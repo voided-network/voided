@@ -1,0 +1,83 @@
+[package]
+name = "voided-core"
+version = "0.1.1"
+edition = "2021"
+authors = ["Voided Team"]
+description = "Core cryptographic primitives for the Voided encryption library"
+license = "MIT"
+repository = "https://github.com/voided-network/voided"
+keywords = ["encryption", "cryptography", "aead", "security"]
+categories = ["cryptography", "encoding"]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[features]
+default = ["backend"]
+
+# Full feature set for Node.js backend binding
+backend = ["compression", "signing", "obfuscation", "std"]
+
+# Browser-compatible subset for WASM
+browser = ["compression", "obfuscation", "wasm"]
+
+# Individual feature flags
+compression = ["brotli", "flate2"]
+signing = ["ed25519-dalek", "p256", "rsa"]
+obfuscation = []
+wasm = ["getrandom/js", "wasm-bindgen"]
+std = []
+
+[dependencies]
+# Core crypto - always included
+aes-gcm = "0.10"
+chacha20poly1305 = "0.10"
+hkdf = "0.12"
+pbkdf2 = { version = "0.12", features = ["simple"] }
+sha2 = "0.10"
+hmac = "0.12"
+x25519-dalek = "2.0"
+
+# Random number generation
+rand = "0.8"
+getrandom = { version = "0.2", optional = true }
+
+# Compression (optional)
+brotli = { version = "3.3", optional = true }
+flate2 = { version = "1.0", optional = true }
+
+# Signing (optional, backend only)
+ed25519-dalek = { version = "2.1", features = ["rand_core"], optional = true }
+p256 = { version = "0.13", features = ["ecdsa", "ecdh"], optional = true }
+rsa = { version = "0.9", optional = true }
+
+# Encoding
+base64 = "0.21"
+hex = "0.4"
+
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+# Security
+zeroize = { version = "1.7", features = ["derive"] }
+constant_time_eq = "0.3"
+
+# WASM support (optional)
+wasm-bindgen = { version = "0.2", optional = true }
+
+# Error handling
+thiserror = "1.0"
+
+[dev-dependencies]
+criterion = "0.5"
+proptest = "1.4"
+hex-literal = "0.4"
+
+# Benchmarks (uncomment when benches directory is created)
+# [[bench]]
+# name = "crypto_benchmarks"
+# harness = false
+
+# Profile settings are defined in workspace root (crates/Cargo.toml)
+

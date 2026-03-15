@@ -1,0 +1,21 @@
+[workspace]
+resolver = "2"
+members = [
+    "voided-core",
+    "voided-node",
+    "voided-wasm",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+authors = ["Voided Team"]
+license = "MIT"
+repository = "https://github.com/voided-network/voided"
+
+[profile.release]
+lto = true
+codegen-units = 1
+opt-level = 3
+strip = true
+

@@ -1,0 +1,577 @@
+/* ==========================================================================
+   voideddev E2EE KEY UI - COMPREHENSIVE STYLING GUIDE
+   ========================================================================== */
+
+/* ==========================================================================
+   BASE STYLES (Required for functionality)
+   ========================================================================== */
+
+/* Overlay - Required for modal functionality */
+.voideddev-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  backdrop-filter: blur(4px);
+}
+
+/* Modal - Required for positioning */
+.voideddev-modal {
+  background: white;
+  border-radius: 8px;
+  padding: 24px;
+  max-width: 500px;
+  width: 90%;
+  max-height: 80vh;
+  overflow-y: auto;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+  position: relative;
+}
+
+/* ==========================================================================
+   THEME 1: MODERN DARK THEME
+   ========================================================================== */
+
+.voideddev-dark-theme .voideddev-overlay {
+  background: rgba(0, 0, 0, 0.8);
+}
+
+.voideddev-dark-theme .voideddev-modal {
+  background: #1a1a1a;
+  color: #ffffff;
+  border: 1px solid #333;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+}
+
+.voideddev-dark-theme .voideddev-modal-title {
+  color: #ffffff;
+  font-size: 1.5rem;
+  font-weight: 600;
+}
+
+.voideddev-dark-theme .voideddev-key-textarea {
+  background: #2a2a2a;
+  border: 1px solid #444;
+  color: #ffffff;
+  font-family: "Monaco", "Menlo", "Ubuntu Mono", monospace;
+}
+
+.voideddev-dark-theme .voideddev-button {
+  background: #007acc;
+  color: white;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 500;
+  transition: background 0.2s;
+}
+
+.voideddev-dark-theme .voideddev-button:hover {
+  background: #005a9e;
+}
+
+.voideddev-dark-theme .voideddev-warning {
+  background: #2d1b0e;
+  border: 1px solid #8b4513;
+  color: #ffa500;
+}
+
+/* ==========================================================================
+   THEME 2: MINIMAL LIGHT THEME
+   ========================================================================== */
+
+.voideddev-minimal .voideddev-modal {
+  background: #ffffff;
+  border: 1px solid #e1e5e9;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  padding: 32px;
+}
+
+.voideddev-minimal .voideddev-modal-title {
+  color: #2c3e50;
+  font-size: 1.25rem;
+  font-weight: 500;
+  margin-bottom: 24px;
+}
+
+.voideddev-minimal .voideddev-key-textarea {
+  background: #f8f9fa;
+  border: 1px solid #dee2e6;
+  border-radius: 8px;
+  padding: 16px;
+  font-family: "SF Mono", "Monaco", "Inconsolata", monospace;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.voideddev-minimal .voideddev-button {
+  background: #6c757d;
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 400;
+  transition: all 0.2s;
+}
+
+.voideddev-minimal .voideddev-button:hover {
+  background: #5a6268;
+  transform: translateY(-1px);
+}
+
+.voideddev-minimal .voideddev-copy-button {
+  background: #28a745;
+}
+
+.voideddev-minimal .voideddev-copy-button:hover {
+  background: #218838;
+}
+
+.voideddev-minimal .voideddev-download-button {
+  background: #17a2b8;
+}
+
+.voideddev-minimal .voideddev-download-button:hover {
+  background: #138496;
+}
+
+.voideddev-minimal .voideddev-share-button {
+  background: #6f42c1;
+}
+
+.voideddev-minimal .voideddev-share-button:hover {
+  background: #5a32a3;
+}
+
+/* ==========================================================================
+   THEME 3: COLORFUL MODERN THEME
+   ========================================================================== */
+
+.voideddev-colorful .voideddev-modal {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border-radius: 16px;
+  box-shadow: 0 10px 40px rgba(102, 126, 234, 0.4);
+}
+
+.voideddev-colorful .voideddev-modal-title {
+  color: white;
+  font-size: 1.75rem;
+  font-weight: 700;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+.voideddev-colorful .voideddev-key-textarea {
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: white;
+  backdrop-filter: blur(10px);
+}
+
+.voideddev-colorful .voideddev-button {
+  background: rgba(255, 255, 255, 0.2);
+  color: white;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  backdrop-filter: blur(10px);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.voideddev-colorful .voideddev-button:hover {
+  background: rgba(255, 255, 255, 0.3);
+  transform: scale(1.05);
+}
+
+/* ==========================================================================
+   COMPONENT-SPECIFIC STYLES
+   ========================================================================== */
+
+/* Modal Header */
+.voideddev-modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid #e9ecef;
+}
+
+.voideddev-modal-title {
+  margin: 0;
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: #333;
+}
+
+.voideddev-close-button {
+  background: none;
+  border: none;
+  font-size: 24px;
+  cursor: pointer;
+  color: #666;
+  padding: 4px;
+  border-radius: 4px;
+  transition: all 0.2s;
+}
+
+.voideddev-close-button:hover {
+  background: #f8f9fa;
+  color: #333;
+}
+
+/* Key ID Display */
+.voideddev-key-id {
+  margin-bottom: 16px;
+  padding: 12px;
+  background: #f8f9fa;
+  border-radius: 6px;
+  font-family: monospace;
+  font-size: 14px;
+}
+
+/* Key Section */
+.voideddev-key-section {
+  margin-bottom: 20px;
+}
+
+.voideddev-key-label {
+  display: block;
+  margin-bottom: 8px;
+  font-weight: 600;
+  color: #333;
+  font-size: 14px;
+}
+
+.voideddev-key-textarea {
+  width: 100%;
+  min-height: 100px;
+  padding: 12px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  font-family: "Monaco", "Menlo", "Ubuntu Mono", monospace;
+  font-size: 12px;
+  line-height: 1.4;
+  resize: vertical;
+  background: #ffffff;
+}
+
+.voideddev-key-textarea:focus {
+  outline: none;
+  border-color: #007bff;
+  box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.1);
+}
+
+/* Button Group */
+.voideddev-button-group {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  flex-wrap: wrap;
+  margin-bottom: 20px;
+}
+
+.voideddev-button {
+  padding: 8px 16px;
+  background: #007bff;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  transition: all 0.2s;
+  min-width: 100px;
+}
+
+.voideddev-button:hover {
+  background: #0056b3;
+  transform: translateY(-1px);
+}
+
+.voideddev-button:active {
+  transform: translateY(0);
+}
+
+.voideddev-button:disabled {
+  background: #6c757d;
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* Specific Button Styles */
+.voideddev-copy-button {
+  background: #28a745;
+}
+
+.voideddev-copy-button:hover {
+  background: #218838;
+}
+
+.voideddev-download-button {
+  background: #17a2b8;
+}
+
+.voideddev-download-button:hover {
+  background: #138496;
+}
+
+.voideddev-share-button {
+  background: #6f42c1;
+}
+
+.voideddev-share-button:hover {
+  background: #5a32a3;
+}
+
+.voideddev-import-button {
+  background: #007bff;
+}
+
+.voideddev-import-button:hover {
+  background: #0056b3;
+}
+
+.voideddev-scan-button {
+  background: #fd7e14;
+}
+
+.voideddev-scan-button:hover {
+  background: #e8690b;
+}
+
+.voideddev-cancel-button {
+  background: #6c757d;
+}
+
+.voideddev-cancel-button:hover {
+  background: #5a6268;
+}
+
+/* Warning/Info Box */
+.voideddev-warning {
+  margin-top: 16px;
+  padding: 12px;
+  background: #fff3cd;
+  border: 1px solid #ffeaa7;
+  border-radius: 6px;
+  color: #856404;
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+/* QR Code Container */
+.voideddev-qr-container {
+  text-align: center;
+  margin-bottom: 20px;
+}
+
+.voideddev-qr-wrapper {
+  display: inline-block;
+  padding: 16px;
+  background: white;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.voideddev-qr-image {
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  max-width: 100%;
+  height: auto;
+}
+
+.voideddev-qr-caption {
+  margin-top: 8px;
+  font-size: 12px;
+  color: #666;
+}
+
+/* QR Fallback */
+.voideddev-qr-fallback {
+  width: 200px;
+  height: 200px;
+  border: 2px solid #333;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: white;
+  border-radius: 8px;
+  margin: 0 auto;
+}
+
+.voideddev-qr-fallback-icon {
+  font-size: 24px;
+  margin-bottom: 8px;
+}
+
+.voideddev-qr-fallback-text {
+  font-size: 12px;
+  color: #666;
+  font-weight: 500;
+}
+
+.voideddev-qr-fallback-subtext {
+  font-size: 10px;
+  color: #999;
+  margin-top: 4px;
+}
+
+/* ==========================================================================
+   RESPONSIVE DESIGN
+   ========================================================================== */
+
+@media (max-width: 768px) {
+  .voideddev-modal {
+    width: 95%;
+    padding: 20px;
+    margin: 10px;
+  }
+
+  .voideddev-button-group {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .voideddev-button {
+    width: 100%;
+    margin-bottom: 8px;
+  }
+
+  .voideddev-modal-title {
+    font-size: 1.25rem;
+  }
+
+  .voideddev-key-textarea {
+    min-height: 80px;
+    font-size: 11px;
+  }
+}
+
+@media (max-width: 480px) {
+  .voideddev-modal {
+    padding: 16px;
+    border-radius: 8px;
+  }
+
+  .voideddev-modal-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .voideddev-close-button {
+    align-self: flex-end;
+  }
+}
+
+/* ==========================================================================
+   ANIMATIONS
+   ========================================================================== */
+
+@keyframes voideddev-fade-in {
+  from {
+    opacity: 0;
+    transform: scale(0.9);
+  }
+
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes voideddev-slide-up {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.voideddev-modal {
+  animation: voideddev-fade-in 0.3s ease-out;
+}
+
+.voideddev-overlay {
+  animation: voideddev-fade-in 0.2s ease-out;
+}
+
+.voideddev-button {
+  animation: voideddev-slide-up 0.3s ease-out;
+}
+
+/* ==========================================================================
+   ACCESSIBILITY
+   ========================================================================== */
+
+/* Focus styles for keyboard navigation */
+.voideddev-button:focus,
+.voideddev-close-button:focus,
+.voideddev-key-textarea:focus {
+  outline: 2px solid #007bff;
+  outline-offset: 2px;
+}
+
+/* High contrast mode support */
+@media (prefers-contrast: high) {
+  .voideddev-modal {
+    border: 2px solid #000;
+  }
+
+  .voideddev-button {
+    border: 2px solid #000;
+  }
+
+  .voideddev-key-textarea {
+    border: 2px solid #000;
+  }
+}
+
+/* Reduced motion support */
+@media (prefers-reduced-motion: reduce) {
+  .voideddev-modal,
+  .voideddev-overlay,
+  .voideddev-button {
+    animation: none;
+  }
+
+  .voideddev-button:hover {
+    transform: none;
+  }
+}
+
+/* ==========================================================================
+   PRINT STYLES
+   ========================================================================== */
+
+@media print {
+  .voideddev-overlay {
+    position: static;
+    background: none;
+  }
+
+  .voideddev-modal {
+    box-shadow: none;
+    border: 1px solid #000;
+  }
+
+  .voideddev-button,
+  .voideddev-close-button {
+    display: none;
+  }
+}

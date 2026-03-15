@@ -1,0 +1,479 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>voideddev E2EE - Customizable Key UI Example</title>
+    <link rel="stylesheet" href="key-ui-styles.css" />
+    <style>
+      /* Custom theme example */
+      .my-custom-theme .voideddev-modal {
+        background: linear-gradient(45deg, #ff6b6b, #4ecdc4);
+        color: white;
+        border-radius: 20px;
+        box-shadow: 0 15px 35px rgba(0, 0, 0, 0.3);
+      }
+
+      .my-custom-theme .voideddev-button {
+        background: rgba(255, 255, 255, 0.2);
+        border: 2px solid rgba(255, 255, 255, 0.3);
+        border-radius: 25px;
+        font-weight: bold;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+      }
+
+      .my-custom-theme .voideddev-button:hover {
+        background: rgba(255, 255, 255, 0.3);
+        transform: scale(1.1);
+      }
+
+      .my-custom-theme .voideddev-key-textarea {
+        background: rgba(255, 255, 255, 0.1);
+        border: 1px solid rgba(255, 255, 255, 0.3);
+        color: white;
+        backdrop-filter: blur(10px);
+      }
+
+      /* Demo page styles */
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+          sans-serif;
+        margin: 0;
+        padding: 20px;
+        background: #f5f5f5;
+      }
+
+      .demo-container {
+        max-width: 800px;
+        margin: 0 auto;
+        background: white;
+        padding: 40px;
+        border-radius: 12px;
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+      }
+
+      .demo-title {
+        text-align: center;
+        color: #333;
+        margin-bottom: 40px;
+      }
+
+      .theme-buttons {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 16px;
+        margin-bottom: 40px;
+      }
+
+      .theme-button {
+        padding: 16px;
+        border: none;
+        border-radius: 8px;
+        font-size: 16px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.3s;
+      }
+
+      .theme-button:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+      }
+
+      .theme-default {
+        background: #007bff;
+        color: white;
+      }
+
+      .theme-dark {
+        background: #343a40;
+        color: white;
+      }
+
+      .theme-minimal {
+        background: #6c757d;
+        color: white;
+      }
+
+      .theme-colorful {
+        background: linear-gradient(45deg, #667eea, #764ba2);
+        color: white;
+      }
+
+      .theme-custom {
+        background: linear-gradient(45deg, #ff6b6b, #4ecdc4);
+        color: white;
+      }
+
+      .action-buttons {
+        display: flex;
+        gap: 16px;
+        justify-content: center;
+        flex-wrap: wrap;
+      }
+
+      .action-button {
+        padding: 12px 24px;
+        border: 2px solid #007bff;
+        background: white;
+        color: #007bff;
+        border-radius: 8px;
+        font-size: 16px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.3s;
+      }
+
+      .action-button:hover {
+        background: #007bff;
+        color: white;
+      }
+
+      .code-example {
+        background: #f8f9fa;
+        border: 1px solid #e9ecef;
+        border-radius: 8px;
+        padding: 20px;
+        margin: 20px 0;
+        font-family: "Monaco", "Menlo", monospace;
+        font-size: 14px;
+        line-height: 1.5;
+        overflow-x: auto;
+      }
+
+      .feature-list {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+        gap: 20px;
+        margin: 40px 0;
+      }
+
+      .feature-card {
+        background: #f8f9fa;
+        padding: 20px;
+        border-radius: 8px;
+        border-left: 4px solid #007bff;
+      }
+
+      .feature-card h3 {
+        margin-top: 0;
+        color: #333;
+      }
+
+      .feature-card p {
+        color: #666;
+        margin-bottom: 0;
+      }
+    </style>
+  </head>
+
+  <body>
+    <div class="demo-container">
+      <h1 class="demo-title">🔐 voideddev E2EE - Customizable Key UI</h1>
+
+      <p style="text-align: center; color: #666; margin-bottom: 40px">
+        Highly customizable key export/import UI components with multiple themes
+        and styling options
+      </p>
+
+      <div class="theme-buttons">
+        <button
+          class="theme-button theme-default"
+          onclick="setTheme('default')"
+        >
+          Default Theme
+        </button>
+        <button class="theme-button theme-dark" onclick="setTheme('dark')">
+          Dark Theme
+        </button>
+        <button
+          class="theme-button theme-minimal"
+          onclick="setTheme('minimal')"
+        >
+          Minimal Theme
+        </button>
+        <button
+          class="theme-button theme-colorful"
+          onclick="setTheme('colorful')"
+        >
+          Colorful Theme
+        </button>
+        <button class="theme-button theme-custom" onclick="setTheme('custom')">
+          Custom Theme
+        </button>
+      </div>
+
+      <div class="action-buttons">
+        <button class="action-button" onclick="exportKey()">
+          📤 Export Key
+        </button>
+        <button class="action-button" onclick="importKey()">
+          📥 Import Key
+        </button>
+        <button class="action-button" onclick="rotateKey()">
+          🔄 Rotate Key
+        </button>
+      </div>
+
+      <div class="feature-list">
+        <div class="feature-card">
+          <h3>🎨 Fully Customizable</h3>
+          <p>
+            Every element can be styled with custom CSS classes. No inline
+            styles, just semantic HTML with data attributes.
+          </p>
+        </div>
+        <div class="feature-card">
+          <h3>📱 Responsive Design</h3>
+          <p>
+            Built-in responsive design that works on all devices. Customize
+            breakpoints and layouts as needed.
+          </p>
+        </div>
+        <div class="feature-card">
+          <h3>♿ Accessibility</h3>
+          <p>
+            Full keyboard navigation, screen reader support, and high contrast
+            mode compatibility.
+          </p>
+        </div>
+        <div class="feature-card">
+          <h3>🎯 Multiple Themes</h3>
+          <p>
+            Pre-built themes included, or create your own custom theme with CSS
+            variables and classes.
+          </p>
+        </div>
+        <div class="feature-card">
+          <h3>🔧 Easy Integration</h3>
+          <p>
+            Simple API with callback functions for all events. Works with any
+            framework or vanilla JS.
+          </p>
+        </div>
+        <div class="feature-card">
+          <h3>📦 No Dependencies</h3>
+          <p>
+            Pure vanilla JavaScript with optional QR code support. No framework
+            dependencies required.
+          </p>
+        </div>
+      </div>
+
+      <h2>Usage Examples</h2>
+
+      <h3>Basic Usage</h3>
+      <div class="code-example">
+        // Create client const client = new VoidedE2EEClient(); // Export key
+        with default styling const keyExport = createKeyExport(client); await
+        keyExport.show(); // Import key with default styling const keyImport =
+        createKeyImport(client); keyImport.show();
+      </div>
+
+      <h3>Custom Styling</h3>
+      <div class="code-example">
+        // Export with custom CSS classes const keyExport =
+        createKeyExport(client, { modalClassName: 'my-custom-modal',
+        buttonClassName: 'my-custom-button', textAreaClassName:
+        'my-custom-textarea', title: 'Backup Your Secret Key', onCopy: () =>
+        console.log('Key copied!'), onShare: () => console.log('Key shared!')
+        }); // Import with custom styling const keyImport =
+        createKeyImport(client, { modalClassName: 'my-import-modal',
+        importButtonClassName: 'my-primary-button', warningClassName:
+        'my-warning-box', onSuccess: () => console.log('Key imported!'),
+        onError: (error) => console.error('Import failed:', error) });
+      </div>
+
+      <h3>Theme Integration</h3>
+      <div class="code-example">
+        // Apply theme to modal const keyExport = createKeyExport(client, {
+        modalClassName: 'voideddev-modal voideddev-dark-theme', // All other
+        classes will inherit from the theme }); // Or apply theme to specific
+        elements const keyImport = createKeyImport(client, { modalClassName:
+        'voideddev-modal voideddev-colorful', buttonClassName: 'voideddev-button
+        voideddev-colorful', textAreaClassName: 'voideddev-key-textarea
+        voideddev-colorful' });
+      </div>
+
+      <h3>Advanced Customization</h3>
+      <div class="code-example">
+        // Full customization example const keyExport = createKeyExport(client,
+        { // Modal and overlay overlayClassName: 'my-overlay', modalClassName:
+        'my-modal', // Content sections qrContainerClassName: 'my-qr-container',
+        textAreaClassName: 'my-textarea', keyIdClassName: 'my-key-id',
+        warningClassName: 'my-warning', // Buttons buttonClassName: 'my-button',
+        copyButtonClassName: 'my-copy-btn', downloadButtonClassName:
+        'my-download-btn', shareButtonClassName: 'my-share-btn',
+        closeButtonClassName: 'my-close-btn', // Content options title: 'Secure
+        Key Backup', showQR: true, showText: true, showShare: true, // Event
+        callbacks onClose: () => console.log('Modal closed'), onCopy: () =>
+        showToast('Key copied!'), onShare: () => showToast('Key shared!'),
+        onDownload: () => showToast('Key downloaded!') });
+      </div>
+
+      <h2>CSS Customization Guide</h2>
+
+      <p>
+        The components use semantic HTML with data attributes for easy
+        targeting:
+      </p>
+
+      <div class="code-example">
+        /* Target specific components */
+        [data-voideddev-component="modal-header"] { /* Modal header */ }
+        [data-voideddev-component="key-textarea"] { /* Key input/display */ }
+        [data-voideddev-component="button-group"] { /* Button container */ }
+        [data-voideddev-component="qr-container"] { /* QR code area */ }
+        [data-voideddev-component="warning"] { /* Warning/info box */ } /*
+        Target specific actions */ [data-voideddev-action="copy"] { /* Copy
+        button */ } [data-voideddev-action="download"] { /* Download button */ }
+        [data-voideddev-action="share"] { /* Share button */ }
+        [data-voideddev-action="close"] { /* Close button */ }
+        [data-voideddev-action="import"] { /* Import button */ }
+      </div>
+
+      <p>
+        All components include comprehensive CSS examples in
+        <code>key-ui-styles.css</code> with multiple themes and responsive
+        design patterns.
+      </p>
+    </div>
+
+    <script type="module">
+      // Import the E2EE client
+      import {
+        VoidedE2EEClient,
+        createKeyExport,
+        createKeyImport,
+      } from "../dist/index.mjs";
+
+      // Create client instance
+      const client = new VoidedE2EEClient();
+
+      // Store current theme
+      let currentTheme = "default";
+
+      // Theme configuration
+      const themes = {
+        default: {},
+        dark: {
+          modalClassName: "voideddev-modal voideddev-dark-theme",
+          overlayClassName: "voideddev-overlay voideddev-dark-theme",
+        },
+        minimal: {
+          modalClassName: "voideddev-modal voideddev-minimal",
+          overlayClassName: "voideddev-overlay voideddev-minimal",
+        },
+        colorful: {
+          modalClassName: "voideddev-modal voideddev-colorful",
+          overlayClassName: "voideddev-overlay voideddev-colorful",
+        },
+        custom: {
+          modalClassName: "voideddev-modal my-custom-theme",
+          overlayClassName: "voideddev-overlay my-custom-theme",
+        },
+      };
+
+      // Set theme function
+      window.setTheme = function (theme) {
+        currentTheme = theme;
+        console.log(`Theme set to: ${theme}`);
+      };
+
+      // Export key function
+      window.exportKey = async function () {
+        try {
+          const options = {
+            ...themes[currentTheme],
+            title: `Backup Your Key (${currentTheme} theme)`,
+            onCopy: () => showToast("✅ Key copied to clipboard!"),
+            onShare: () => showToast("✅ Key shared successfully!"),
+            onDownload: () => showToast("✅ Key downloaded!"),
+            onClose: () => console.log("Export modal closed"),
+          };
+
+          const keyExport = createKeyExport(client, options);
+          await keyExport.show();
+        } catch (error) {
+          console.error("Failed to export key:", error);
+          showToast("❌ Failed to export key");
+        }
+      };
+
+      // Import key function
+      window.importKey = function () {
+        const options = {
+          ...themes[currentTheme],
+          title: `Import Key (${currentTheme} theme)`,
+          onSuccess: () => showToast("✅ Key imported successfully!"),
+          onError: (error) => showToast(`❌ Import failed: ${error}`),
+          onClose: () => console.log("Import modal closed"),
+        };
+
+        const keyImport = createKeyImport(client, options);
+        keyImport.show();
+      };
+
+      // Rotate key function
+      window.rotateKey = async function () {
+        try {
+          await client.rotateKey();
+          showToast("✅ Key rotated successfully!");
+        } catch (error) {
+          console.error("Failed to rotate key:", error);
+          showToast("❌ Failed to rotate key");
+        }
+      };
+
+      // Simple toast notification
+      function showToast(message) {
+        const toast = document.createElement("div");
+        toast.textContent = message;
+        toast.style.cssText = `
+                position: fixed;
+                top: 20px;
+                right: 20px;
+                background: #333;
+                color: white;
+                padding: 12px 20px;
+                border-radius: 6px;
+                z-index: 10001;
+                font-weight: 500;
+                box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+                animation: slideIn 0.3s ease-out;
+            `;
+
+        document.body.appendChild(toast);
+
+        setTimeout(() => {
+          toast.style.animation = "slideOut 0.3s ease-out";
+          setTimeout(() => {
+            if (toast.parentNode) {
+              toast.parentNode.removeChild(toast);
+            }
+          }, 300);
+        }, 3000);
+      }
+
+      // Add toast animations
+      const style = document.createElement("style");
+      style.textContent = `
+            @keyframes slideIn {
+                from { transform: translateX(100%); opacity: 0; }
+                to { transform: translateX(0); opacity: 1; }
+            }
+            @keyframes slideOut {
+                from { transform: translateX(0); opacity: 1; }
+                to { transform: translateX(100%); opacity: 0; }
+            }
+        `;
+      document.head.appendChild(style);
+
+      console.log("voideddev E2EE Key UI Demo loaded!");
+      console.log(
+        "Available functions: exportKey(), importKey(), rotateKey(), setTheme()"
+      );
+    </script>
+  </body>
+</html>

@@ -1,0 +1,80 @@
+{
+  "name": "@voideddev/e2ee-client",
+  "version": "0.3.0",
+  "description": "Browser-based E2EE client library for true end-to-end encryption including keys, crypto, compression, and local storage adapters.",
+  "type": "module",
+  "main": "dist/index.cjs",
+  "module": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      },
+      "require": {
+        "types": "./dist/index.d.cts",
+        "default": "./dist/index.cjs"
+      }
+    },
+    "./wasm": {
+      "import": {
+        "types": "./dist/wasm/loader.d.ts",
+        "default": "./dist/wasm/loader.js"
+      },
+      "require": {
+        "types": "./dist/wasm/loader.d.cts",
+        "default": "./dist/wasm/loader.cjs"
+      }
+    },
+    "./crypto": {
+      "import": {
+        "types": "./dist/crypto-backend.d.ts",
+        "default": "./dist/crypto-backend.js"
+      },
+      "require": {
+        "types": "./dist/crypto-backend.d.cts",
+        "default": "./dist/crypto-backend.cjs"
+      }
+    }
+  },
+  "scripts": {
+    "build": "tsup src/index.ts src/wasm/loader.ts src/crypto-backend.ts --format esm,cjs --dts --minify --clean --treeshake --no-splitting --platform browser --target es2020",
+    "build:wasm": "node scripts/build-wasm.js",
+    "copy:wasm": "node scripts/copy-wasm.js",
+    "build:all": "npm run copy:wasm && npm run build",
+    "test": "jest --testPathIgnorePatterns=gb-scale --testPathIgnorePatterns=benchmark-all --forceExit",
+    "test:integration": "node tests/integration.test.mjs",
+    "test:memory": "node --max-old-space-size=8192 ./node_modules/.bin/jest",
+    "test:benchmark": "jest --testNamePattern='benchmark' --maxWorkers=1 --testTimeout=6000 --verbose",
+    "test:all": "npm run test:integration && npm run test",
+    "dev": "tsup src/index.ts src/wasm/loader.ts src/crypto-backend.ts --format esm,cjs --dts --watch",
+    "prepublishOnly": "npm run copy:wasm && npm run build"
+  },
+  "devDependencies": {
+    "@types/jest": "^29.5.14",
+    "@types/node": "^20.19.10",
+    "brotli-wasm": "^3.0.0",
+    "fast-check": "^3.13.1",
+    "fflate": "^0.8.2",
+    "jest": "^29.0.0",
+    "qrcode": "^1.5.3",
+    "ts-jest": "^29.4.1",
+    "tsup": "^8.5.1",
+    "typescript": "^5.0.0"
+  },
+  "files": [
+    "dist",
+    "wasm"
+  ],
+  "keywords": [
+    "e2ee",
+    "encryption",
+    "browser",
+    "client-side",
+    "privacy",
+    "rust",
+    "wasm"
+  ],
+  "license": "MIT"
+}

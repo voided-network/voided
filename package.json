@@ -1,0 +1,46 @@
+{
+  "name": "@voideddev/monorepo",
+  "version": "0.1.0",
+  "private": true,
+  "workspaces": [
+    "packages/*"
+  ],
+  "type": "module",
+  "description": "voideddev - Secure data transmission with E2EE and server-side encryption",
+  "scripts": {
+    "build": "node scripts/build-all.js",
+    "build:rust": "node scripts/build-all.js --rust",
+    "build:npm": "node scripts/build-all.js --npm",
+    "build:node": "node scripts/build-all.js --node",
+    "build:wasm": "node scripts/build-all.js --wasm",
+    "build:cross": "node scripts/build-cross-platform.js",
+    "build:cross:linux": "node scripts/build-cross-platform.js --linux",
+    "build:cross:mac": "node scripts/build-cross-platform.js --mac",
+    "test": "npm run test --workspaces --if-present",
+    "test:enc-server": "cd packages/enc-server && npm test",
+    "test:e2ee-client": "cd packages/e2ee-client && npm test",
+    "lint": "eslint packages/*/src/**/*.{js,ts}",
+    "clean": "rm -rf node_modules packages/*/node_modules packages/*/dist crates/target crates/voided-wasm/pkg packages/enc-server/native/voided_node.node packages/enc-server/prebuilds/darwin-* packages/e2ee-client/wasm/init.js packages/e2ee-client/wasm/voided_wasm*"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@typescript-eslint/eslint-plugin": "^8.57.0",
+    "@typescript-eslint/parser": "^8.57.0",
+    "eslint": "^8.57.1",
+    "jest": "^30.0.4",
+    "tsup": "^8.5.1",
+    "typescript": "^5.0.0"
+  },
+  "keywords": [
+    "encryption",
+    "e2ee",
+    "privacy",
+    "security",
+    "obfuscation"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/voided-network/voided.git"
+  }
+}
