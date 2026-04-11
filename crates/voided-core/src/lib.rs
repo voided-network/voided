@@ -40,6 +40,7 @@ extern crate alloc;
 pub mod encryption;
 pub mod formats;
 pub mod hash;
+pub mod shell;
 pub mod util;
 
 #[cfg(feature = "compression")]
