@@ -46,6 +46,22 @@ Cross-platform native builds require Zig to be installed locally, set via `VOIDE
 - [`packages/enc-server/README.md`](packages/enc-server/README.md)
 - [`crates/voided-core/README.md`](crates/voided-core/README.md)
 
+## Voided v2 Direction
+
+The current package surface still includes a map-first compatibility lane in
+`@voideddev/enc-server`, but the planned v2 product direction is fused-first:
+
+1. compression
+2. encryption
+3. fused shell
+
+That means map-based obfuscation is no longer the long-term default shape of the
+product. It remains useful for compatibility and selected experimental work, but
+new architecture work should target a profile-first fused shell surface instead.
+
+The detailed plan lives in
+[`docs/v2-fused-first-architecture.md`](docs/v2-fused-first-architecture.md).
+
 ## Examples
 
 Repository-level examples live in [`examples/`](examples). Package-specific examples live alongside each package.

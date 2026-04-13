@@ -263,6 +263,10 @@ export function hexDecode(encoded: string): Buffer {
 // HIGH-LEVEL PIPELINE
 // ============================================================================
 
+/**
+ * @deprecated Map-first full flow is now the compatibility lane. New
+ * integrations should plan for profile-based fused-shell `seal/open` APIs.
+ */
 export interface EncryptWithMapOptions {
   key: Buffer;
   temperature?: number;
@@ -272,6 +276,10 @@ export interface EncryptWithMapOptions {
   compressionLevel?: number;
 }
 
+/**
+ * @deprecated Map-first full flow is now the compatibility lane. New
+ * integrations should plan for profile-based fused-shell `seal/open` APIs.
+ */
 export interface EncryptWithMapResult {
   data: string;
   map: ObfuscationMap;
@@ -283,6 +291,9 @@ export interface EncryptWithMapResult {
 
 /**
  * Full encryption pipeline: compress → encrypt → obfuscate
+ *
+ * @deprecated This map-first flow remains for compatibility. Voided v2 is
+ * moving to `compression -> encryption -> fused shell` as the primary path.
  */
 export function encryptWithMap(
   data: string | Buffer,
@@ -339,6 +350,9 @@ export function encryptWithMap(
 
 /**
  * Full decryption pipeline: deobfuscate → decrypt → decompress
+ *
+ * @deprecated This map-first flow remains for compatibility. Voided v2 is
+ * moving to `compression -> encryption -> fused shell` as the primary path.
  */
 export function decryptWithMap(
   obfuscatedData: string,
@@ -370,6 +384,9 @@ export function decryptWithMap(
 
 /**
  * Decrypt and return as string
+ *
+ * @deprecated This map-first flow remains for compatibility. Voided v2 is
+ * moving to `compression -> encryption -> fused shell` as the primary path.
  */
 export function decryptWithMapString(
   obfuscatedData: string,

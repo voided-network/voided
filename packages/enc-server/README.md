@@ -25,13 +25,31 @@ const decrypted = service.decrypt(encrypted.data, encrypted.map);
 console.log(decrypted);
 ```
 
+## Roadmap Note
+
+The current package still exposes map-first helpers such as `encryptWithMap`
+and `VoidedService`. Those are still useful for compatibility, but they are not
+the planned long-term shape of Voided.
+
+The v2 direction is fused-first:
+
+1. compression
+2. encryption
+3. fused shell
+
+Map-based obfuscation should move to experimental or legacy positioning instead
+of remaining the default product story. The detailed plan lives in
+[`../../docs/v2-fused-first-architecture.md`](../../docs/v2-fused-first-architecture.md).
+Planning metadata for the target profile and policy ids also lives in
+`VOIDED_V2_PROFILE_PLAN` and `DEFAULT_VOIDED_V2_POLICY_PLAN`.
+
 ## Package Surface
 
 - Low-level crypto helpers such as `generateKey`, `encrypt`, `decrypt`, `deriveKeyHkdf`, and `deriveKeyPbkdf2`
 - Hashing helpers including `hash`, `generateHmac`, `hashPbkdf2`, `fingerprint`, and `safetyNumbers`
 - Compression helpers `compress` and `decompress`
 - Obfuscation helpers `generateMap`, `obfuscate`, `deobfuscate`, `analyzeMap`, and `getExpansionRatio`
-- High-level pipeline helpers `encryptWithMap`, `decryptWithMap`, and `decryptWithMapString`
+- Compatibility pipeline helpers `encryptWithMap`, `decryptWithMap`, and `decryptWithMapString`
 - `VoidedService`, `KeyManager`, streaming helpers, stats, and upload-limit helpers
 
 ## Native Builds
@@ -47,6 +65,7 @@ Local development binaries are copied into `native/`. Release prebuilds live in 
 ## Notes
 
 - `encryptWithMap` requires either an existing obfuscation map or a deterministic `seed`.
+- `encryptWithMap` and `VoidedService` should be treated as compatibility helpers while the fused-first v2 surface is implemented.
 - The service layer is synchronous because the native Rust binding is loaded directly into Node.js.
 - Examples live in the repository-level `examples/` directory and package test fixtures.
 
