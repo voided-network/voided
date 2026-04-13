@@ -35,6 +35,18 @@ export {
   compress,
   decompress,
   type CompressionResult,
+
+  // Fused shell / full-flow
+  fuse,
+  unfuse,
+  inspectFused,
+  protect,
+  open,
+  inspectArtifact,
+  repackArtifact,
+  type FusedShellInfo,
+  type ProtectedArtifactInfo,
+  type ProtectResult,
   
   // Utility
   randomBytes,

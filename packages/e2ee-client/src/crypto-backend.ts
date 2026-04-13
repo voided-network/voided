@@ -117,6 +117,35 @@ export interface EncryptionResult {
   encryptedSize: number;
 }
 
+export interface FusedShellInfo {
+  version: number;
+  preset: 'compact' | 'balanced' | 'concealed' | string;
+  chunkSize: number;
+  chunkCount: number;
+  payloadSize: number;
+  shellSize: number;
+  metadataSize: number;
+  tagSize: number;
+}
+
+export interface ProtectedArtifactInfo {
+  version: number;
+  preset: 'compact' | 'balanced' | 'concealed' | string;
+  compressionAlgorithm: 'gzip' | 'brotli' | 'none' | string;
+  encryptionAlgorithm: 'xchacha20-poly1305' | 'aes-256-gcm' | string;
+  originalSize: number;
+  compressedSize: number;
+  encryptedSize: number;
+  protectedSize: number;
+  shellChunkSize: number;
+  shellChunkCount: number;
+  shellNonce: Uint8Array;
+}
+
+export interface ProtectResult extends ProtectedArtifactInfo {
+  artifact: Uint8Array;
+}
+
 /**
  * Generate a new encryption key.
  */
@@ -356,6 +385,113 @@ export async function decompress(
   }
   
   return tsCompression.decompress(data, algorithm);
+}
+
+// ============================================================================
+// FUSED SHELL / FULL-FLOW
+// ============================================================================
+
+function fusedWasmOnlyError(): Error {
+  return new Error(
+    'Voided v2 fused shell APIs currently require the Rust WASM backend in e2ee-client'
+  );
+}
+
+export async function fuse(
+  data: Uint8Array,
+  key: Uint8Array,
+  preset: 'compact' | 'balanced' | 'concealed' = 'balanced',
+  chunkSize?: number,
+): Promise<Uint8Array> {
+  if (await useWasmBackend()) {
+    return _wasm!.fuse(data, key, preset, chunkSize);
+  }
+
+  throw fusedWasmOnlyError();
+}
+
+export async function unfuse(data: Uint8Array, key: Uint8Array): Promise<Uint8Array> {
+  if (await useWasmBackend()) {
+    return _wasm!.unfuse(data, key);
+  }
+
+  throw fusedWasmOnlyError();
+}
+
+export async function inspectFused(data: Uint8Array): Promise<FusedShellInfo> {
+  if (await useWasmBackend()) {
+    return _wasm!.inspectFused(data);
+  }
+
+  throw fusedWasmOnlyError();
+}
+
+export async function protect(
+  data: Uint8Array,
+  key: Uint8Array,
+  options: {
+    preset?: 'compact' | 'balanced' | 'concealed';
+    compressionAlgorithm?: 'gzip' | 'brotli' | 'none';
+    compressionLevel?: number;
+    encryptionAlgorithm?: 'xchacha20-poly1305' | 'aes-256-gcm';
+    shellChunkSize?: number;
+  } = {},
+): Promise<ProtectResult> {
+  if (await useWasmBackend()) {
+    return _wasm!.protect(
+      data,
+      key,
+      options.preset,
+      options.compressionAlgorithm,
+      options.compressionLevel,
+      options.encryptionAlgorithm,
+      options.shellChunkSize,
+    );
+  }
+
+  throw fusedWasmOnlyError();
+}
+
+export async function open(artifact: Uint8Array, key: Uint8Array): Promise<Uint8Array> {
+  if (await useWasmBackend()) {
+    return _wasm!.open(artifact, key);
+  }
+
+  throw fusedWasmOnlyError();
+}
+
+export async function inspectArtifact(artifact: Uint8Array): Promise<ProtectedArtifactInfo> {
+  if (await useWasmBackend()) {
+    return _wasm!.inspectArtifact(artifact);
+  }
+
+  throw fusedWasmOnlyError();
+}
+
+export async function repackArtifact(
+  artifact: Uint8Array,
+  key: Uint8Array,
+  options: {
+    preset?: 'compact' | 'balanced' | 'concealed';
+    compressionAlgorithm?: 'gzip' | 'brotli' | 'none';
+    compressionLevel?: number;
+    encryptionAlgorithm?: 'xchacha20-poly1305' | 'aes-256-gcm';
+    shellChunkSize?: number;
+  } = {},
+): Promise<ProtectResult> {
+  if (await useWasmBackend()) {
+    return _wasm!.repackArtifact(
+      artifact,
+      key,
+      options.preset,
+      options.compressionAlgorithm,
+      options.compressionLevel,
+      options.encryptionAlgorithm,
+      options.shellChunkSize,
+    );
+  }
+
+  throw fusedWasmOnlyError();
 }
 
 // ============================================================================

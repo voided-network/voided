@@ -2,10 +2,9 @@
  * Planning-only metadata for the fused-first Voided v2 preset and role-alias
  * migration.
  *
- * This file intentionally captures the target preset and policy surface before
- * the fused-shell runtime is promoted into the package. Keeping these ids and
- * defaults in source gives downstream consumers one place to align on names
- * during the migration.
+ * This file captures the fused-first preset and policy surface for Voided v2.
+ * Keeping these ids and defaults in source gives downstream consumers one
+ * place to align on names while the runtime surfaces settle.
  */
 
 export type VoidedV2PresetId =
@@ -32,9 +31,7 @@ export interface VoidedV2PresetPlanEntry {
   roleAliases: readonly VoidedV2RoleAlias[];
   support: VoidedV2PresetSupport;
   status: VoidedV2PresetStatus;
-  pipeline:
-    | "compression->encryption->fused-shell"
-    | "compression->encryption->map-shell";
+  pipeline: "compression->encryption->fused-shell";
   internalShell:
     | "FusedPrefixShell"
     | "FusedReactiveShell"

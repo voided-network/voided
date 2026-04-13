@@ -34,6 +34,7 @@ console.log(exportedKey);
 
 - `VoidedE2EEClient` for stateful client-side encryption flows
 - Top-level helpers such as `encrypt`, `decrypt`, `exportKey`, `importKey`, and `rotateKey`
+- Browser-side fused shell helpers exposed through the crypto backend namespace: `fuse`, `unfuse`, `inspectFused`, `protect`, `open`, `inspectArtifact`, and `repackArtifact`
 - `IndexedDBStorage` for browser-local key persistence
 - Optional signatures, forward secrecy helpers, and key sharing helpers
 - Chunking and client upload-limit helpers for large payloads
@@ -58,6 +59,8 @@ console.log(isWasmReady());
   separate handwritten TypeScript shell implementation. The frozen fused preset
   surface is `compact`, `balanced`, and `concealed`, with `balanced` as the
   expected default role alias.
+- The new fused shell APIs currently require the Rust/WASM backend; there is no
+  handwritten TypeScript fallback for them.
 - Deprecated map-first behavior belongs to v1, not to the e2ee-client v2
   direction.
 - Examples live in `examples/` and `packages/e2ee-client/examples/`.

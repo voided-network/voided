@@ -54,6 +54,8 @@ Planning metadata for the target preset and policy ids also lives in
 - Low-level crypto helpers such as `generateKey`, `encrypt`, `decrypt`, `deriveKeyHkdf`, and `deriveKeyPbkdf2`
 - Hashing helpers including `hash`, `generateHmac`, `hashPbkdf2`, `fingerprint`, and `safetyNumbers`
 - Compression helpers `compress` and `decompress`
+- Fused shell primitives `fuse`, `unfuse`, and `inspectFused`
+- Fused-first full-flow helpers `protect`, `open`, `inspectArtifact`, and `repackArtifact`
 - Fused-first v2 planning metadata through `VOIDED_V2_PRESET_PLAN`
 - `KeyManager`, streaming helpers, stats, and upload-limit helpers
 
@@ -71,7 +73,7 @@ Local development binaries are copied into `native/`. Release prebuilds live in
 ## Notes
 
 - Deprecated map-first behavior is no longer exported from this package branch.
-- The long-term wrapper target is a thin `protect/open/inspect` surface over `voided-node`, not a second product contract that drifts away from `voided-core`.
+- The primary wrapper contract is now the fused-first `protect/open/inspect/repack` surface over `voided-node`.
 - The service layer is synchronous because the native Rust binding is loaded directly into Node.js.
 - Examples live in the repository-level `examples/` directory and package test fixtures.
 

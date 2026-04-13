@@ -25,6 +25,35 @@ export interface CompressionResult {
   compressionRatio: number;
 }
 
+export interface FusedShellInfo {
+  version: number;
+  preset: string;
+  chunkSize: number;
+  chunkCount: number;
+  payloadSize: number;
+  shellSize: number;
+  metadataSize: number;
+  tagSize: number;
+}
+
+export interface ProtectedArtifactInfo {
+  version: number;
+  preset: string;
+  compressionAlgorithm: string;
+  encryptionAlgorithm: string;
+  originalSize: number;
+  compressedSize: number;
+  encryptedSize: number;
+  protectedSize: number;
+  shellChunkSize: number;
+  shellChunkCount: number;
+  shellNonce: Buffer;
+}
+
+export interface ProtectResult extends ProtectedArtifactInfo {
+  artifact: Buffer;
+}
+
 // Native module interface
 export interface NativeModule {
   VERSION: string;
@@ -51,6 +80,31 @@ export interface NativeModule {
   // Compression
   compress(data: Buffer, algorithm?: string, level?: number): CompressionResult;
   decompress(data: Buffer, algorithm: string): Buffer;
+
+  // Fused shell / full-flow
+  fuse(data: Buffer, key: Buffer, preset?: string, chunkSize?: number): Buffer;
+  unfuse(data: Buffer, key: Buffer): Buffer;
+  inspectFused(data: Buffer): FusedShellInfo;
+  protect(
+    data: Buffer,
+    key: Buffer,
+    preset?: string,
+    compressionAlgorithm?: string,
+    compressionLevel?: number,
+    encryptionAlgorithm?: string,
+    shellChunkSize?: number,
+  ): ProtectResult;
+  open(artifact: Buffer, key: Buffer): Buffer;
+  inspectArtifact(artifact: Buffer): ProtectedArtifactInfo;
+  repackArtifact(
+    artifact: Buffer,
+    key: Buffer,
+    preset?: string,
+    compressionAlgorithm?: string,
+    compressionLevel?: number,
+    encryptionAlgorithm?: string,
+    shellChunkSize?: number,
+  ): ProtectResult;
 
   // Utility
   randomBytes(length: number): Buffer;

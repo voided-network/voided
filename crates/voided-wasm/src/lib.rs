@@ -322,6 +322,55 @@ pub struct CompressionResult {
     pub compression_ratio: f64,
 }
 
+/// Fused shell metadata
+#[derive(Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FusedShellInfo {
+    pub version: u32,
+    pub preset: String,
+    pub chunk_size: u32,
+    pub chunk_count: u32,
+    pub payload_size: u32,
+    pub shell_size: u32,
+    pub metadata_size: u32,
+    pub tag_size: u32,
+}
+
+/// Protected artifact metadata
+#[derive(Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProtectedArtifactInfo {
+    pub version: u32,
+    pub preset: String,
+    pub compression_algorithm: String,
+    pub encryption_algorithm: String,
+    pub original_size: u32,
+    pub compressed_size: u32,
+    pub encrypted_size: u32,
+    pub protected_size: u32,
+    pub shell_chunk_size: u32,
+    pub shell_chunk_count: u32,
+    pub shell_nonce: Vec<u8>,
+}
+
+/// Result of protect/repack operations.
+#[derive(Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProtectResult {
+    pub artifact: Vec<u8>,
+    pub version: u32,
+    pub preset: String,
+    pub compression_algorithm: String,
+    pub encryption_algorithm: String,
+    pub original_size: u32,
+    pub compressed_size: u32,
+    pub encrypted_size: u32,
+    pub protected_size: u32,
+    pub shell_chunk_size: u32,
+    pub shell_chunk_count: u32,
+    pub shell_nonce: Vec<u8>,
+}
+
 /// Compress data
 #[wasm_bindgen]
 pub fn compress(
@@ -365,6 +414,206 @@ pub fn decompress(data: &[u8], algorithm: &str) -> Result<Vec<u8>, JsValue> {
     };
 
     voided_core::compression::decompress(data, algo).map_err(|e| JsValue::from_str(&e.to_string()))
+}
+
+// ============================================================================
+// Fused shell / full-flow
+// ============================================================================
+
+fn parse_key(key: &[u8]) -> Result<voided_core::encryption::Key, JsValue> {
+    voided_core::encryption::Key::from_bytes(key).map_err(|e| JsValue::from_str(&e.to_string()))
+}
+
+fn parse_preset(preset: Option<String>) -> Result<voided_core::shell::FusedPreset, JsValue> {
+    preset
+        .as_deref()
+        .map(voided_core::shell::FusedPreset::from_name)
+        .transpose()
+        .map_err(|e| JsValue::from_str(&e.to_string()))
+        .map(|preset| preset.unwrap_or_default())
+}
+
+fn parse_encryption_algorithm(
+    algorithm: Option<String>,
+) -> Option<voided_core::encryption::Algorithm> {
+    algorithm.as_deref().map(|algorithm| match algorithm {
+        "xchacha20-poly1305" => voided_core::encryption::Algorithm::XChaCha20Poly1305,
+        _ => voided_core::encryption::Algorithm::Aes256Gcm,
+    })
+}
+
+fn parse_compression_algorithm(
+    algorithm: Option<String>,
+) -> voided_core::compression::CompressionAlgorithm {
+    match algorithm.as_deref() {
+        Some("gzip") => voided_core::compression::CompressionAlgorithm::Gzip,
+        Some("none") => voided_core::compression::CompressionAlgorithm::None,
+        _ => voided_core::compression::CompressionAlgorithm::Brotli,
+    }
+}
+
+fn shell_info_from_core(info: voided_core::shell::FusedShellInfo) -> FusedShellInfo {
+    FusedShellInfo {
+        version: info.version as u32,
+        preset: info.preset_label,
+        chunk_size: info.chunk_size,
+        chunk_count: info.chunk_count as u32,
+        payload_size: info.payload_size as u32,
+        shell_size: info.shell_size as u32,
+        metadata_size: info.metadata_size as u32,
+        tag_size: info.tag_size as u32,
+    }
+}
+
+fn artifact_info_from_core(info: voided_core::shell::ProtectedArtifactInfo) -> ProtectedArtifactInfo {
+    ProtectedArtifactInfo {
+        version: info.version as u32,
+        preset: info.preset_label,
+        compression_algorithm: info.compression_algorithm.name().to_string(),
+        encryption_algorithm: info.encryption_algorithm.name().to_string(),
+        original_size: info.original_size as u32,
+        compressed_size: info.compressed_size as u32,
+        encrypted_size: info.encrypted_size as u32,
+        protected_size: info.protected_size as u32,
+        shell_chunk_size: info.shell_chunk_size,
+        shell_chunk_count: info.shell_chunk_count as u32,
+        shell_nonce: info.shell_nonce.to_vec(),
+    }
+}
+
+fn protect_result_from_core(result: voided_core::shell::ProtectResult) -> ProtectResult {
+    ProtectResult {
+        artifact: result.artifact,
+        version: result.info.version as u32,
+        preset: result.info.preset_label,
+        compression_algorithm: result.info.compression_algorithm.name().to_string(),
+        encryption_algorithm: result.info.encryption_algorithm.name().to_string(),
+        original_size: result.info.original_size as u32,
+        compressed_size: result.info.compressed_size as u32,
+        encrypted_size: result.info.encrypted_size as u32,
+        protected_size: result.info.protected_size as u32,
+        shell_chunk_size: result.info.shell_chunk_size,
+        shell_chunk_count: result.info.shell_chunk_count as u32,
+        shell_nonce: result.info.shell_nonce.to_vec(),
+    }
+}
+
+/// Fuse arbitrary bytes with the fused shell primitive.
+#[wasm_bindgen]
+pub fn fuse(
+    data: &[u8],
+    key: &[u8],
+    preset: Option<String>,
+    chunk_size: Option<u32>,
+) -> Result<Vec<u8>, JsValue> {
+    let key = parse_key(key)?;
+    let preset = parse_preset(preset)?;
+
+    voided_core::shell::fuse_bytes(
+        data,
+        &key,
+        Some(voided_core::shell::FusedShellOptions {
+            preset,
+            chunk_size: chunk_size.map(|size| size as usize),
+            shell_nonce: None,
+        }),
+    )
+    .map_err(|e| JsValue::from_str(&e.to_string()))
+}
+
+/// Reverse the fused shell primitive.
+#[wasm_bindgen]
+pub fn unfuse(data: &[u8], key: &[u8]) -> Result<Vec<u8>, JsValue> {
+    let key = parse_key(key)?;
+    voided_core::shell::unfuse_bytes(data, &key).map_err(|e| JsValue::from_str(&e.to_string()))
+}
+
+/// Inspect a fused shell envelope without a key.
+#[wasm_bindgen(js_name = inspectFused)]
+pub fn inspect_fused(data: &[u8]) -> Result<JsValue, JsValue> {
+    let info = voided_core::shell::inspect_fused(data).map_err(|e| JsValue::from_str(&e.to_string()))?;
+    serde_wasm_bindgen::to_value(&shell_info_from_core(info))
+        .map_err(|e| JsValue::from_str(&e.to_string()))
+}
+
+/// Protect bytes with the fused-first Voided v2 full flow.
+#[wasm_bindgen]
+pub fn protect(
+    data: &[u8],
+    key: &[u8],
+    preset: Option<String>,
+    compression_algorithm: Option<String>,
+    compression_level: Option<u32>,
+    encryption_algorithm: Option<String>,
+    shell_chunk_size: Option<u32>,
+) -> Result<JsValue, JsValue> {
+    let key = parse_key(key)?;
+    let preset = parse_preset(preset)?;
+    let result = voided_core::shell::protect(
+        data,
+        &key,
+        Some(voided_core::shell::ProtectOptions {
+            preset,
+            compression_algorithm: parse_compression_algorithm(compression_algorithm),
+            compression_level: compression_level.unwrap_or(6),
+            compression_min_size_threshold: 100,
+            encryption_algorithm: parse_encryption_algorithm(encryption_algorithm),
+            shell_chunk_size: shell_chunk_size.map(|size| size as usize),
+            shell_nonce: None,
+        }),
+    )
+    .map_err(|e| JsValue::from_str(&e.to_string()))?;
+
+    serde_wasm_bindgen::to_value(&protect_result_from_core(result))
+        .map_err(|e| JsValue::from_str(&e.to_string()))
+}
+
+/// Open a fused protected artifact.
+#[wasm_bindgen(js_name = open)]
+pub fn open_artifact(artifact: &[u8], key: &[u8]) -> Result<Vec<u8>, JsValue> {
+    let key = parse_key(key)?;
+    voided_core::shell::open(artifact, &key).map_err(|e| JsValue::from_str(&e.to_string()))
+}
+
+/// Inspect a fused protected artifact without a key.
+#[wasm_bindgen(js_name = inspectArtifact)]
+pub fn inspect_artifact(artifact: &[u8]) -> Result<JsValue, JsValue> {
+    let info =
+        voided_core::shell::inspect_artifact(artifact).map_err(|e| JsValue::from_str(&e.to_string()))?;
+    serde_wasm_bindgen::to_value(&artifact_info_from_core(info))
+        .map_err(|e| JsValue::from_str(&e.to_string()))
+}
+
+/// Repack an artifact under a new fused preset/profile.
+#[wasm_bindgen(js_name = repackArtifact)]
+pub fn repack_artifact(
+    artifact: &[u8],
+    key: &[u8],
+    preset: Option<String>,
+    compression_algorithm: Option<String>,
+    compression_level: Option<u32>,
+    encryption_algorithm: Option<String>,
+    shell_chunk_size: Option<u32>,
+) -> Result<JsValue, JsValue> {
+    let key = parse_key(key)?;
+    let preset = parse_preset(preset)?;
+    let result = voided_core::shell::repack_artifact(
+        artifact,
+        &key,
+        Some(voided_core::shell::ProtectOptions {
+            preset,
+            compression_algorithm: parse_compression_algorithm(compression_algorithm),
+            compression_level: compression_level.unwrap_or(6),
+            compression_min_size_threshold: 100,
+            encryption_algorithm: parse_encryption_algorithm(encryption_algorithm),
+            shell_chunk_size: shell_chunk_size.map(|size| size as usize),
+            shell_nonce: None,
+        }),
+    )
+    .map_err(|e| JsValue::from_str(&e.to_string()))?;
+
+    serde_wasm_bindgen::to_value(&protect_result_from_core(result))
+        .map_err(|e| JsValue::from_str(&e.to_string()))
 }
 
 // ============================================================================

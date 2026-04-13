@@ -20,6 +20,10 @@ pub enum Error {
     #[error("Unsupported algorithm: {0}")]
     UnsupportedAlgorithm(u8),
 
+    /// Unsupported fused preset identifier
+    #[error("Unsupported fused preset: {0}")]
+    UnsupportedPreset(u8),
+
     /// Data shorter than expected
     #[error("Truncated payload: expected at least {expected} bytes, got {actual}")]
     TruncatedPayload {
@@ -95,6 +99,10 @@ pub enum Error {
         /// Actual nonce length in bytes
         actual: usize,
     },
+
+    /// Invalid runtime configuration
+    #[error("Invalid configuration: {0}")]
+    InvalidConfiguration(String),
 
     /// Signing operation failed
     #[error("Signing failed: {0}")]

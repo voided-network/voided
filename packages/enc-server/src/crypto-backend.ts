@@ -146,6 +146,35 @@ export interface CompressionResult {
   compressionRatio: number;
 }
 
+export interface FusedShellInfo {
+  version: number;
+  preset: 'compact' | 'balanced' | 'concealed' | string;
+  chunkSize: number;
+  chunkCount: number;
+  payloadSize: number;
+  shellSize: number;
+  metadataSize: number;
+  tagSize: number;
+}
+
+export interface ProtectedArtifactInfo {
+  version: number;
+  preset: 'compact' | 'balanced' | 'concealed' | string;
+  compressionAlgorithm: 'gzip' | 'brotli' | 'none' | string;
+  encryptionAlgorithm: 'xchacha20-poly1305' | 'aes-256-gcm' | string;
+  originalSize: number;
+  compressedSize: number;
+  encryptedSize: number;
+  protectedSize: number;
+  shellChunkSize: number;
+  shellChunkCount: number;
+  shellNonce: Buffer;
+}
+
+export interface ProtectResult extends ProtectedArtifactInfo {
+  artifact: Buffer;
+}
+
 export function compress(
   data: Buffer,
   algorithm: 'gzip' | 'brotli' = 'brotli',
@@ -163,6 +192,79 @@ export function compress(
 
 export function decompress(data: Buffer, algorithm: 'gzip' | 'brotli'): Buffer {
   return native().decompress(data, algorithm);
+}
+
+// ============================================================================
+// FUSED SHELL / FULL-FLOW
+// ============================================================================
+
+export function fuse(
+  data: Buffer,
+  key: Buffer,
+  preset: 'compact' | 'balanced' | 'concealed' = 'balanced',
+  chunkSize?: number,
+): Buffer {
+  return native().fuse(data, key, preset, chunkSize);
+}
+
+export function unfuse(data: Buffer, key: Buffer): Buffer {
+  return native().unfuse(data, key);
+}
+
+export function inspectFused(data: Buffer): FusedShellInfo {
+  return native().inspectFused(data);
+}
+
+export function protect(
+  data: Buffer,
+  key: Buffer,
+  options: {
+    preset?: 'compact' | 'balanced' | 'concealed';
+    compressionAlgorithm?: 'gzip' | 'brotli' | 'none';
+    compressionLevel?: number;
+    encryptionAlgorithm?: 'xchacha20-poly1305' | 'aes-256-gcm';
+    shellChunkSize?: number;
+  } = {},
+): ProtectResult {
+  return native().protect(
+    data,
+    key,
+    options.preset,
+    options.compressionAlgorithm,
+    options.compressionLevel,
+    options.encryptionAlgorithm,
+    options.shellChunkSize,
+  );
+}
+
+export function open(artifact: Buffer, key: Buffer): Buffer {
+  return native().open(artifact, key);
+}
+
+export function inspectArtifact(artifact: Buffer): ProtectedArtifactInfo {
+  return native().inspectArtifact(artifact);
+}
+
+export function repackArtifact(
+  artifact: Buffer,
+  key: Buffer,
+  options: {
+    preset?: 'compact' | 'balanced' | 'concealed';
+    compressionAlgorithm?: 'gzip' | 'brotli' | 'none';
+    compressionLevel?: number;
+    encryptionAlgorithm?: 'xchacha20-poly1305' | 'aes-256-gcm';
+    shellChunkSize?: number;
+  } = {},
+): ProtectResult {
+  return native().repackArtifact(
+    artifact,
+    key,
+    options.preset,
+    options.compressionAlgorithm,
+    options.compressionLevel,
+    options.encryptionAlgorithm,
+    options.shellChunkSize,
+  );
 }
 
 // ============================================================================

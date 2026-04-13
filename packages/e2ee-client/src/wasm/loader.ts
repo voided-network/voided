@@ -33,6 +33,35 @@ export interface CompressionResult {
   compressionRatio: number;
 }
 
+export interface FusedShellInfo {
+  version: number;
+  preset: string;
+  chunkSize: number;
+  chunkCount: number;
+  payloadSize: number;
+  shellSize: number;
+  metadataSize: number;
+  tagSize: number;
+}
+
+export interface ProtectedArtifactInfo {
+  version: number;
+  preset: string;
+  compressionAlgorithm: string;
+  encryptionAlgorithm: string;
+  originalSize: number;
+  compressedSize: number;
+  encryptedSize: number;
+  protectedSize: number;
+  shellChunkSize: number;
+  shellChunkCount: number;
+  shellNonce: Uint8Array;
+}
+
+export interface ProtectResult extends ProtectedArtifactInfo {
+  artifact: Uint8Array;
+}
+
 // WASM module interface
 export interface WasmModule {
   version(): string;
@@ -63,6 +92,31 @@ export interface WasmModule {
   // Compression
   compress(data: Uint8Array, algorithm?: string, level?: number): CompressionResult;
   decompress(data: Uint8Array, algorithm: string): Uint8Array;
+
+  // Fused shell / full-flow
+  fuse(data: Uint8Array, key: Uint8Array, preset?: string, chunkSize?: number): Uint8Array;
+  unfuse(data: Uint8Array, key: Uint8Array): Uint8Array;
+  inspectFused(data: Uint8Array): FusedShellInfo;
+  protect(
+    data: Uint8Array,
+    key: Uint8Array,
+    preset?: string,
+    compressionAlgorithm?: string,
+    compressionLevel?: number,
+    encryptionAlgorithm?: string,
+    shellChunkSize?: number,
+  ): ProtectResult;
+  open(artifact: Uint8Array, key: Uint8Array): Uint8Array;
+  inspectArtifact(artifact: Uint8Array): ProtectedArtifactInfo;
+  repackArtifact(
+    artifact: Uint8Array,
+    key: Uint8Array,
+    preset?: string,
+    compressionAlgorithm?: string,
+    compressionLevel?: number,
+    encryptionAlgorithm?: string,
+    shellChunkSize?: number,
+  ): ProtectResult;
 
   // Utility
   random_bytes(length: number): Uint8Array;
@@ -99,6 +153,42 @@ function normalizeCompressionResult(result: any): CompressionResult {
   };
 }
 
+function normalizeFusedShellInfo(result: any): FusedShellInfo {
+  return {
+    version: result.version,
+    preset: result.preset,
+    chunkSize: result.chunkSize ?? result.chunk_size,
+    chunkCount: result.chunkCount ?? result.chunk_count,
+    payloadSize: result.payloadSize ?? result.payload_size,
+    shellSize: result.shellSize ?? result.shell_size,
+    metadataSize: result.metadataSize ?? result.metadata_size,
+    tagSize: result.tagSize ?? result.tag_size,
+  };
+}
+
+function normalizeProtectedArtifactInfo(result: any): ProtectedArtifactInfo {
+  return {
+    version: result.version,
+    preset: result.preset,
+    compressionAlgorithm: result.compressionAlgorithm ?? result.compression_algorithm,
+    encryptionAlgorithm: result.encryptionAlgorithm ?? result.encryption_algorithm,
+    originalSize: result.originalSize ?? result.original_size,
+    compressedSize: result.compressedSize ?? result.compressed_size,
+    encryptedSize: result.encryptedSize ?? result.encrypted_size,
+    protectedSize: result.protectedSize ?? result.protected_size,
+    shellChunkSize: result.shellChunkSize ?? result.shell_chunk_size,
+    shellChunkCount: result.shellChunkCount ?? result.shell_chunk_count,
+    shellNonce: result.shellNonce ?? result.shell_nonce,
+  };
+}
+
+function normalizeProtectResult(result: any): ProtectResult {
+  return {
+    artifact: result.artifact,
+    ...normalizeProtectedArtifactInfo(result),
+  };
+}
+
 function normalizeWasmModule(mod: RawWasmModule): WasmModule {
   const version = getExportFn<() => string>(mod, ["version", "VERSION"]);
   const generateKey = getExportFn<() => Uint8Array>(mod, ["generate_key", "generateKey"]);
@@ -132,6 +222,36 @@ function normalizeWasmModule(mod: RawWasmModule): WasmModule {
   const generateSalt = getExportFn<(length?: number) => Uint8Array>(mod, ["generate_salt", "generateSalt"]);
   const compressFn = getExportFn<(data: Uint8Array, algorithm?: string, level?: number) => any>(mod, ["compress"]);
   const decompressFn = getExportFn<(data: Uint8Array, algorithm: string) => Uint8Array>(mod, ["decompress"]);
+  const fuseFn = getExportFn<(data: Uint8Array, key: Uint8Array, preset?: string, chunkSize?: number) => Uint8Array>(
+    mod,
+    ["fuse"],
+  );
+  const unfuseFn = getExportFn<(data: Uint8Array, key: Uint8Array) => Uint8Array>(mod, ["unfuse"]);
+  const inspectFusedFn = getExportFn<(data: Uint8Array) => any>(mod, ["inspectFused", "inspect_fused"]);
+  const protectFn = getExportFn<
+    (
+      data: Uint8Array,
+      key: Uint8Array,
+      preset?: string,
+      compressionAlgorithm?: string,
+      compressionLevel?: number,
+      encryptionAlgorithm?: string,
+      shellChunkSize?: number,
+    ) => any
+  >(mod, ["protect"]);
+  const openFn = getExportFn<(artifact: Uint8Array, key: Uint8Array) => Uint8Array>(mod, ["open"]);
+  const inspectArtifactFn = getExportFn<(artifact: Uint8Array) => any>(mod, ["inspectArtifact", "inspect_artifact"]);
+  const repackArtifactFn = getExportFn<
+    (
+      artifact: Uint8Array,
+      key: Uint8Array,
+      preset?: string,
+      compressionAlgorithm?: string,
+      compressionLevel?: number,
+      encryptionAlgorithm?: string,
+      shellChunkSize?: number,
+    ) => any
+  >(mod, ["repackArtifact", "repack_artifact"]);
   const randomBytes = getExportFn<(length: number) => Uint8Array>(mod, ["random_bytes", "randomBytes"]);
   const base64Encode = getExportFn<(data: Uint8Array) => string>(mod, ["base64_encode", "base64Encode"]);
   const base64Decode = getExportFn<(encoded: string) => Uint8Array>(mod, ["base64_decode", "base64Decode"]);
@@ -193,6 +313,43 @@ function normalizeWasmModule(mod: RawWasmModule): WasmModule {
     generate_salt: (length) => generateSalt(length),
     compress: (data, algorithm, level) => normalizeCompressionResult(compressFn(data, algorithm, level)),
     decompress: (data, algorithm) => decompressFn(data, algorithm),
+    fuse: (data, key, preset, chunkSize) => fuseFn(data, key, preset, chunkSize),
+    unfuse: (data, key) => unfuseFn(data, key),
+    inspectFused: (data) => normalizeFusedShellInfo(inspectFusedFn(data)),
+    protect: (data, key, preset, compressionAlgorithm, compressionLevel, encryptionAlgorithm, shellChunkSize) =>
+      normalizeProtectResult(
+        protectFn(
+          data,
+          key,
+          preset,
+          compressionAlgorithm,
+          compressionLevel,
+          encryptionAlgorithm,
+          shellChunkSize,
+        ),
+      ),
+    open: (artifact, key) => openFn(artifact, key),
+    inspectArtifact: (artifact) => normalizeProtectedArtifactInfo(inspectArtifactFn(artifact)),
+    repackArtifact: (
+      artifact,
+      key,
+      preset,
+      compressionAlgorithm,
+      compressionLevel,
+      encryptionAlgorithm,
+      shellChunkSize,
+    ) =>
+      normalizeProtectResult(
+        repackArtifactFn(
+          artifact,
+          key,
+          preset,
+          compressionAlgorithm,
+          compressionLevel,
+          encryptionAlgorithm,
+          shellChunkSize,
+        ),
+      ),
     random_bytes: (length) => randomBytes(length),
     base64_encode: (data) => base64Encode(data),
     base64_decode: (encoded) => base64Decode(encoded),
