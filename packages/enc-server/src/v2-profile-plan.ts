@@ -1,140 +1,169 @@
 /**
- * Planning-only metadata for the fused-first Voided v2 migration.
+ * Planning-only metadata for the fused-first Voided v2 preset and role-alias
+ * migration.
  *
- * This file intentionally captures the target profile and policy surface before
+ * This file intentionally captures the target preset and policy surface before
  * the fused-shell runtime is promoted into the package. Keeping these ids and
  * defaults in source gives downstream consumers one place to align on names
  * during the migration.
  */
 
-export type VoidedV2ProfileId =
-  | "fused.default.v2"
-  | "fused.hardened.v2"
-  | "fused.structured.v2"
+export type VoidedV2PresetId =
+  | "fused.compact.v2"
+  | "fused.balanced.v2"
+  | "fused.concealed.v2"
   | "map.legacy.v1";
 
-export type VoidedV2ProfileAlias =
-  | "default"
-  | "high-security"
-  | "experimental-fused-structured"
+export type VoidedV2PresetAlias =
+  | "compact"
+  | "balanced"
+  | "concealed"
   | "legacy-map";
 
-export type VoidedV2ProfileSupport = "stable" | "experimental" | "legacy";
-export type VoidedV2ProfileStatus = "planned" | "compat";
+export type VoidedV2RoleAlias =
+  | "default"
+  | "high-security"
+  | "low-overhead";
 
-export interface VoidedV2ProfilePlanEntry {
-  id: VoidedV2ProfileId;
-  alias: VoidedV2ProfileAlias;
-  support: VoidedV2ProfileSupport;
-  status: VoidedV2ProfileStatus;
+export type VoidedV2PresetSupport = "stable" | "legacy";
+export type VoidedV2PresetStatus = "planned" | "compat";
+
+export interface VoidedV2PresetPlanEntry {
+  id: VoidedV2PresetId;
+  alias: VoidedV2PresetAlias;
+  roleAliases: readonly VoidedV2RoleAlias[];
+  support: VoidedV2PresetSupport;
+  status: VoidedV2PresetStatus;
   pipeline:
     | "compression->encryption->fused-shell"
     | "compression->encryption->map-shell";
+  internalShell:
+    | "FusedPrefixShell"
+    | "FusedReactiveShell"
+    | "FusedScheduledShell"
+    | "SequentialMapCompat";
   summary: string;
   notes: readonly string[];
 }
 
-export const VOIDED_V2_PROFILE_PLAN = [
+export const VOIDED_V2_PRESET_PLAN = [
   {
-    id: "fused.default.v2",
-    alias: "default",
+    id: "fused.compact.v2",
+    alias: "compact",
+    roleAliases: ["low-overhead"],
     support: "stable",
     status: "planned",
     pipeline: "compression->encryption->fused-shell",
-    summary: "Primary fused-first flow for normal Voided product traffic.",
+    internalShell: "FusedPrefixShell",
+    summary: "Lowest-overhead stable fused preset.",
     notes: [
-      "Expected default write profile for Slipner.",
-      "Replaces the current map-first product story.",
+      "Maps directly to the frozen compact fused preset.",
+      "Useful when overhead matters more than concealment variety.",
     ],
   },
   {
-    id: "fused.hardened.v2",
-    alias: "high-security",
+    id: "fused.balanced.v2",
+    alias: "balanced",
+    roleAliases: ["default"],
     support: "stable",
     status: "planned",
     pipeline: "compression->encryption->fused-shell",
-    summary: "Stable fused-first profile with heavier shell hardness.",
+    internalShell: "FusedReactiveShell",
+    summary: "Default fused preset for normal Voided product traffic.",
     notes: [
-      "Intended for operators who want more shell overhead.",
-      "Does not pull map shell back into the default stable path.",
+      "Maps directly to the frozen balanced fused preset.",
+      "Recommended default write preset for Slipner.",
     ],
   },
   {
-    id: "fused.structured.v2",
-    alias: "experimental-fused-structured",
-    support: "experimental",
+    id: "fused.concealed.v2",
+    alias: "concealed",
+    roleAliases: ["high-security"],
+    support: "stable",
     status: "planned",
     pipeline: "compression->encryption->fused-shell",
-    summary: "Experimental fused profile for structured or adaptive shell modes.",
+    internalShell: "FusedScheduledShell",
+    summary: "Heavier stable fused preset with more concealment variation.",
     notes: [
-      "Should remain opt-in until research and runtime validation settle.",
-      "Not selected by default alias resolution.",
+      "Maps directly to the frozen concealed fused preset.",
+      "Recommended high-security role alias.",
     ],
   },
   {
     id: "map.legacy.v1",
     alias: "legacy-map",
+    roleAliases: [],
     support: "legacy",
     status: "compat",
     pipeline: "compression->encryption->map-shell",
+    internalShell: "SequentialMapCompat",
     summary: "Compatibility lane for historical map-first artifacts and controlled writes.",
     notes: [
       "Readable during migration.",
       "Should not remain the main product-facing write path.",
     ],
   },
-] as const satisfies readonly VoidedV2ProfilePlanEntry[];
+]
+  as const satisfies readonly VoidedV2PresetPlanEntry[];
 
-const PROFILE_ALIAS_MAP: Readonly<Record<VoidedV2ProfileAlias, VoidedV2ProfileId>> = {
-  default: "fused.default.v2",
-  "high-security": "fused.hardened.v2",
-  "experimental-fused-structured": "fused.structured.v2",
+const PRESET_ALIAS_MAP: Readonly<Record<VoidedV2PresetAlias, VoidedV2PresetId>> = {
+  compact: "fused.compact.v2",
+  balanced: "fused.balanced.v2",
+  concealed: "fused.concealed.v2",
   "legacy-map": "map.legacy.v1",
 };
 
-const PROFILE_INDEX = new Map<VoidedV2ProfileId, VoidedV2ProfilePlanEntry>(
-  VOIDED_V2_PROFILE_PLAN.map((entry) => [entry.id, entry])
+const ROLE_ALIAS_MAP: Readonly<Record<VoidedV2RoleAlias, VoidedV2PresetId>> = {
+  default: "fused.balanced.v2",
+  "high-security": "fused.concealed.v2",
+  "low-overhead": "fused.compact.v2",
+};
+
+const PRESET_INDEX = new Map<VoidedV2PresetId, VoidedV2PresetPlanEntry>(
+  VOIDED_V2_PRESET_PLAN.map((entry) => [entry.id, entry])
 );
 
-export function listVoidedV2Profiles(): readonly VoidedV2ProfilePlanEntry[] {
-  return VOIDED_V2_PROFILE_PLAN;
+export function listVoidedV2Presets(): readonly VoidedV2PresetPlanEntry[] {
+  return VOIDED_V2_PRESET_PLAN;
 }
 
-export function resolveVoidedV2Profile(
-  profile: VoidedV2ProfileId | VoidedV2ProfileAlias
-): VoidedV2ProfilePlanEntry | undefined {
-  const profileId = PROFILE_ALIAS_MAP[profile as VoidedV2ProfileAlias] ?? profile;
-  return PROFILE_INDEX.get(profileId as VoidedV2ProfileId);
+export function resolveVoidedV2Preset(
+  preset: VoidedV2PresetId | VoidedV2PresetAlias | VoidedV2RoleAlias
+): VoidedV2PresetPlanEntry | undefined {
+  const presetId =
+    PRESET_ALIAS_MAP[preset as VoidedV2PresetAlias] ??
+    ROLE_ALIAS_MAP[preset as VoidedV2RoleAlias] ??
+    preset;
+  return PRESET_INDEX.get(presetId as VoidedV2PresetId);
 }
 
 export interface VoidedV2PolicyPlan {
-  defaultWriteProfile: VoidedV2ProfileId;
-  acceptedReadProfiles: readonly VoidedV2ProfileId[];
-  allowExperimentalProfiles: boolean;
+  defaultWritePreset: VoidedV2PresetId;
+  acceptedReadPresets: readonly VoidedV2PresetId[];
   allowLegacyWrites: boolean;
   repackLegacyOnRead: boolean;
 }
 
 export const DEFAULT_VOIDED_V2_POLICY_PLAN: VoidedV2PolicyPlan = {
-  defaultWriteProfile: "fused.default.v2",
-  acceptedReadProfiles: [
-    "fused.default.v2",
-    "fused.hardened.v2",
+  defaultWritePreset: "fused.balanced.v2",
+  acceptedReadPresets: [
+    "fused.compact.v2",
+    "fused.balanced.v2",
+    "fused.concealed.v2",
     "map.legacy.v1",
   ],
-  allowExperimentalProfiles: false,
   allowLegacyWrites: false,
   repackLegacyOnRead: true,
 };
 
 export const HIGH_SECURITY_VOIDED_V2_POLICY_PLAN: VoidedV2PolicyPlan = {
-  defaultWriteProfile: "fused.hardened.v2",
-  acceptedReadProfiles: [
-    "fused.default.v2",
-    "fused.hardened.v2",
+  defaultWritePreset: "fused.concealed.v2",
+  acceptedReadPresets: [
+    "fused.compact.v2",
+    "fused.balanced.v2",
+    "fused.concealed.v2",
     "map.legacy.v1",
   ],
-  allowExperimentalProfiles: false,
   allowLegacyWrites: false,
   repackLegacyOnRead: true,
 };

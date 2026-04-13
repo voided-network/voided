@@ -125,17 +125,18 @@ export {
 
 // Planning metadata for the fused-first Voided v2 migration
 export {
-  VOIDED_V2_PROFILE_PLAN,
+  VOIDED_V2_PRESET_PLAN,
   DEFAULT_VOIDED_V2_POLICY_PLAN,
   HIGH_SECURITY_VOIDED_V2_POLICY_PLAN,
-  listVoidedV2Profiles,
-  resolveVoidedV2Profile,
+  listVoidedV2Presets,
+  resolveVoidedV2Preset,
   type VoidedV2PolicyPlan,
-  type VoidedV2ProfileAlias,
-  type VoidedV2ProfileId,
-  type VoidedV2ProfilePlanEntry,
-  type VoidedV2ProfileStatus,
-  type VoidedV2ProfileSupport,
+  type VoidedV2PresetAlias,
+  type VoidedV2PresetId,
+  type VoidedV2PresetPlanEntry,
+  type VoidedV2PresetStatus,
+  type VoidedV2PresetSupport,
+  type VoidedV2RoleAlias,
 } from "./v2-profile-plan.js";
 
 // ============================================================================
@@ -164,7 +165,7 @@ export interface VoidedServiceOptions {
  * VoidedService - High-level encryption service
  *
  * @deprecated This convenience wrapper is map-first and remains for
- * compatibility. Voided v2 is moving toward profile-based fused-shell flows.
+ * compatibility. Voided v2 is moving toward preset-based fused-shell flows.
  */
 export class VoidedService {
   private key: Buffer;

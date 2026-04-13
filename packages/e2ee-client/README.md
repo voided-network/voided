@@ -2,6 +2,13 @@
 
 `@voideddev/e2ee-client` is the browser-side Voided library. It provides end-to-end encryption, browser storage, key import/export, chunking for large payloads, and an optional Rust/WASM backend behind a stable TypeScript API.
 
+Today the runtime layering is:
+
+- `voided-core` as the source-of-truth Rust implementation
+- `voided-wasm` as the browser binding over `voided-core`
+- `@voideddev/e2ee-client` as the browser TypeScript wrapper over `voided-wasm`
+  with a TypeScript fallback when WASM cannot load
+
 ## Installation
 
 ```bash
@@ -47,6 +54,10 @@ console.log(isWasmReady());
 
 - Encryption keys stay on the client side unless you explicitly export them.
 - The package does not implement passkey or OPRF authentication flows; derive session keys in your auth layer and then import them here when needed.
+- The fused-first Voided v2 direction should come through `voided-wasm`, not a
+  separate handwritten TypeScript shell implementation. The frozen fused preset
+  surface is `compact`, `balanced`, and `concealed`, with `balanced` as the
+  expected default role alias.
 - Examples live in `examples/` and `packages/e2ee-client/examples/`.
 
 ## Development

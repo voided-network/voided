@@ -22,9 +22,9 @@ This lets Voided tell the truth about what the system is actually good at:
 
 - the default path is small, native, and direct
 - shelling is a first-class outer artifact instead of an afterthought
-- profile choice happens at the product level, not through a pile of low-level
+- preset choice happens at the product level, not through a pile of low-level
   knobs
-- Slipner can consume a stable `seal/open/inspect/repack` surface instead of
+- Slipner can consume a stable `protect/open/inspect/repack` surface instead of
   hand-assembling flows
 
 ## Product goals
@@ -32,7 +32,7 @@ This lets Voided tell the truth about what the system is actually good at:
 - Make fused shell the supported default artifact shape.
 - Keep primitive access for compression, encryption, and fused shell.
 - Keep map shell only as experimental or legacy compatibility material.
-- Give users stable profile names instead of asking them to choose shell tuning
+- Give users stable preset names instead of asking them to choose shell tuning
   details.
 - Give Slipner one clean consumption model for write, read, and migration.
 - Keep the stack lightweight and native. No Docker, no extra service tier.
@@ -54,6 +54,33 @@ pointing in different directions.
 Voided v2 should fix that mismatch directly instead of trying to cosmetically
 rebrand the old map-first API.
 
+## Current runtime stack
+
+The migration has to respect the stack that already exists today:
+
+- `voided-core`
+  - source-of-truth Rust implementation for crypto behavior
+- `voided-node`
+  - N-API binding that exposes `voided-core` into Node.js
+- `@voideddev/enc-server`
+  - TypeScript Node wrapper around `voided-node`
+- `voided-wasm`
+  - wasm-bindgen binding that exposes `voided-core` into browser runtimes
+- `@voideddev/e2ee-client`
+  - browser TypeScript wrapper that prefers `voided-wasm` and falls back to
+    TypeScript or Web Crypto helpers when WASM cannot load
+
+That means the migration should move in this order:
+
+1. `voided-core`
+2. `voided-node` and `voided-wasm`
+3. `@voideddev/enc-server` and `@voideddev/e2ee-client`
+4. Slipner integration
+
+The fused-first design should not be implemented independently in each wrapper.
+The algorithm and preset registry should live in `voided-core`, then be
+projected through both bindings.
+
 ## Architecture direction
 
 ### Outer artifact
@@ -64,7 +91,7 @@ payloads.
 The outer artifact should carry:
 
 - artifact format version
-- profile id
+- preset id
 - shell mode
 - shell tuning values needed for decode
 - authentication material for tamper detection
@@ -78,16 +105,16 @@ v2.
 
 Voided should present two layers:
 
-1. profile-first full flows for normal product use
+1. preset-first full flows for normal product use
 2. primitive modules for expert use, tooling, and labs
 
 Normal callers should think in terms of:
 
-- `seal`
+- `protect`
 - `open`
 - `inspect`
 - `repack`
-- `profile`
+- `preset`
 
 They should not need to think in terms of:
 
@@ -112,7 +139,7 @@ crates/voided-core/src/
   shell/
     mod.rs
     auth.rs
-    profile.rs
+    preset.rs
     fused.rs
     map.rs
     inspect.rs
@@ -138,15 +165,15 @@ Module responsibilities:
 - `shell::map`
   - experimental or legacy map shell handling
   - no longer the center of the product
-- `shell::profile`
-  - versioned profile registry
+- `shell::preset`
+  - versioned preset registry
   - support level metadata
-  - alias resolution such as `default -> fused.default.v2`
+  - alias resolution such as `default -> fused.balanced.v2`
 - `shell::inspect`
   - lightweight artifact header inspection without full decode
-  - read profile id, format version, shell mode, and compatibility flags
+  - read preset id, format version, shell mode, and compatibility flags
 - `shell::pipeline`
-  - `seal`, `open`, and `repack`
+  - `protect`, `open`, and `repack`
   - glue for `compression -> encryption -> shell`
 - `compat`
   - shims for old map-first entry points
@@ -154,29 +181,31 @@ Module responsibilities:
 
 ## Proposed Node package layout
 
-The Node package should stop presenting map flow as the main product API.
+`@voideddev/enc-server` is a TypeScript wrapper over `voided-node`, so the
+package should stop presenting map flow as the main product API while staying a
+thin orchestration layer over the Rust binding.
 
 ### High-level surface
 
 ```ts
 import {
-  seal,
+  protect,
   open,
   inspectArtifact,
   repackArtifact,
-  listProfiles,
-  resolveProfile,
+  listPresets,
+  resolvePreset,
 } from "@voideddev/enc-server";
 ```
 
 High-level intent:
 
-- `seal(data, { key, profile, aad })`
+- `protect(data, { key, preset, aad })`
 - `open(artifact, { key, aad })`
 - `inspectArtifact(artifact)`
-- `repackArtifact(artifact, { fromKey, toKey, profile })`
-- `listProfiles()`
-- `resolveProfile("default")`
+- `repackArtifact(artifact, { fromKey, toKey, preset })`
+- `listPresets()`
+- `resolvePreset("balanced")`
 
 ### Primitive surface
 
@@ -203,67 +232,119 @@ Namespace intent:
 Map-specific helpers should move under an explicit experimental or legacy
 namespace instead of staying at the top level beside the default flow.
 
-## User-facing profiles
+## Proposed browser package layout
 
-The product should expose versioned profile ids plus stable human aliases.
+`@voideddev/e2ee-client` should mirror the same fused-first preset surface, but
+it should get that behavior from `voided-wasm`, not from a second handwritten
+TypeScript shell implementation.
 
-### Stable aliases
+### High-level surface
 
-- `default`
-- `high-security`
+```ts
+import {
+  protect,
+  open,
+  inspectArtifact,
+  listPresets,
+  resolvePreset,
+} from "@voideddev/e2ee-client";
+```
 
-### Versioned profile ids
+High-level intent:
 
-- `fused.default.v2`
-- `fused.hardened.v2`
-- `fused.structured.v2` as experimental
+- keep the browser-facing API aligned with `enc-server`
+- prefer `voided-wasm` for fused preset flows
+- expose capability or readiness checks when WASM is unavailable
+
+### Fallback policy
+
+The current TypeScript fallback in `e2ee-client` is useful for today's
+encryption helpers, but it should not become a second source of truth for fused
+shell logic.
+
+For v2:
+
+- fused preset flows should come from `voided-core` through `voided-wasm`
+- the TypeScript fallback can continue to support older helper paths where that
+  is still useful
+- if browser fused flows must require WASM, the API should say that honestly
+  through capability checks instead of quietly diverging from Rust behavior
+
+## User-facing presets and role aliases
+
+The product should expose preset-first names that match the frozen fused family,
+then layer role aliases on top.
+
+### Stable preset aliases
+
+- `compact`
+- `balanced`
+- `concealed`
+
+### Role aliases
+
+- `default` -> `balanced`
+- `high-security` -> `concealed`
+- `low-overhead` -> `compact`
+
+### Versioned preset ids
+
+- `fused.compact.v2`
+- `fused.balanced.v2`
+- `fused.concealed.v2`
 - `map.legacy.v1`
 
-### Profile definitions
+### Internal mapping to frozen fused presets
 
-#### `default` -> `fused.default.v2`
+- `compact` -> `FusedPrefixShell`
+- `balanced` -> `FusedReactiveShell`
+- `concealed` -> `FusedScheduledShell`
+
+### Preset definitions
+
+#### `compact` -> `fused.compact.v2`
+
+Use when the caller wants the cheapest stable fused shell path.
+
+Properties:
+
+- full flow uses `compression -> encryption -> fused shell`
+- maps to the frozen compact fused preset
+- optimized for minimal overhead and simplest shape
+- should stay stable and boring
+
+This is a first-class preset, not the default role alias.
+
+#### `balanced` -> `fused.balanced.v2`
 
 Use when the caller wants the normal supported Voided flow.
 
 Properties:
 
 - full flow uses `compression -> encryption -> fused shell`
-- adaptive compression is allowed
-- default encryption stays modern and boring
+- maps to the frozen reactive fused preset
+- keeps near-compact cost with more internal diversity
 - map shell is not used
 - tuned for general product traffic, not maximum ceremony
 
-This should be the default write profile for Slipner.
+This should be the default write preset for Slipner.
 
-#### `high-security` -> `fused.hardened.v2`
+#### `concealed` -> `fused.concealed.v2`
 
 Use when the caller wants stronger shell hardness at the cost of more overhead.
 
 Properties:
 
 - still fused-first
+- maps to the frozen scheduled fused preset
 - still does not default to map shell
-- allows more aggressive shell geometry and stricter profile policy
+- keeps near-balanced cost with more concealment variation
 - remains stable and supported
 
 This is not an excuse to drag the map path back into the center. If map-based
 hardness proves useful later, it should be opt-in and separately labeled.
 
-#### Experimental fused profiles
-
-Example:
-
-- `fused.structured.v2`
-
-Use for research-backed but not yet default fused modes.
-
-Properties:
-
-- explicit opt-in
-- not selected by default alias resolution
-- readable only when policy allows experimental profiles
-
-#### Legacy map profile
+#### Legacy map preset
 
 - `map.legacy.v1`
 
@@ -273,19 +354,19 @@ Use only for:
 - controlled migration writes during rollout
 - edge cases where an operator intentionally accepts the tradeoff
 
-This profile should be treated as compatibility material, not as the normal
+This preset should be treated as compatibility material, not as the normal
 shape of Voided.
 
-## Profile policy surface
+## Preset policy surface
 
-Voided should distinguish between profile metadata and runtime policy.
+Voided should distinguish between preset metadata and runtime policy.
 
 Suggested policy model:
 
 ```ts
-interface VoidedProfilePolicy {
-  defaultWriteProfile: string;
-  acceptedReadProfiles: string[];
+interface VoidedPresetPolicy {
+  defaultWritePreset: string;
+  acceptedReadPresets: string[];
   allowExperimentalRead?: boolean;
   allowExperimentalWrite?: boolean;
   allowLegacyRead?: boolean;
@@ -296,26 +377,26 @@ interface VoidedProfilePolicy {
 
 Policy rules:
 
-- default writes should always target one stable profile
+- default writes should always target one stable preset
 - experimental writes must be explicit
 - legacy writes should default to off
 - legacy reads should be allowed during migration
-- optional repack should convert old artifacts to the current write profile
+- optional repack should convert old artifacts to the current write preset
 
-This keeps profile choice explicit and keeps compatibility policy out of random
+This keeps preset choice explicit and keeps compatibility policy out of random
 call sites.
 
 ## Slipner consumption model
 
-Slipner should consume Voided through the high-level profile-first surface.
+Slipner should consume Voided through the high-level preset-first surface.
 
 ### What Slipner should call
 
-- `seal`
+- `protect`
 - `open`
 - `inspectArtifact`
 - `repackArtifact`
-- `resolveProfile`
+- `resolvePreset`
 
 ### What Slipner should not do
 
@@ -332,17 +413,17 @@ existing `SurfacePreset` concepts.
 
 Suggested naming:
 
-- `voided_default_write_profile`
-- `voided_accepted_read_profiles`
-- `voided_allow_experimental_profiles`
+- `voided_default_write_preset`
+- `voided_accepted_read_presets`
+- `voided_allow_experimental_presets`
 - `voided_allow_legacy_map_reads`
 - `voided_allow_legacy_map_writes`
 - `voided_migration_mode`
 
 Suggested defaults:
 
-- write profile: `default`
-- accepted reads: `default`, `high-security`, `map.legacy.v1`
+- write preset: `balanced`
+- accepted reads: `compact`, `balanced`, `concealed`, `map.legacy.v1`
 - experimental writes: off
 - legacy writes: off
 - migration mode: lazy repack on read or background repack
@@ -351,11 +432,11 @@ Suggested defaults:
 
 Store enough metadata to reason about migration without fully decoding:
 
-- `voided_profile_id`
+- `voided_preset_id`
 - `voided_artifact_version`
 - `voided_format_family`
 - `voided_written_at`
-- optional `voided_origin_profile_id` after repack
+- optional `voided_origin_preset_id` after repack
 
 That gives Slipner an honest compatibility story and avoids guessing from raw
 bytes later.
@@ -367,8 +448,8 @@ bytes later.
 - compression primitives
 - encryption primitives
 - fused shell primitives
-- profile registry and inspection helpers
-- high-level `seal/open/repack` flow
+- preset registry and inspection helpers
+- high-level `protect/open/repack` flow
 
 ### Becomes compatibility or experimental
 
@@ -393,35 +474,45 @@ Done by this plan.
 Goals:
 
 - state the fused-first direction explicitly
-- define profile ids and policy language
+- define preset ids and policy language
 - stop pretending the old map-first API is the long-term shape
 
 ### Phase 1: promote shell into core
 
 Implementation tasks:
 
-- move fused shell implementation out of lab code into `voided-core`
+- move fused shell implementation and frozen preset mapping out of lab code into
+  `voided-core`
 - turn the current `shell.rs` helper file into a shell module tree
 - add artifact inspection support
-- add profile registry support in Rust
+- add preset registry support in Rust
 
 ### Phase 2: ship dual surface in Node
 
 Implementation tasks:
 
-- add `seal/open/inspect/repack` to `@voideddev/enc-server`
+- add `protect/open/inspect/repack` to `@voideddev/enc-server`
 - expose fused shell primitives
 - move map helpers under explicit experimental or compatibility naming
 - keep old map-first functions as adapters for one release window
+
+### Phase 2b: ship aligned browser surface
+
+Implementation tasks:
+
+- expose the same fused preset registry through `voided-wasm`
+- add aligned `protect/open/inspect` flows to `@voideddev/e2ee-client`
+- keep TypeScript fallback honest about what it can and cannot do for fused v2
+  flows
 
 ### Phase 3: make Slipner dual-read and single-write
 
 Implementation tasks:
 
-- write new artifacts with `default`
+- write new artifacts with `balanced`
 - continue reading `map.legacy.v1`
 - optionally repack old artifacts on read or in background jobs
-- record artifact profile metadata in Slipner storage
+- record artifact preset metadata in Slipner storage
 
 ### Phase 4: deprecate legacy writes
 
@@ -443,13 +534,15 @@ Implementation tasks:
 
 The first implementation pass after this doc should be small and concrete:
 
-1. Add a versioned profile registry in the Rust core.
-2. Add a shell inspection header that carries profile id and shell mode.
+1. Add a versioned preset registry in the Rust core that exposes:
+   `compact`, `balanced`, and `concealed`.
+2. Add a shell inspection header that carries preset id and shell mode.
 3. Move fused shell encode and decode into `voided-core`.
-4. Add Node bindings for fused shell primitives and `seal/open`.
+4. Add Node and WASM bindings for fused shell primitives plus
+   `protect/open`.
 5. Re-express `encryptWithMap` as a compatibility adapter instead of the main
    story.
-6. Teach Slipner to store Voided profile metadata and default to `default`
+6. Teach Slipner to store Voided preset metadata and default to `balanced`
    writes.
 
 ## Non-goals
@@ -457,4 +550,4 @@ The first implementation pass after this doc should be small and concrete:
 - preserving the old map-default product shape out of loyalty
 - adding a container runtime or Docker-based workflow
 - exposing every shell tuning knob as a product setting
-- shipping a stable map-heavy profile unless it proves clearly worth the cost
+- shipping a stable map-heavy preset unless it proves clearly worth the cost

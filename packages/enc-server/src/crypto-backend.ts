@@ -265,7 +265,7 @@ export function hexDecode(encoded: string): Buffer {
 
 /**
  * @deprecated Map-first full flow is now the compatibility lane. New
- * integrations should plan for profile-based fused-shell `seal/open` APIs.
+ * integrations should plan for preset-based fused-shell `protect/open` APIs.
  */
 export interface EncryptWithMapOptions {
   key: Buffer;
@@ -278,7 +278,7 @@ export interface EncryptWithMapOptions {
 
 /**
  * @deprecated Map-first full flow is now the compatibility lane. New
- * integrations should plan for profile-based fused-shell `seal/open` APIs.
+ * integrations should plan for preset-based fused-shell `protect/open` APIs.
  */
 export interface EncryptWithMapResult {
   data: string;

@@ -2,6 +2,12 @@
 
 `@voideddev/enc-server` is the Node.js Voided library. It exposes the native Rust-backed primitives for hashing, compression, encryption, and obfuscation, plus a higher-level service layer for common server-side workflows.
 
+Today the runtime layering is:
+
+- `voided-core` as the source-of-truth Rust implementation
+- `voided-node` as the N-API binding over `voided-core`
+- `@voideddev/enc-server` as the TypeScript wrapper over `voided-node`
+
 ## Installation
 
 ```bash
@@ -37,11 +43,22 @@ The v2 direction is fused-first:
 2. encryption
 3. fused shell
 
+The frozen fused preset surface is:
+
+- `compact`
+- `balanced`
+- `concealed`
+
+with role aliases layered on top:
+
+- `default` -> `balanced`
+- `high-security` -> `concealed`
+
 Map-based obfuscation should move to experimental or legacy positioning instead
 of remaining the default product story. The detailed plan lives in
 [`../../docs/v2-fused-first-architecture.md`](../../docs/v2-fused-first-architecture.md).
-Planning metadata for the target profile and policy ids also lives in
-`VOIDED_V2_PROFILE_PLAN` and `DEFAULT_VOIDED_V2_POLICY_PLAN`.
+Planning metadata for the target preset and policy ids also lives in
+`VOIDED_V2_PRESET_PLAN` and `DEFAULT_VOIDED_V2_POLICY_PLAN`.
 
 ## Package Surface
 
@@ -65,7 +82,8 @@ Local development binaries are copied into `native/`. Release prebuilds live in 
 ## Notes
 
 - `encryptWithMap` requires either an existing obfuscation map or a deterministic `seed`.
-- `encryptWithMap` and `VoidedService` should be treated as compatibility helpers while the fused-first v2 surface is implemented.
+- `encryptWithMap` and `VoidedService` should be treated as compatibility helpers while the fused-first preset surface is implemented.
+- The long-term wrapper target is a thin `protect/open/inspect` surface over `voided-node`, not a second product contract that drifts away from `voided-core`.
 - The service layer is synchronous because the native Rust binding is loaded directly into Node.js.
 - Examples live in the repository-level `examples/` directory and package test fixtures.
 
