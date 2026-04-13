@@ -177,6 +177,84 @@ export class Validator {
     }
 
     /**
+     * Validate fused protected blob
+     */
+    static validateProtectedBlob(blob: any): void {
+        if (!blob || typeof blob !== 'object') {
+            throw new ValidationError('Invalid protected blob: must be an object');
+        }
+
+        if (typeof blob.artifact !== 'string' || blob.artifact.length === 0) {
+            throw new ValidationError('Invalid protected blob: artifact must be a non-empty string');
+        }
+
+        try {
+            atob(blob.artifact);
+        } catch {
+            throw new ValidationError('Invalid protected blob: artifact is not valid base64');
+        }
+
+        if (typeof blob.keyId !== 'string' || blob.keyId.length === 0) {
+            throw new ValidationError('Invalid protected blob: keyId must be a non-empty string');
+        }
+
+        if (blob.version !== '2.0') {
+            throw new ValidationError('Invalid protected blob: unsupported version');
+        }
+
+        if (blob.pipeline !== 'compression->encryption->fused-shell') {
+            throw new ValidationError('Invalid protected blob: unsupported pipeline');
+        }
+
+        const validPresets = ['compact', 'balanced', 'concealed'];
+        if (!validPresets.includes(blob.preset)) {
+            throw new ValidationError('Invalid protected blob: unsupported preset');
+        }
+
+        if (!blob.compression || typeof blob.compression !== 'object') {
+            throw new ValidationError('Invalid protected blob: compression info required');
+        }
+
+        const validCompressionAlgorithms = ['gzip', 'brotli', 'none'];
+        if (!validCompressionAlgorithms.includes(blob.compression.algorithm)) {
+            throw new ValidationError('Invalid protected blob: unsupported compression algorithm');
+        }
+
+        if (typeof blob.compression.originalSize !== 'number' || blob.compression.originalSize < 0) {
+            throw new ValidationError('Invalid protected blob: invalid originalSize');
+        }
+
+        if (typeof blob.compression.compressedSize !== 'number' || blob.compression.compressedSize < 0) {
+            throw new ValidationError('Invalid protected blob: invalid compressedSize');
+        }
+
+        const validEncryptionAlgorithms = ['aes-256-gcm', 'xchacha20-poly1305'];
+        if (!validEncryptionAlgorithms.includes(blob.encryptionAlgorithm)) {
+            throw new ValidationError('Invalid protected blob: unsupported encryption algorithm');
+        }
+
+        if (!blob.shell || typeof blob.shell !== 'object') {
+            throw new ValidationError('Invalid protected blob: shell info required');
+        }
+
+        if (typeof blob.shell.chunkSize !== 'number' || blob.shell.chunkSize <= 0) {
+            throw new ValidationError('Invalid protected blob: invalid shell chunk size');
+        }
+
+        if (typeof blob.shell.chunkCount !== 'number' || blob.shell.chunkCount < 0) {
+            throw new ValidationError('Invalid protected blob: invalid shell chunk count');
+        }
+
+        if (typeof blob.protectedSize !== 'number' || blob.protectedSize <= 0) {
+            throw new ValidationError('Invalid protected blob: invalid protected size');
+        }
+
+        if (blob.textEncoding !== undefined && blob.textEncoding !== 'utf8' && blob.textEncoding !== 'utf16le') {
+            throw new ValidationError('Invalid protected blob: unsupported text encoding');
+        }
+    }
+
+    /**
      * Validate key string
      */
     static validateKeyString(keyString: unknown): asserts keyString is string {
@@ -229,4 +307,4 @@ export class Validator {
             }
         }
     }
-} 
+}

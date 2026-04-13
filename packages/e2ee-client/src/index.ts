@@ -8,6 +8,14 @@ export {
   isWasmBackendReady,
 } from "./crypto-backend";
 
+import {
+  protect as protectArtifactBytes,
+  open as openArtifactBytes,
+  inspectArtifact as inspectArtifactBytes,
+  type ProtectResult as RuntimeProtectResult,
+  type ProtectedArtifactInfo as RuntimeProtectedArtifactInfo,
+} from "./crypto-backend";
+
 // Export WASM loader for advanced usage
 export { 
   initWasm, 
@@ -20,7 +28,6 @@ export {
 import {
   compress,
   decompress,
-  CompressionResult,
   stringToUint8Array,
 } from "./compression";
 import { CryptoService } from "./crypto-service";
@@ -164,6 +171,36 @@ export interface EncryptOptions {
   compressionAlgorithm?: "gzip" | "brotli" | "none" | "auto"; // Explicit compression control
   compressionLevel?: number; // 1-9 for gzip, 1-11 for brotli
 }
+
+export interface ProtectOptions {
+  preset?: "compact" | "balanced" | "concealed";
+  compressionAlgorithm?: "gzip" | "brotli" | "none";
+  compressionLevel?: number;
+  encryptionAlgorithm?: "aes-256-gcm" | "xchacha20-poly1305";
+  shellChunkSize?: number;
+}
+
+export interface ProtectedBlob {
+  artifact: string;
+  keyId: string;
+  version: "2.0";
+  pipeline: "compression->encryption->fused-shell";
+  preset: "compact" | "balanced" | "concealed";
+  compression: {
+    algorithm: "gzip" | "brotli" | "none";
+    originalSize: number;
+    compressedSize: number;
+  };
+  encryptionAlgorithm: "aes-256-gcm" | "xchacha20-poly1305";
+  shell: {
+    chunkSize: number;
+    chunkCount: number;
+  };
+  protectedSize: number;
+  textEncoding?: "utf8" | "utf16le";
+}
+
+export type ProtectedBlobInfo = Omit<ProtectedBlob, "artifact">;
 
 export interface KeyDerivationOptions {
   password: string;
@@ -844,6 +881,62 @@ export class VoidedE2EEClient {
   }
 
   /**
+   * Protect data with the fused-first Voided v2 full flow.
+   */
+  public async protect(
+    data: string,
+    options: ProtectOptions = {}
+  ): Promise<ProtectedBlob> {
+    Validator.validateData(data);
+
+    if (this.enableSignatures) {
+      throw new CryptoError(
+        "VoidedE2EEClient.protect does not yet support signature wrapping"
+      );
+    }
+
+    if (this.enableForwardSecrecy) {
+      throw new CryptoError(
+        "VoidedE2EEClient.protect does not yet support forward secrecy wrapping"
+      );
+    }
+
+    try {
+      const { bytes, textEncoding } = this.encodeProtectableText(data);
+      assertWithinClientUploadLimit(bytes.length);
+
+      // Ensure we do not race with a concurrent rotation
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await (this.keyManager as any).waitForRotationComplete?.();
+      const key = await this.keyManager.getCurrentKey();
+      const rawKey = await this.exportRawKeyBytes(key);
+
+      const protectedArtifact = await protectArtifactBytes(bytes, rawKey, {
+        preset: options.preset,
+        compressionAlgorithm: options.compressionAlgorithm,
+        compressionLevel: options.compressionLevel,
+        encryptionAlgorithm: options.encryptionAlgorithm,
+        shellChunkSize: options.shellChunkSize,
+      });
+
+      return this.toProtectedBlob(protectedArtifact, textEncoding);
+    } catch (error) {
+      if (
+        error instanceof ValidationError ||
+        error instanceof CryptoError ||
+        error instanceof E2EEError
+      ) {
+        throw error;
+      }
+      throw new CryptoError(
+        `Protect failed: ${
+          error instanceof Error ? error.message : String(error)
+        }`
+      );
+    }
+  }
+
+  /**
    * Encrypt data with chunking for large files - OPTIMIZED VERSION
    */
   private async encryptWithChunking(
@@ -1155,6 +1248,71 @@ export class VoidedE2EEClient {
   }
 
   /**
+   * Open a fused protected blob.
+   */
+  public async open(blob: ProtectedBlob): Promise<string> {
+    Validator.validateProtectedBlob(blob);
+
+    try {
+      const artifact = base64Decode(blob.artifact);
+
+      // Ensure we do not race with a concurrent rotation
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await (this.keyManager as any).waitForRotationComplete?.();
+      const decryptionKey = await this.keyManager.getCurrentKey();
+
+      try {
+        const rawKey = await this.exportRawKeyBytes(decryptionKey);
+        const plaintext = await openArtifactBytes(artifact, rawKey);
+        return this.decodeProtectedText(plaintext, blob.textEncoding);
+      } catch (decryptError) {
+        const migrationState = await this.keyManager.getMigrationStatus();
+        if (migrationState?.isActive) {
+          const legacyKey = await this.keyManager.getLegacyKey();
+          if (legacyKey) {
+            const rawLegacyKey = await this.exportRawKeyBytes(legacyKey);
+            const plaintext = await openArtifactBytes(artifact, rawLegacyKey);
+            return this.decodeProtectedText(plaintext, blob.textEncoding);
+          }
+        }
+
+        throw decryptError;
+      }
+    } catch (error) {
+      if (
+        error instanceof ValidationError ||
+        error instanceof CryptoError ||
+        error instanceof E2EEError
+      ) {
+        throw error;
+      }
+      throw new CryptoError(
+        `Open failed: ${error instanceof Error ? error.message : String(error)}`
+      );
+    }
+  }
+
+  /**
+   * Inspect a fused protected blob without opening it.
+   */
+  public async inspectProtected(blob: ProtectedBlob): Promise<ProtectedBlobInfo> {
+    Validator.validateProtectedBlob(blob);
+
+    try {
+      const artifact = base64Decode(blob.artifact);
+      const info = await inspectArtifactBytes(artifact);
+      return this.toProtectedBlobInfo(info, blob.keyId, blob.textEncoding);
+    } catch (error) {
+      if (error instanceof ValidationError || error instanceof CryptoError) {
+        throw error;
+      }
+      throw new CryptoError(
+        `Inspect failed: ${error instanceof Error ? error.message : String(error)}`
+      );
+    }
+  }
+
+  /**
    * Decrypt chunked data by processing each chunk and reassembling - OPTIMIZED VERSION
    */
   private async decryptChunkedData(blob: EncryptedBlob): Promise<string> {
@@ -1441,6 +1599,88 @@ export class VoidedE2EEClient {
     return out;
   }
 
+  private encodeProtectableText(input: string): {
+    bytes: Uint8Array;
+    textEncoding: "utf8" | "utf16le";
+  } {
+    if (this.hasUnpairedSurrogates(input)) {
+      return {
+        bytes: this.stringToUtf16LEBytes(input),
+        textEncoding: "utf16le",
+      };
+    }
+
+    return {
+      bytes: this.textEncoder.encode(input),
+      textEncoding: "utf8",
+    };
+  }
+
+  private decodeProtectedText(
+    bytes: Uint8Array,
+    textEncoding: "utf8" | "utf16le" | undefined
+  ): string {
+    if (textEncoding === "utf16le") {
+      return this.utf16LEBytesToString(bytes);
+    }
+
+    return this.textDecoder.decode(bytes);
+  }
+
+  private async exportRawKeyBytes(key: CryptoKey): Promise<Uint8Array> {
+    return base64Decode(await this.crypto.exportKey(key));
+  }
+
+  private toProtectedBlob(
+    result: RuntimeProtectResult,
+    textEncoding: "utf8" | "utf16le"
+  ): ProtectedBlob {
+    return {
+      artifact: base64Encode(result.artifact),
+      keyId: this.keyId,
+      version: "2.0",
+      pipeline: "compression->encryption->fused-shell",
+      preset: result.preset as ProtectedBlob["preset"],
+      compression: {
+        algorithm: result.compressionAlgorithm as ProtectedBlob["compression"]["algorithm"],
+        originalSize: result.originalSize,
+        compressedSize: result.compressedSize,
+      },
+      encryptionAlgorithm: result.encryptionAlgorithm as ProtectedBlob["encryptionAlgorithm"],
+      shell: {
+        chunkSize: result.shellChunkSize,
+        chunkCount: result.shellChunkCount,
+      },
+      protectedSize: result.protectedSize,
+      textEncoding,
+    };
+  }
+
+  private toProtectedBlobInfo(
+    info: RuntimeProtectedArtifactInfo,
+    keyId: string,
+    textEncoding: "utf8" | "utf16le" | undefined
+  ): ProtectedBlobInfo {
+    return {
+      keyId,
+      version: "2.0",
+      pipeline: "compression->encryption->fused-shell",
+      preset: info.preset as ProtectedBlob["preset"],
+      compression: {
+        algorithm: info.compressionAlgorithm as ProtectedBlob["compression"]["algorithm"],
+        originalSize: info.originalSize,
+        compressedSize: info.compressedSize,
+      },
+      encryptionAlgorithm: info.encryptionAlgorithm as ProtectedBlob["encryptionAlgorithm"],
+      shell: {
+        chunkSize: info.shellChunkSize,
+        chunkCount: info.shellChunkCount,
+      },
+      protectedSize: info.protectedSize,
+      textEncoding,
+    };
+  }
+
   /**
    * Export current key as base64 string
    */
@@ -1633,6 +1873,23 @@ export async function encrypt(
 
 export async function decrypt(blob: EncryptedBlob): Promise<string> {
   return getDefaultClient().decrypt(blob);
+}
+
+export async function protect(
+  data: string,
+  options?: ProtectOptions
+): Promise<ProtectedBlob> {
+  return getDefaultClient().protect(data, options);
+}
+
+export async function open(blob: ProtectedBlob): Promise<string> {
+  return getDefaultClient().open(blob);
+}
+
+export async function inspectProtected(
+  blob: ProtectedBlob
+): Promise<ProtectedBlobInfo> {
+  return getDefaultClient().inspectProtected(blob);
 }
 
 export async function exportKey(): Promise<string> {
