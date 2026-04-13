@@ -25,38 +25,17 @@ export interface CompressionResult {
   compressionRatio: number;
 }
 
-export interface ObfuscationResult {
-  obfuscated: string;
-  originalLength: number;
-  obfuscatedLength: number;
-  expansionRatio: number;
-  uniqueCharsObfuscated: number;
-  mappingsUsed: number;
-}
-
-export interface MapAnalysis {
-  temperature: number;
-  totalMappings: number;
-  averageMappingsPerChar: number;
-  averageMappingLength: number;
-  expansionRatio: number;
-  computeScore: number;
-  entropy: number;
-}
-
-export type ObfuscationMap = Record<string, string[]>;
-
 // Native module interface
 export interface NativeModule {
   VERSION: string;
-  
+
   // Encryption
   generateKey(): Buffer;
   encrypt(data: Buffer, key: Buffer, algorithm?: string): EncryptionResult;
   decrypt(encrypted: EncryptionResult, key: Buffer): Buffer;
   deriveKeyHkdf(ikm: Buffer, salt: Buffer | null, info: Buffer): Buffer;
   deriveKeyPbkdf2(password: Buffer, salt: Buffer, iterations: number): Buffer;
-  
+
   // Hashing
   hash(data: Buffer, algorithm?: string): string;
   hashWithSalt(data: Buffer, salt: Buffer, algorithm?: string): string;
@@ -68,18 +47,11 @@ export interface NativeModule {
   generateFingerprint(data: Buffer, length?: number): string;
   generateSafetyNumbers(data: Buffer, groupSize?: number): string;
   generateSalt(length?: number): Buffer;
-  
+
   // Compression
   compress(data: Buffer, algorithm?: string, level?: number): CompressionResult;
   decompress(data: Buffer, algorithm: string): Buffer;
-  
-  // Obfuscation
-  generateMap(temperature?: number, seed?: string, charset?: string): ObfuscationMap;
-  obfuscate(text: string, map: ObfuscationMap, seed?: string, strategy?: string): ObfuscationResult;
-  deobfuscate(obfuscatedText: string, map: ObfuscationMap): string;
-  analyzeMap(map: ObfuscationMap): MapAnalysis;
-  getExpansionRatio(map: ObfuscationMap): number;
-  
+
   // Utility
   randomBytes(length: number): Buffer;
   secureWipe(buffer: Buffer): void;
@@ -93,7 +65,7 @@ export interface NativeModule {
 function getPlatformIdentifier(): string {
   const platform = process.platform;
   const arch = process.arch;
-  
+
   const platformMap: Record<string, string> = {
     'win32-x64': 'win32-x64-msvc',
     'win32-arm64': 'win32-arm64-msvc',
@@ -102,7 +74,7 @@ function getPlatformIdentifier(): string {
     'linux-x64': 'linux-x64-gnu',
     'linux-arm64': 'linux-arm64-gnu',
   };
-  
+
   return platformMap[`${platform}-${arch}`] || `${platform}-${arch}`;
 }
 

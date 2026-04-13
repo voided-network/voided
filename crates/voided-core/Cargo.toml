@@ -16,15 +16,14 @@ crate-type = ["cdylib", "rlib"]
 default = ["backend"]
 
 # Full feature set for Node.js backend binding
-backend = ["compression", "signing", "obfuscation", "std"]
+backend = ["compression", "signing", "std"]
 
 # Browser-compatible subset for WASM
-browser = ["compression", "obfuscation", "wasm"]
+browser = ["compression", "wasm"]
 
 # Individual feature flags
 compression = ["brotli", "flate2"]
 signing = ["ed25519-dalek", "p256", "rsa"]
-obfuscation = []
 wasm = ["getrandom/js", "wasm-bindgen"]
 std = []
 

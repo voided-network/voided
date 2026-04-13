@@ -1,6 +1,8 @@
 # @voideddev/enc-server
 
-`@voideddev/enc-server` is the Node.js Voided library. It exposes the native Rust-backed primitives for hashing, compression, encryption, and obfuscation, plus a higher-level service layer for common server-side workflows.
+`@voideddev/enc-server` is the Node.js Voided library. It exposes the native
+Rust-backed primitives for hashing, compression, encryption, and utility
+operations while Voided moves toward a fused-first v2 surface.
 
 Today the runtime layering is:
 
@@ -16,29 +18,13 @@ npm install @voideddev/enc-server
 
 If a prebuilt native binary is not available for the current platform, the package falls back to a source build during install. In that case, Rust must be installed locally.
 
-## Deprecated v1 Surface
+## Removed v1 Surface
 
-```ts
-import { VoidedService } from "@voideddev/enc-server";
-
-const service = new VoidedService({
-  seed: "app-seed",
-});
-
-const encrypted = service.encrypt("Sensitive server-side payload");
-const decrypted = service.decrypt(encrypted.data, encrypted.map);
-
-console.log(decrypted);
-```
-
-That map-first example is deprecated v1 behavior. It is not the Voided v2
-design target.
+Deprecated map-first APIs such as `encryptWithMap`, `VoidedService`, and map
+generation helpers have been removed from this branch. That old behavior now
+belongs to v1 only.
 
 ## Roadmap Note
-
-The current package still exposes map-first helpers such as `encryptWithMap`
-and `VoidedService`. They are deprecated v1 APIs and not part of the Voided v2
-surface.
 
 The v2 direction is fused-first:
 
@@ -84,8 +70,7 @@ Local development binaries are copied into `native/`. Release prebuilds live in
 
 ## Notes
 
-- Map-first APIs in this package are deprecated v1 carryovers. New work should
-  not build on them.
+- Deprecated map-first behavior is no longer exported from this package branch.
 - The long-term wrapper target is a thin `protect/open/inspect` surface over `voided-node`, not a second product contract that drifts away from `voided-core`.
 - The service layer is synchronous because the native Rust binding is loaded directly into Node.js.
 - Examples live in the repository-level `examples/` directory and package test fixtures.

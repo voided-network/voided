@@ -33,27 +33,6 @@ export interface CompressionResult {
   compressionRatio: number;
 }
 
-export interface ObfuscationResult {
-  obfuscated: string;
-  originalLength: number;
-  obfuscatedLength: number;
-  expansionRatio: number;
-  uniqueCharsObfuscated: number;
-  mappingsUsed: number;
-}
-
-export interface MapAnalysis {
-  temperature: number;
-  totalMappings: number;
-  averageMappingsPerChar: number;
-  averageMappingLength: number;
-  expansionRatio: number;
-  computeScore: number;
-  entropy: number;
-}
-
-export type ObfuscationMap = Map<string, string[]> | Record<string, string[]>;
-
 // WASM module interface
 export interface WasmModule {
   version(): string;
@@ -80,17 +59,11 @@ export interface WasmModule {
   generate_fingerprint(data: Uint8Array, length?: number): string;
   generate_safety_numbers(data: Uint8Array, groupSize?: number): string;
   generate_salt(length?: number): Uint8Array;
-  
+
   // Compression
   compress(data: Uint8Array, algorithm?: string, level?: number): CompressionResult;
   decompress(data: Uint8Array, algorithm: string): Uint8Array;
-  
-  // Obfuscation
-  generate_map(temperature?: number, seed?: string, charset?: string): ObfuscationMap;
-  obfuscate(text: string, map: ObfuscationMap, seed?: string, strategy?: string): ObfuscationResult;
-  deobfuscate(obfuscatedText: string, map: ObfuscationMap): string;
-  analyze_map(map: ObfuscationMap): MapAnalysis;
-  
+
   // Utility
   random_bytes(length: number): Uint8Array;
   base64_encode(data: Uint8Array): string;
@@ -159,18 +132,6 @@ function normalizeWasmModule(mod: RawWasmModule): WasmModule {
   const generateSalt = getExportFn<(length?: number) => Uint8Array>(mod, ["generate_salt", "generateSalt"]);
   const compressFn = getExportFn<(data: Uint8Array, algorithm?: string, level?: number) => any>(mod, ["compress"]);
   const decompressFn = getExportFn<(data: Uint8Array, algorithm: string) => Uint8Array>(mod, ["decompress"]);
-  const generateMap = getExportFn<(temperature?: number, seed?: string, charset?: string) => ObfuscationMap>(
-    mod,
-    ["generate_map", "generateMap"],
-  );
-  const obfuscate = getExportFn<
-    (text: string, map: ObfuscationMap, seed?: string, strategy?: string) => ObfuscationResult
-  >(mod, ["obfuscate"]);
-  const deobfuscate = getExportFn<(obfuscatedText: string, map: ObfuscationMap) => string>(
-    mod,
-    ["deobfuscate"],
-  );
-  const analyzeMap = getExportFn<(map: ObfuscationMap) => MapAnalysis>(mod, ["analyze_map", "analyzeMap"]);
   const randomBytes = getExportFn<(length: number) => Uint8Array>(mod, ["random_bytes", "randomBytes"]);
   const base64Encode = getExportFn<(data: Uint8Array) => string>(mod, ["base64_encode", "base64Encode"]);
   const base64Decode = getExportFn<(encoded: string) => Uint8Array>(mod, ["base64_decode", "base64Decode"]);
@@ -232,10 +193,6 @@ function normalizeWasmModule(mod: RawWasmModule): WasmModule {
     generate_salt: (length) => generateSalt(length),
     compress: (data, algorithm, level) => normalizeCompressionResult(compressFn(data, algorithm, level)),
     decompress: (data, algorithm) => decompressFn(data, algorithm),
-    generate_map: (temperature, seed, charset) => generateMap(temperature, seed, charset),
-    obfuscate: (text, map, seed, strategy) => obfuscate(text, map, seed, strategy),
-    deobfuscate: (obfuscatedText, map) => deobfuscate(obfuscatedText, map),
-    analyze_map: (map) => analyzeMap(map),
     random_bytes: (length) => randomBytes(length),
     base64_encode: (data) => base64Encode(data),
     base64_decode: (encoded) => base64Decode(encoded),

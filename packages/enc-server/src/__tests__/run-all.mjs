@@ -8,9 +8,19 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 
 async function runTests() {
     const files = await readdir(__dirname);
-    // Skip only large-data/benchmark tests
+    // Skip large-data tests plus removed map-first coverage.
     const skipFiles = [
-        'benchmark-all.e2e.test.mjs', 
+        'batch.operations.test.mjs',
+        'benchmark-all.e2e.test.mjs',
+        'map-analysis.test.mjs',
+        'obfuscation.edge.test.mjs',
+        'pipeline.test.mjs',
+        'property.test.mjs',
+        'reencrypt.edge.test.mjs',
+        'service.e2e.stress.test.mjs',
+        'stats.integration.test.mjs',
+        'stats.random.fuzz.test.mjs',
+        'streams.basic.test.mjs',
         'tb.integration.test.mjs'
     ];
     const testFiles = files.filter(f => f.endsWith('.test.mjs') && f !== 'run-all.mjs' && !skipFiles.includes(f));
@@ -63,4 +73,3 @@ runTests().catch(e => {
     console.error(e);
     process.exit(1);
 });
-

@@ -11,7 +11,6 @@
 //! - `browser` - Browser-compatible subset for WASM
 //! - `compression` - Brotli and Gzip compression
 //! - `signing` - Digital signatures (Ed25519, ECDSA, RSA-PSS)
-//! - `obfuscation` - Map-based character obfuscation
 //!
 //! ## Example
 //!
@@ -52,9 +51,6 @@ pub mod signing;
 #[cfg(feature = "signing")]
 pub use signing::{generate_ed25519_key_pair, sign_ed25519, verify_ed25519};
 
-#[cfg(feature = "obfuscation")]
-pub mod obfuscation;
-
 mod error;
 pub use error::{Error, Result};
 
@@ -66,9 +62,6 @@ pub const FORMAT_VERSION: u8 = 0x01;
 
 /// Magic bytes for encrypted payloads
 pub const MAGIC_ENCRYPTED: &[u8; 4] = b"VOI1";
-
-/// Magic bytes for obfuscation maps
-pub const MAGIC_MAP: &[u8; 4] = b"VOIM";
 
 /// Magic bytes for signatures
 pub const MAGIC_SIGNATURE: &[u8; 4] = b"VOIS";

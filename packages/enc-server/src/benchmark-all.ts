@@ -6,13 +6,7 @@ import {
     encrypt, 
     decrypt, 
     generateKey,
-    obfuscate, 
-    deobfuscate,
-    generateMap,
-    encryptWithMap,
-    decryptWithMap,
 } from './crypto-backend.js';
-import { signingService } from './signing-service.js';
 import { assertWithinServerUploadLimit } from './limits.js';
 
 export interface OpBenchmarkResult {
@@ -101,46 +95,6 @@ export function benchmarkEncryption(
     return results;
 }
 
-export function benchmarkObfuscation(
-    text: string,
-    iterations = 50
-): OpBenchmarkResult[] {
-    assertWithinServerUploadLimit(Buffer.from(text, 'utf8').length);
-    const temps = [0.3, 0.5, 0.8];
-    const results: OpBenchmarkResult[] = [];
-    
-    for (const temperature of temps) {
-        const map = generateMap(temperature);
-        // warmup
-        const warm = obfuscate(text, map);
-        deobfuscate(warm.obfuscated, map);
-
-        let total = 0;
-        for (let i = 0; i < iterations; i++) {
-            const t1 = performance.now();
-            const obf = obfuscate(text, map);
-            const deobf = deobfuscate(obf.obfuscated, map);
-            const t2 = performance.now();
-            total += t2 - t1;
-        }
-        const avg = total / iterations;
-        StatsTracker.instance.add({
-            label: `obfuscate+deobfuscate-${temperature}`,
-            originalSize: text.length,
-            compressedSize: 0,
-            compressionRatio: 1,
-            obfuscatedSize: 0,
-            expansionRatio: 0,
-            computeUnits: iterations,
-            algorithm: 'map',
-            temperature,
-            durationMs: avg
-        });
-        results.push({ label: 'obfuscation', algorithm: `temp-${temperature}`, iterations, avgMs: avg, totalMs: total });
-    }
-    return results;
-}
-
 export function benchmarkHashing(
     text: string,
     iterations = 200
@@ -176,48 +130,10 @@ export function benchmarkHashing(
     return results;
 }
 
-export function benchmarkPipeline(
-    text: string,
-    iterations = 25
-): OpBenchmarkResult[] {
-    assertWithinServerUploadLimit(Buffer.from(text, 'utf8').length);
-    const results: OpBenchmarkResult[] = [];
-    const key = generateKey();
-
-    // warmup
-    encryptWithMap(text, { key, temperature: 0.5 });
-
-    let total = 0;
-    for (let i = 0; i < iterations; i++) {
-        const t1 = performance.now();
-        const res = encryptWithMap(text, { key, temperature: 0.5 });
-        const plain = decryptWithMap(res.data, res.map, key);
-        const t2 = performance.now();
-        total += t2 - t1;
-    }
-    const avg = total / iterations;
-    StatsTracker.instance.add({
-        label: 'pipeline-full',
-        originalSize: text.length,
-        compressedSize: 0,
-        compressionRatio: 1,
-        obfuscatedSize: 0,
-        expansionRatio: 0,
-        computeUnits: iterations,
-        algorithm: 'full',
-        temperature: 0.5,
-        durationMs: avg
-    });
-    results.push({ label: 'pipeline', algorithm: 'full', iterations, avgMs: avg, totalMs: total });
-    return results;
-}
-
 export function benchmarkAll(sampleText = 'benchmark-message', iterations = 50) {
     const data = Buffer.from(sampleText, 'utf8');
     const r1 = benchmarkCompression(data, Math.max(10, Math.floor(iterations / 2)));
     const r2 = benchmarkEncryption(data, iterations);
-    const r3 = benchmarkObfuscation(sampleText, Math.max(10, Math.floor(iterations / 2)));
-    const r4 = benchmarkHashing(sampleText, iterations * 4);
-    const r5 = benchmarkPipeline(sampleText, Math.max(5, Math.floor(iterations / 5)));
-    return { compression: r1, encryption: r2, obfuscation: r3, hashing: r4, pipeline: r5 };
+    const r3 = benchmarkHashing(sampleText, iterations * 4);
+    return { compression: r1, encryption: r2, hashing: r3 };
 }

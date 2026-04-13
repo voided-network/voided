@@ -6,7 +6,7 @@
 
 - Authenticated encryption with AES-256-GCM and XChaCha20-Poly1305
 - HKDF and PBKDF2 key derivation
-- Optional compression, signing, and obfuscation modules
+- Optional compression and signing modules
 - Shared payload formats for the Node and WASM layers
 
 ## Example
@@ -29,7 +29,6 @@ assert_eq!(plaintext, &decrypted[..]);
 - `browser`: browser-compatible subset used by the WASM crate
 - `compression`: Brotli and Gzip helpers
 - `signing`: Ed25519, P-256, and RSA helpers
-- `obfuscation`: map-based character obfuscation
 
 ## License
 

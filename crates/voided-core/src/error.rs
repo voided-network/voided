@@ -116,18 +116,6 @@ pub enum Error {
     #[error("Hash operation failed: {0}")]
     HashFailed(String),
 
-    /// Obfuscation operation failed
-    #[error("Obfuscation failed: {0}")]
-    ObfuscationFailed(String),
-
-    /// Deobfuscation operation failed
-    #[error("Deobfuscation failed: {0}")]
-    DeobfuscationFailed(String),
-
-    /// Map generation failed
-    #[error("Map generation failed: {0}")]
-    MapGenerationFailed(String),
-
     /// Payload too large
     #[error("Payload too large: {size} bytes exceeds limit of {limit} bytes")]
     PayloadTooLarge {

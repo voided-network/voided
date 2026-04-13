@@ -36,16 +36,6 @@ export {
   decompress,
   type CompressionResult,
   
-  // Obfuscation
-  generateMap,
-  obfuscate,
-  deobfuscate,
-  analyzeMap,
-  getExpansionRatio,
-  type ObfuscationMap,
-  type ObfuscationResult,
-  type MapAnalysis,
-  
   // Utility
   randomBytes,
   generateSalt,
@@ -54,13 +44,6 @@ export {
   base64Decode,
   hexEncode,
   hexDecode,
-  
-  // High-level pipeline
-  encryptWithMap,
-  decryptWithMap,
-  decryptWithMapString,
-  type EncryptWithMapOptions,
-  type EncryptWithMapResult,
 } from "./crypto-backend.js";
 
 // Also export as namespace for convenience
@@ -72,9 +55,6 @@ export * as rust from "./crypto-backend.js";
 
 // Key management
 export { KeyManager, type StoredKey } from "./key-manager.js";
-
-// Re-encryption for key rotation
-export { reEncryptWithNewKey } from "./reencrypt.js";
 
 // Signing (uses Node.js crypto - not yet migrated to Rust)
 export { 
@@ -94,8 +74,6 @@ export {
   createDecompressionStream,
   createEncryptionStream,
   createDecryptionStream,
-  createObfuscateStream,
-  createDeobfuscateStream,
   createChunker,
   createLineSplitter,
 } from "./streams.js";
@@ -117,9 +95,7 @@ export {
   benchmarkAll,
   benchmarkCompression,
   benchmarkEncryption,
-  benchmarkObfuscation,
   benchmarkHashing,
-  benchmarkPipeline,
   type OpBenchmarkResult,
 } from "./benchmark-all.js";
 
@@ -138,90 +114,3 @@ export {
   type VoidedV2PresetSupport,
   type VoidedV2RoleAlias,
 } from "./v2-profile-plan.js";
-
-// ============================================================================
-// SERVICE CLASS
-// ============================================================================
-
-import {
-  generateKey,
-  generateMap,
-  obfuscate as rustObfuscate,
-  deobfuscate as rustDeobfuscate,
-  encryptWithMap,
-  decryptWithMapString,
-  type ObfuscationMap,
-  type EncryptWithMapResult,
-} from "./crypto-backend.js";
-
-export interface VoidedServiceOptions {
-  encryptionKey?: Buffer;
-  temperature?: number;
-  seed?: string;
-  compressionAlgorithm?: 'brotli' | 'gzip';
-}
-
-/**
- * VoidedService - High-level encryption service
- *
- * @deprecated This convenience wrapper belongs to deprecated Voided v1. It is
- * not part of the Voided v2 fused-first surface.
- */
-export class VoidedService {
-  private key: Buffer;
-  private temperature: number;
-  private seed?: string;
-  private compressionAlgorithm: 'brotli' | 'gzip';
-  
-  constructor(options: VoidedServiceOptions = {}) {
-    this.key = options.encryptionKey ?? generateKey();
-    this.temperature = options.temperature ?? 0.5;
-    this.seed = options.seed;
-    this.compressionAlgorithm = options.compressionAlgorithm ?? 'brotli';
-  }
-  
-  /**
-   * Get the encryption key
-   */
-  getKey(): Buffer {
-    return this.key;
-  }
-  
-  /**
-   * Encrypt data with full pipeline
-   */
-  encrypt(data: string | Buffer): EncryptWithMapResult {
-    return encryptWithMap(data, {
-      key: this.key,
-      temperature: this.temperature,
-      seed: this.seed,
-      compressionAlgorithm: this.compressionAlgorithm,
-    });
-  }
-  
-  /**
-   * Decrypt data with full pipeline
-   */
-  decrypt(obfuscatedData: string, map: ObfuscationMap): string {
-    return decryptWithMapString(obfuscatedData, map, this.key);
-  }
-  
-  /**
-   * Simple obfuscation (no encryption)
-   */
-  obfuscateOnly(data: string): { obfuscated: string; map: ObfuscationMap } {
-    if (!this.seed) {
-      throw new Error('VoidedService requires a seed parameter for obfuscateOnly. Provide a seed in the constructor options.');
-    }
-    const map = generateMap(this.temperature, this.seed);
-    const result = rustObfuscate(data, map, this.seed);
-    return { obfuscated: result.obfuscated, map };
-  }
-  
-  /**
-   * Simple deobfuscation
-   */
-  deobfuscateOnly(data: string, map: ObfuscationMap): string {
-    return rustDeobfuscate(data, map);
-  }
-}
