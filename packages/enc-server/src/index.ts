@@ -164,8 +164,8 @@ export interface VoidedServiceOptions {
 /**
  * VoidedService - High-level encryption service
  *
- * @deprecated This convenience wrapper is map-first and remains for
- * compatibility. Voided v2 is moving toward preset-based fused-shell flows.
+ * @deprecated This convenience wrapper belongs to deprecated Voided v1. It is
+ * not part of the Voided v2 fused-first surface.
  */
 export class VoidedService {
   private key: Buffer;

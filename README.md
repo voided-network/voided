@@ -48,8 +48,7 @@ Cross-platform native builds require Zig to be installed locally, set via `VOIDE
 
 ## Voided v2 Direction
 
-The current package surface still includes a map-first compatibility lane in
-the wrapper packages, but the planned v2 product direction is fused-first:
+The planned Voided v2 product direction is fused-first:
 
 1. compression
 2. encryption
@@ -63,9 +62,9 @@ The runtime layering that should stay aligned through the migration is:
 - `@voideddev/enc-server` as the Node wrapper over `voided-node`
 - `@voideddev/e2ee-client` as the browser wrapper over `voided-wasm`
 
-That means map-based obfuscation is no longer the long-term default shape of the
-product. It remains useful for compatibility and selected experimental work, but
-new architecture work should target a preset-first fused shell surface instead.
+That means map-based obfuscation is a deprecated v1 concern, not part of the
+Voided v2 product surface. New architecture work should target a preset-first
+fused shell surface instead.
 
 The detailed plan lives in
 [`docs/v2-fused-first-architecture.md`](docs/v2-fused-first-architecture.md).

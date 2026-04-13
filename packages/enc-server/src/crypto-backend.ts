@@ -264,8 +264,8 @@ export function hexDecode(encoded: string): Buffer {
 // ============================================================================
 
 /**
- * @deprecated Map-first full flow is now the compatibility lane. New
- * integrations should plan for preset-based fused-shell `protect/open` APIs.
+ * @deprecated Map-first full flow belongs to deprecated Voided v1. It is not
+ * part of the Voided v2 fused-first surface.
  */
 export interface EncryptWithMapOptions {
   key: Buffer;
@@ -277,8 +277,8 @@ export interface EncryptWithMapOptions {
 }
 
 /**
- * @deprecated Map-first full flow is now the compatibility lane. New
- * integrations should plan for preset-based fused-shell `protect/open` APIs.
+ * @deprecated Map-first full flow belongs to deprecated Voided v1. It is not
+ * part of the Voided v2 fused-first surface.
  */
 export interface EncryptWithMapResult {
   data: string;
@@ -292,8 +292,8 @@ export interface EncryptWithMapResult {
 /**
  * Full encryption pipeline: compress → encrypt → obfuscate
  *
- * @deprecated This map-first flow remains for compatibility. Voided v2 is
- * moving to `compression -> encryption -> fused shell` as the primary path.
+ * @deprecated This map-first flow belongs to deprecated Voided v1. Voided v2 is
+ * fused-first and does not treat this API as part of its design surface.
  */
 export function encryptWithMap(
   data: string | Buffer,
@@ -351,8 +351,8 @@ export function encryptWithMap(
 /**
  * Full decryption pipeline: deobfuscate → decrypt → decompress
  *
- * @deprecated This map-first flow remains for compatibility. Voided v2 is
- * moving to `compression -> encryption -> fused shell` as the primary path.
+ * @deprecated This map-first flow belongs to deprecated Voided v1. Voided v2 is
+ * fused-first and does not treat this API as part of its design surface.
  */
 export function decryptWithMap(
   obfuscatedData: string,
@@ -385,8 +385,8 @@ export function decryptWithMap(
 /**
  * Decrypt and return as string
  *
- * @deprecated This map-first flow remains for compatibility. Voided v2 is
- * moving to `compression -> encryption -> fused shell` as the primary path.
+ * @deprecated This map-first flow belongs to deprecated Voided v1. Voided v2 is
+ * fused-first and does not treat this API as part of its design surface.
  */
 export function decryptWithMapString(
   obfuscatedData: string,

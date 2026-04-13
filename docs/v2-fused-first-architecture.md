@@ -13,10 +13,8 @@ The primary full flow should be:
 2. encryption
 3. fused shell
 
-Map-based obfuscation should stop being the default product surface. It can stay
-available as an experimental or legacy lane where it still has value, but the
-core product should no longer force the whole API and module layout to revolve
-around it.
+Map-based obfuscation is a deprecated v1 concern. It should not remain inside
+the Voided v2 product surface, policy surface, or runtime defaults.
 
 This lets Voided tell the truth about what the system is actually good at:
 
@@ -31,7 +29,7 @@ This lets Voided tell the truth about what the system is actually good at:
 
 - Make fused shell the supported default artifact shape.
 - Keep primitive access for compression, encryption, and fused shell.
-- Keep map shell only as experimental or legacy compatibility material.
+- Do not preserve map shell inside the Voided v2 surface.
 - Give users stable preset names instead of asking them to choose shell tuning
   details.
 - Give Slipner one clean consumption model for write, read, and migration.
@@ -52,7 +50,8 @@ research code. That means the product contract and the research signal are
 pointing in different directions.
 
 Voided v2 should fix that mismatch directly instead of trying to cosmetically
-rebrand the old map-first API.
+rebrand the old map-first API. Old map users can stay on the deprecated v1
+surface instead of dragging that surface into v2.
 
 ## Current runtime stack
 
@@ -81,6 +80,22 @@ The fused-first design should not be implemented independently in each wrapper.
 The algorithm and preset registry should live in `voided-core`, then be
 projected through both bindings.
 
+## v1 boundary
+
+Old map-first and sequential flows belong to deprecated Voided v1. They are not
+part of the Voided v2 contract.
+
+That means:
+
+- no map preset in the v2 preset registry
+- no map read policy in the v2 runtime policy model
+- no map write policy in the v2 runtime policy model
+- no v2 wrapper docs centered on map-first flows
+
+If existing deployments still need map-first artifacts, they should keep using
+v1 or migrate those artifacts with v1 tooling before moving onto the fused-only
+v2 surface.
+
 ## Architecture direction
 
 ### Outer artifact
@@ -97,9 +112,8 @@ The outer artifact should carry:
 - authentication material for tamper detection
 
 The compression and encryption steps stay inside the shell flow. Users should
-not need to manually serialize encrypted JSON blobs before shelling. That was a
-reasonable compatibility tactic for the old map flow, but it should not define
-v2.
+not need to manually serialize encrypted JSON blobs before shelling. That old
+map-first packaging style should not define v2.
 
 ### Full-flow mental model
 
@@ -141,11 +155,9 @@ crates/voided-core/src/
     auth.rs
     preset.rs
     fused.rs
-    map.rs
     inspect.rs
     pipeline.rs
   formats/
-  compat/
 ```
 
 Module responsibilities:
@@ -162,22 +174,16 @@ Module responsibilities:
   - fused shell encode and decode
   - shell envelope types
   - structured or adaptive fused modes when supported
-- `shell::map`
-  - experimental or legacy map shell handling
-  - no longer the center of the product
 - `shell::preset`
   - versioned preset registry
   - support level metadata
   - alias resolution such as `default -> fused.balanced.v2`
 - `shell::inspect`
   - lightweight artifact header inspection without full decode
-  - read preset id, format version, shell mode, and compatibility flags
+  - read preset id, format version, shell mode, and artifact flags
 - `shell::pipeline`
   - `protect`, `open`, and `repack`
   - glue for `compression -> encryption -> shell`
-- `compat`
-  - shims for old map-first entry points
-  - old payload wrappers that must still be decoded during migration
 
 ## Proposed Node package layout
 
@@ -214,7 +220,6 @@ import {
   compression,
   encryption,
   fusedShell,
-  experimental,
 } from "@voideddev/enc-server";
 ```
 
@@ -226,11 +231,6 @@ Namespace intent:
   - direct encryption primitives
 - `fusedShell`
   - fused shell encode and decode primitives
-- `experimental.mapShell`
-  - map shell helpers when explicitly requested
-
-Map-specific helpers should move under an explicit experimental or legacy
-namespace instead of staying at the top level beside the default flow.
 
 ## Proposed browser package layout
 
@@ -292,7 +292,6 @@ then layer role aliases on top.
 - `fused.compact.v2`
 - `fused.balanced.v2`
 - `fused.concealed.v2`
-- `map.legacy.v1`
 
 ### Internal mapping to frozen fused presets
 
@@ -344,19 +343,6 @@ Properties:
 This is not an excuse to drag the map path back into the center. If map-based
 hardness proves useful later, it should be opt-in and separately labeled.
 
-#### Legacy map preset
-
-- `map.legacy.v1`
-
-Use only for:
-
-- decoding historical artifacts
-- controlled migration writes during rollout
-- edge cases where an operator intentionally accepts the tradeoff
-
-This preset should be treated as compatibility material, not as the normal
-shape of Voided.
-
 ## Preset policy surface
 
 Voided should distinguish between preset metadata and runtime policy.
@@ -367,23 +353,15 @@ Suggested policy model:
 interface VoidedPresetPolicy {
   defaultWritePreset: string;
   acceptedReadPresets: string[];
-  allowExperimentalRead?: boolean;
-  allowExperimentalWrite?: boolean;
-  allowLegacyRead?: boolean;
-  allowLegacyWrite?: boolean;
-  repackOnRead?: boolean;
 }
 ```
 
 Policy rules:
 
 - default writes should always target one stable preset
-- experimental writes must be explicit
-- legacy writes should default to off
-- legacy reads should be allowed during migration
-- optional repack should convert old artifacts to the current write preset
+- accepted reads should stay inside the fused v2 preset set
 
-This keeps preset choice explicit and keeps compatibility policy out of random
+This keeps preset choice explicit and keeps deprecated v1 behavior out of random
 call sites.
 
 ## Slipner consumption model
@@ -415,18 +393,13 @@ Suggested naming:
 
 - `voided_default_write_preset`
 - `voided_accepted_read_presets`
-- `voided_allow_experimental_presets`
-- `voided_allow_legacy_map_reads`
-- `voided_allow_legacy_map_writes`
 - `voided_migration_mode`
 
 Suggested defaults:
 
 - write preset: `balanced`
-- accepted reads: `compact`, `balanced`, `concealed`, `map.legacy.v1`
-- experimental writes: off
-- legacy writes: off
-- migration mode: lazy repack on read or background repack
+- accepted reads: `compact`, `balanced`, `concealed`
+- migration mode: cut over only after v1 artifacts are migrated or retired
 
 ### Suggested Slipner metadata per artifact
 
@@ -438,8 +411,8 @@ Store enough metadata to reason about migration without fully decoding:
 - `voided_written_at`
 - optional `voided_origin_preset_id` after repack
 
-That gives Slipner an honest compatibility story and avoids guessing from raw
-bytes later.
+That gives Slipner an honest migration story and avoids guessing from raw bytes
+later.
 
 ## Deprecation plan
 
@@ -451,7 +424,7 @@ bytes later.
 - preset registry and inspection helpers
 - high-level `protect/open/repack` flow
 
-### Becomes compatibility or experimental
+### Does not belong in v2
 
 - `encryptWithMap`
 - `decryptWithMap`
@@ -476,6 +449,8 @@ Goals:
 - state the fused-first direction explicitly
 - define preset ids and policy language
 - stop pretending the old map-first API is the long-term shape
+- make it explicit that deprecated map/sequential behavior belongs to v1, not
+  v2
 
 ### Phase 1: promote shell into core
 
@@ -487,14 +462,13 @@ Implementation tasks:
 - add artifact inspection support
 - add preset registry support in Rust
 
-### Phase 2: ship dual surface in Node
+### Phase 2: ship fused surface in Node
 
 Implementation tasks:
 
 - add `protect/open/inspect/repack` to `@voideddev/enc-server`
 - expose fused shell primitives
-- move map helpers under explicit experimental or compatibility naming
-- keep old map-first functions as adapters for one release window
+- stop presenting map helpers as part of the v2 package story
 
 ### Phase 2b: ship aligned browser surface
 
@@ -505,30 +479,27 @@ Implementation tasks:
 - keep TypeScript fallback honest about what it can and cannot do for fused v2
   flows
 
-### Phase 3: make Slipner dual-read and single-write
+### Phase 3: make Slipner fused-only on v2
 
 Implementation tasks:
 
 - write new artifacts with `balanced`
-- continue reading `map.legacy.v1`
-- optionally repack old artifacts on read or in background jobs
 - record artifact preset metadata in Slipner storage
 
-### Phase 4: deprecate legacy writes
+### Phase 4: cut over from v1 cleanly
 
 Implementation tasks:
 
-- disable map writes by default
-- keep map reads for compatibility
-- make legacy write enablement require explicit policy
+- migrate any required map-first artifacts with deprecated v1 tooling
+- keep v2 runtime fused-only
+- do not add map decode support back into v2
 
-### Phase 5: shrink the compatibility surface
+### Phase 5: remove v1-facing documentation from the v2 branch
 
 Implementation tasks:
 
 - remove map-first examples from primary docs
-- make `encryptWithMap` a clearly deprecated adapter
-- keep only the minimal legacy surface needed for long-tail decode
+- keep v2 wrapper docs centered on fused presets only
 
 ## Starter changes needed next
 
@@ -540,8 +511,8 @@ The first implementation pass after this doc should be small and concrete:
 3. Move fused shell encode and decode into `voided-core`.
 4. Add Node and WASM bindings for fused shell primitives plus
    `protect/open`.
-5. Re-express `encryptWithMap` as a compatibility adapter instead of the main
-   story.
+5. Stop treating `encryptWithMap` and related map-first APIs as part of the v2
+   design target.
 6. Teach Slipner to store Voided preset metadata and default to `balanced`
    writes.
 

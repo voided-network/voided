@@ -58,6 +58,8 @@ console.log(isWasmReady());
   separate handwritten TypeScript shell implementation. The frozen fused preset
   surface is `compact`, `balanced`, and `concealed`, with `balanced` as the
   expected default role alias.
+- Deprecated map-first behavior belongs to v1, not to the e2ee-client v2
+  direction.
 - Examples live in `examples/` and `packages/e2ee-client/examples/`.
 
 ## Development

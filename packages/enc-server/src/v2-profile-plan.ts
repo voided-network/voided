@@ -11,22 +11,20 @@
 export type VoidedV2PresetId =
   | "fused.compact.v2"
   | "fused.balanced.v2"
-  | "fused.concealed.v2"
-  | "map.legacy.v1";
+  | "fused.concealed.v2";
 
 export type VoidedV2PresetAlias =
   | "compact"
   | "balanced"
-  | "concealed"
-  | "legacy-map";
+  | "concealed";
 
 export type VoidedV2RoleAlias =
   | "default"
   | "high-security"
   | "low-overhead";
 
-export type VoidedV2PresetSupport = "stable" | "legacy";
-export type VoidedV2PresetStatus = "planned" | "compat";
+export type VoidedV2PresetSupport = "stable";
+export type VoidedV2PresetStatus = "planned";
 
 export interface VoidedV2PresetPlanEntry {
   id: VoidedV2PresetId;
@@ -40,8 +38,7 @@ export interface VoidedV2PresetPlanEntry {
   internalShell:
     | "FusedPrefixShell"
     | "FusedReactiveShell"
-    | "FusedScheduledShell"
-    | "SequentialMapCompat";
+    | "FusedScheduledShell";
   summary: string;
   notes: readonly string[];
 }
@@ -89,20 +86,6 @@ export const VOIDED_V2_PRESET_PLAN = [
       "Recommended high-security role alias.",
     ],
   },
-  {
-    id: "map.legacy.v1",
-    alias: "legacy-map",
-    roleAliases: [],
-    support: "legacy",
-    status: "compat",
-    pipeline: "compression->encryption->map-shell",
-    internalShell: "SequentialMapCompat",
-    summary: "Compatibility lane for historical map-first artifacts and controlled writes.",
-    notes: [
-      "Readable during migration.",
-      "Should not remain the main product-facing write path.",
-    ],
-  },
 ]
   as const satisfies readonly VoidedV2PresetPlanEntry[];
 
@@ -110,7 +93,6 @@ const PRESET_ALIAS_MAP: Readonly<Record<VoidedV2PresetAlias, VoidedV2PresetId>> 
   compact: "fused.compact.v2",
   balanced: "fused.balanced.v2",
   concealed: "fused.concealed.v2",
-  "legacy-map": "map.legacy.v1",
 };
 
 const ROLE_ALIAS_MAP: Readonly<Record<VoidedV2RoleAlias, VoidedV2PresetId>> = {
@@ -140,8 +122,6 @@ export function resolveVoidedV2Preset(
 export interface VoidedV2PolicyPlan {
   defaultWritePreset: VoidedV2PresetId;
   acceptedReadPresets: readonly VoidedV2PresetId[];
-  allowLegacyWrites: boolean;
-  repackLegacyOnRead: boolean;
 }
 
 export const DEFAULT_VOIDED_V2_POLICY_PLAN: VoidedV2PolicyPlan = {
@@ -150,10 +130,7 @@ export const DEFAULT_VOIDED_V2_POLICY_PLAN: VoidedV2PolicyPlan = {
     "fused.compact.v2",
     "fused.balanced.v2",
     "fused.concealed.v2",
-    "map.legacy.v1",
   ],
-  allowLegacyWrites: false,
-  repackLegacyOnRead: true,
 };
 
 export const HIGH_SECURITY_VOIDED_V2_POLICY_PLAN: VoidedV2PolicyPlan = {
@@ -162,8 +139,5 @@ export const HIGH_SECURITY_VOIDED_V2_POLICY_PLAN: VoidedV2PolicyPlan = {
     "fused.compact.v2",
     "fused.balanced.v2",
     "fused.concealed.v2",
-    "map.legacy.v1",
   ],
-  allowLegacyWrites: false,
-  repackLegacyOnRead: true,
 };
