@@ -1,33 +1,45 @@
 # voided-core
 
-`voided-core` is the source-of-truth Rust crate behind Voided's Node and WASM
-bindings. If you want to use Voided directly from Rust, this is the crate that
-owns the actual crypto behavior, fused shell formats, and full-flow artifact
-pipeline.
+`voided-core` is the direct Rust implementation of Voided. It is the
+source-of-truth crate for the Node and WASM bindings, and it is also the right
+entry point if you want to use Voided from Rust without going through the
+JavaScript wrappers.
 
-It gives you three layers to work with:
+The crate is organized around three layers:
 
-- Primitive modules for hashing, authenticated encryption, compression, and
-  key derivation
-- Fused shell primitives for shaping opaque outer envelopes around bytes you
-  already control
-- Full-flow helpers for the default Voided v2 path:
-  `compression -> encryption -> fused shell`
+1. primitive cryptography
+2. fused shell primitives
+3. full-flow fused artifacts
 
-## When To Use This Crate
+## Contents
+
+- [What This Crate Is For](#what-this-crate-is-for)
+- [Installation](#installation)
+- [Core Concepts](#core-concepts)
+- [Public Modules](#public-modules)
+- [Quick Start](#quick-start)
+- [Choosing The Right Layer](#choosing-the-right-layer)
+- [Fused Presets](#fused-presets)
+- [Feature Flags](#feature-flags)
+- [Build Targets](#build-targets)
+- [Testing](#testing)
+- [v1 Boundary](#v1-boundary)
+- [License](#license)
+
+## What This Crate Is For
 
 Use `voided-core` directly when you want:
 
-- Native Rust access to Voided without going through the Node or WASM wrappers
-- The fused-first artifact model used by Voided v2 and Slipner
-- Primitive access to hashing, encryption, compression, and key derivation
-- One implementation that stays aligned with the higher-level bindings
+- native Rust access to Voided's primitives and artifact formats
+- the fused-first Voided v2 model without a JavaScript wrapper
+- one implementation that stays aligned across Rust, Node, and WASM
+- direct control over whether you use raw primitives, fused shell, or the full
+  fused artifact flow
 
-If you are building from Node.js or the browser, the wrapper crates are usually
-the better entry points:
+If you want the wrapper layers instead:
 
-- Node: `@voideddev/enc-server`
-- Browser: `@voideddev/e2ee-client`
+- use `@voideddev/enc-server` for Node.js
+- use `@voideddev/e2ee-client` for browser runtimes
 
 ## Installation
 
@@ -45,49 +57,120 @@ Browser-oriented build:
 voided-core = { version = "0.1.1", default-features = false, features = ["browser"] }
 ```
 
-## What You Get
+The default feature set is `backend`.
 
-### Primitive Modules
+## Core Concepts
 
-- `voided_core::encryption`
-  - AEAD encryption with AES-256-GCM and XChaCha20-Poly1305
-  - HKDF and PBKDF2 key derivation
-  - X25519 key agreement helpers
-- `voided_core::hash`
-  - SHA-256 and SHA-512 hashing
-  - HMAC helpers
-  - fingerprints and safety-number formatting
-- `voided_core::compression`
-  - Brotli and Gzip compression helpers
-  - only available when the `compression` feature is enabled
-- `voided_core::signing`
-  - Ed25519, P-256, and RSA signing helpers
-  - only available when the `signing` feature is enabled
-- `voided_core::util`
-  - random bytes, base64/hex helpers, secure wipe, and related utilities
+### Primitive Cryptography
 
-### Fused Modules
+The primitive layer covers:
 
-- `voided_core::shell::fuse_bytes`
-- `voided_core::shell::unfuse_bytes`
-- `voided_core::shell::inspect_fused`
-- `voided_core::shell::protect`
-- `voided_core::shell::open`
-- `voided_core::shell::inspect_artifact`
-- `voided_core::shell::repack_artifact`
+- AEAD encryption
+- key generation and derivation
+- hashing and HMAC
+- compression
+- utility helpers
 
-The public fused presets are:
+Use this layer when you want Voided's cryptographic building blocks but prefer
+to define your own outer envelope or storage format.
 
-- `compact`
-- `balanced`
-- `concealed`
+### Fused Shell
+
+The fused shell is the outer-shell layer for already-prepared bytes. It gives
+you a stable shell envelope with preset-driven behavior.
+
+Use this layer when:
+
+- you already own the bytes being shelled
+- you want to inspect shell metadata independently
+- you want to apply or remove the shell without using the full artifact flow
+
+### Full-Flow Fused Artifact
+
+The full-flow helper layer is the normal Voided v2 path:
+
+1. optional compression
+2. authenticated encryption
+3. fused shell envelope
+
+The main functions are:
+
+- `protect`
+- `open`
+- `inspect_artifact`
+- `repack_artifact`
+
+Use this layer when you want the standard Voided v2 artifact contract.
+
+## Public Modules
+
+### `voided_core::encryption`
+
+Provides:
+
+- AES-256-GCM and XChaCha20-Poly1305
+- HKDF and PBKDF2
+- X25519 key agreement helpers
+- serialization helpers for encrypted payloads
+
+### `voided_core::hash`
+
+Provides:
+
+- SHA-256 and SHA-512
+- HMAC helpers
+- PBKDF2-based hash verification helpers
+- fingerprints and safety-number formatting
+
+### `voided_core::compression`
+
+Available with the `compression` feature.
+
+Provides:
+
+- Brotli
+- Gzip
+- compression result metadata
+- helpers for compressed payload serialization
+
+### `voided_core::shell`
+
+Provides:
+
+- `fuse_bytes`
+- `unfuse_bytes`
+- `inspect_fused`
+- `protect`
+- `open`
+- `inspect_artifact`
+- `repack_artifact`
+- fused preset and options types
+
+### `voided_core::util`
+
+Provides:
+
+- random bytes
+- secure wipe
+- encoding helpers
+- small shared utility helpers
+
+### `voided_core::signing`
+
+Available with the `signing` feature.
+
+Provides:
+
+- Ed25519 helpers
+- P-256 helpers
+- RSA helpers
 
 ## Quick Start
 
-### Authenticated Encryption
+### Example: Direct AEAD Encryption
 
-Use the `encryption` module when you want direct AEAD primitives without the
-full Voided artifact pipeline.
+Use the primitive encryption layer when you want direct ciphertext handling and
+you do not want Voided to own the outer artifact format.
 
 ```rust
 use voided_core::encryption::{decrypt, encrypt, generate_key, Algorithm, EncryptOptions};
@@ -109,10 +192,9 @@ assert_eq!(decrypted, plaintext);
 # Ok::<(), voided_core::Error>(())
 ```
 
-### Full-Flow Fused Artifact
+### Example: Standard Fused Artifact
 
-Use `protect/open` when you want the normal Voided v2 storage or transport
-artifact shape.
+Use `protect/open` when you want the normal Voided v2 artifact shape.
 
 ```rust
 use voided_core::encryption::generate_key;
@@ -138,10 +220,10 @@ assert_eq!(restored, plaintext);
 # Ok::<(), voided_core::Error>(())
 ```
 
-### Fused Shell Primitive
+### Example: Shell-Only Envelope
 
-Use `fuse_bytes/unfuse_bytes` when you already own the bytes inside the shell
-and only want the shell layer itself.
+Use `fuse_bytes/unfuse_bytes` when the bytes inside the shell are already in the
+form you want.
 
 ```rust
 use voided_core::encryption::generate_key;
@@ -169,45 +251,105 @@ assert_eq!(restored, payload);
 
 ## Choosing The Right Layer
 
-- Use `encryption` when you need direct AEAD primitives and you want to manage
-  outer formats yourself.
-- Use `fuse_bytes` when you already have encrypted or otherwise prepared bytes
-  and only want Voided's shell layer.
-- Use `protect` for the normal Voided v2 product path. This is the simplest
-  entry point for storage artifacts and the model Slipner now consumes.
-- Use `inspect_fused` and `inspect_artifact` when you want metadata without
+- Use `encryption` when you need direct AEAD primitives and want to manage the
+  outer format yourself.
+- Use `hash` when you need fingerprints, HMACs, or verification helpers without
+  touching the artifact flow.
+- Use `compression` when you want direct compression results and metadata.
+- Use `fuse_bytes` when you already have the bytes you want inside the shell.
+- Use `protect` when you want the standard Voided v2 artifact path.
+- Use `inspect_fused` or `inspect_artifact` when you want metadata without
   opening the payload.
 - Use `repack_artifact` when you want to move an artifact between fused presets
   without changing the underlying plaintext.
 
+## Fused Presets
+
+The stable fused presets are:
+
+- `compact`
+- `balanced`
+- `concealed`
+
+Practical intent:
+
+- `compact`
+  - lowest-overhead preset
+- `balanced`
+  - default general-purpose preset
+- `concealed`
+  - heavier preset with more shell variation
+
+If you do not have a strong reason otherwise, start with `balanced`.
+
 ## Feature Flags
 
-- `backend`
-  - default
-  - enables the full server-oriented surface
-  - includes `compression`, `signing`, and `std`
-- `browser`
-  - browser-oriented subset used by the WASM crate
-  - intended for the `voided-wasm` binding path
-- `compression`
-  - enables Brotli and Gzip helpers
-  - required for `shell::protect`, `shell::open`, and `shell::repack_artifact`
-- `signing`
-  - enables Ed25519, P-256, and RSA signing helpers
-- `wasm`
-  - internal support feature used by the WASM binding build
-- `std`
-  - enables the standard-library path used by the backend build
+### `backend`
 
-## Notes
+- enabled by default
+- full server-oriented feature set
+- includes `compression`, `signing`, and `std`
 
-- `voided-core` is the implementation authority for the Voided stack. The Node
-  and browser wrappers should project this crate's behavior, not reimplement it.
-- Map-based obfuscation belongs to deprecated Voided v1 and is not part of the
-  current `voided-core` surface.
-- The fused-first full flow is `compression -> encryption -> fused shell`.
-- The crate exposes shared payload and envelope formats so Node and WASM stay
-  aligned on artifact behavior.
+### `browser`
+
+- browser-oriented subset used by the WASM build
+- meant for `voided-wasm` and other browser-compatible targets
+
+### `compression`
+
+- enables Brotli and Gzip helpers
+- required for `shell::protect`, `shell::open`, and `shell::repack_artifact`
+
+### `signing`
+
+- enables Ed25519, P-256, and RSA helpers
+
+### `wasm`
+
+- internal support feature used by the WASM binding build
+
+### `std`
+
+- enables the standard library path used by the backend build
+
+## Build Targets
+
+Common target shapes:
+
+- server/native Rust
+  - use default features
+- browser/WASM-oriented builds
+  - disable default features and enable `browser`
+
+The crate itself is the implementation authority for both wrapper bindings, so
+behavior added here should be projected through `voided-node` and `voided-wasm`
+rather than reimplemented elsewhere.
+
+## Testing
+
+When changing this crate, the most important checks are:
+
+- unit tests around the touched module
+- fused artifact stress and vector coverage
+- deterministic shell behavior when nonce or chunk settings are fixed
+
+From the workspace Rust root:
+
+```bash
+cargo test -p voided-core
+```
+
+## v1 Boundary
+
+`voided-core` is the fused-first Rust crate for the current library line.
+Map-based obfuscation belongs to deprecated v1 and is not part of the current
+crate surface.
+
+That means:
+
+- no map-shell module in the public current surface
+- no map-first examples in this crate guide
+- no new direct Rust development targeting the old map path
 
 ## License
 
