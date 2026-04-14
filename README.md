@@ -20,6 +20,8 @@ The default full flow in Voided v2 is:
 - [What Voided Includes](#what-voided-includes)
 - [Choose Your Entry Point](#choose-your-entry-point)
 - [Core Concepts](#core-concepts)
+- [What Fused Means](#what-fused-means)
+- [Command Map](#command-map)
 - [Fused Presets](#fused-presets)
 - [Repository Quick Start](#repository-quick-start)
 - [Developer Manuals](#developer-manuals)
@@ -108,6 +110,76 @@ Both shell and full-flow artifacts can be inspected without opening them:
 
 That makes it easier to reason about preset, sizes, and envelope structure
 without immediately decrypting the payload.
+
+## What Fused Means
+
+The fused shell is not a second encryption algorithm and it is not the old map
+system under a new name.
+
+It is the outer container layer that wraps already-prepared bytes into a
+versioned, preset-driven, inspectable envelope.
+
+In the standard Voided v2 flow, the bytes going into the shell are:
+
+1. optionally compressed
+2. encrypted with an AEAD
+3. wrapped by the fused shell
+
+What the shell adds on top of the encrypted payload:
+
+- a stable outer binary format
+- preset-driven shell behavior
+- chunking metadata
+- inspectable envelope metadata
+- a consistent artifact contract across Rust, Node, and browser surfaces
+
+The shell does not replace encryption. It sits outside encryption and gives the
+encrypted payload a first-class artifact shape.
+
+If you already have the bytes you want inside the shell, use shell primitives.
+If you want Voided to do the whole flow for you, use full-flow helpers.
+
+## Command Map
+
+The easiest way to think about the API is by asking which layer you want Voided
+to own.
+
+### Primitive Layer
+
+Use these when you only want one part of the stack:
+
+- `hash`
+  - digest bytes or strings
+- `encrypt` / `decrypt`
+  - authenticated encryption without shelling or artifact formatting
+- `compress` / `decompress`
+  - compression without encryption or shelling
+
+### Shell Layer
+
+Use these when your payload is already prepared and you only want the outer
+fused envelope:
+
+- `fuse`
+  - wrap prepared bytes in the fused shell
+- `unfuse`
+  - remove the shell and return the inner bytes
+- `inspectFused`
+  - read shell metadata without opening the inner payload
+
+### Full-Flow Artifact Layer
+
+Use these when you want the normal Voided v2 artifact model:
+
+- `protect`
+  - compress, encrypt, and shell data into a fused artifact
+- `open`
+  - reverse the full flow and return the original plaintext bytes
+- `inspectArtifact`
+  - read artifact metadata without opening it
+- `repackArtifact`
+  - reopen and rewrite an artifact with new options such as preset or
+    compression settings
 
 ## Fused Presets
 

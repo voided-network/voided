@@ -16,6 +16,8 @@ The crate is organized around three layers:
 - [What This Crate Is For](#what-this-crate-is-for)
 - [Installation](#installation)
 - [Core Concepts](#core-concepts)
+- [What Fused Means](#what-fused-means)
+- [Command Map](#command-map)
 - [Public Modules](#public-modules)
 - [Quick Start](#quick-start)
 - [Choosing The Right Layer](#choosing-the-right-layer)
@@ -102,6 +104,59 @@ The main functions are:
 
 Use this layer when you want the standard Voided v2 artifact contract.
 
+## What Fused Means
+
+The fused shell is the outer envelope format for bytes that are already ready
+to store or transport. In the normal Voided v2 flow, those bytes are encrypted
+payload bytes.
+
+That means the standard pipeline is:
+
+1. optional compression
+2. authenticated encryption
+3. fused shell envelope
+
+The shell is responsible for the outer artifact contract:
+
+- versioned envelope structure
+- preset selection
+- chunk sizing and chunk counts
+- shell metadata that can be inspected without opening the artifact
+
+The shell does not replace encryption, and it does not ask the primitive layer
+to disappear. It gives the encrypted payload a stable outer form.
+
+In practice:
+
+- use shell helpers when the inner bytes are already in the shape you want
+- use full-flow helpers when you want `voided-core` to own the complete
+  standard artifact format
+
+## Command Map
+
+The public shell commands break down like this:
+
+- `fuse_bytes`
+  - wrap prepared bytes in the fused shell
+- `unfuse_bytes`
+  - remove the fused shell and return the inner bytes
+- `inspect_fused`
+  - inspect shell metadata without opening the inner payload
+- `protect`
+  - compress, encrypt, and shell plaintext into a standard fused artifact
+- `open`
+  - reverse the full `protect` pipeline and return the original plaintext
+- `inspect_artifact`
+  - inspect a fused artifact without opening it
+- `repack_artifact`
+  - reopen and rewrite an artifact with different preset or pipeline options
+
+That gives you three clean entry points:
+
+- primitives when you only need crypto or compression
+- shell helpers when you already own the inner bytes
+- full-flow helpers when you want the standard Voided v2 artifact contract
+
 ## Public Modules
 
 ### `voided_core::encryption`
@@ -145,6 +200,18 @@ Provides:
 - `inspect_artifact`
 - `repack_artifact`
 - fused preset and options types
+
+Command intent:
+
+- `fuse_bytes` / `unfuse_bytes`
+  - direct shell-layer control
+- `protect` / `open`
+  - standard full-flow artifact entry points
+- `inspect_fused` / `inspect_artifact`
+  - metadata inspection without opening payloads
+- `repack_artifact`
+  - rewrite artifacts without forcing callers to manually unpack and rebuild the
+    shell pipeline
 
 ### `voided_core::util`
 

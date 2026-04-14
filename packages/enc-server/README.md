@@ -19,6 +19,7 @@ Under the hood, the package is layered like this:
 - [What This Package Is For](#what-this-package-is-for)
 - [Installation](#installation)
 - [Quick Start](#quick-start)
+- [What Fused Means In Node.js](#what-fused-means-in-nodejs)
 - [Choosing The Right API Layer](#choosing-the-right-api-layer)
 - [Primitive Crypto APIs](#primitive-crypto-apis)
 - [Fused Shell And Full-Flow APIs](#fused-shell-and-full-flow-apis)
@@ -129,6 +130,29 @@ console.log(info.preset);
 console.log(restored.equals(payload));
 ```
 
+## What Fused Means In Node.js
+
+The fused shell is the outer artifact format. It wraps bytes that are already
+prepared and gives them a stable, inspectable, preset-driven envelope.
+
+In the standard Voided v2 flow, the bytes entering the shell are:
+
+1. optionally compressed
+2. encrypted
+3. wrapped by the fused shell
+
+That means:
+
+- `encrypt` gives you ciphertext and encryption metadata, but not the standard
+  fused artifact
+- `fuse` wraps prepared bytes in the shell
+- `protect` runs the normal full flow and returns the standard fused artifact
+
+Use `fuse/unfuse` when you already control the bytes that should live inside
+the shell.
+
+Use `protect/open` when you want the normal Voided artifact contract.
+
 ## Choosing The Right API Layer
 
 The package exposes several layers. Use the smallest one that fits your job.
@@ -202,6 +226,15 @@ Use these when you want the shell layer directly:
 - `unfuse(data, key)`
 - `inspectFused(data)`
 
+What each one does:
+
+- `fuse`
+  - wrap already-prepared bytes in the fused shell
+- `unfuse`
+  - strip the shell and return the inner bytes
+- `inspectFused`
+  - inspect shell metadata without opening the inner payload
+
 `inspectFused` gives you metadata such as:
 
 - preset
@@ -218,6 +251,17 @@ Use these when you want the standard Voided v2 artifact contract:
 - `open(artifact, key)`
 - `inspectArtifact(artifact)`
 - `repackArtifact(artifact, key, options?)`
+
+What each one does:
+
+- `protect`
+  - compress, encrypt, and shell the input into the standard fused artifact
+- `open`
+  - reverse `protect` and return the original plaintext bytes
+- `inspectArtifact`
+  - inspect artifact metadata without opening it
+- `repackArtifact`
+  - reopen and rewrite an artifact with new preset or pipeline settings
 
 `protect` and `repackArtifact` accept:
 

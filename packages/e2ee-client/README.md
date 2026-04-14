@@ -18,6 +18,7 @@ At a high level, the package exposes four layers:
 - [Installation](#installation)
 - [Package Layers](#package-layers)
 - [Quick Start](#quick-start)
+- [What Fused Means In The Browser](#what-fused-means-in-the-browser)
 - [Stateful Client Guide](#stateful-client-guide)
 - [Top-Level Helper Guide](#top-level-helper-guide)
 - [Low-Level Crypto Guide](#low-level-crypto-guide)
@@ -130,6 +131,29 @@ console.log(info.protectedSize);
 console.log(restored);
 ```
 
+## What Fused Means In The Browser
+
+The fused shell is the outer artifact envelope. It does not replace browser
+encryption. It wraps already-prepared bytes in a stable, inspectable,
+preset-driven format.
+
+In the standard Voided v2 browser flow, the steps are:
+
+1. optional compression
+2. encryption
+3. fused shell wrapping
+
+That means:
+
+- `encrypt` returns the older encrypted blob shape
+- `fuse` wraps prepared bytes in the shell
+- `protect` returns the standard fused artifact shape
+
+Use `protect/open` when you want the standard Voided v2 artifact contract.
+
+Use `fuse/unfuse` only when you already control the inner bytes and only need
+the outer shell.
+
 ## Stateful Client Guide
 
 `VoidedE2EEClient` is the highest-level browser API in the package.
@@ -159,6 +183,17 @@ Common client operations:
 
 Use the stateful client when you want application-oriented browser behavior and
 do not want to manually wire key bytes into every operation.
+
+Command intent:
+
+- `protect`
+  - compress, encrypt, and shell text through the standard fused flow
+- `open`
+  - reverse the full fused flow and return the original text
+- `inspectProtected`
+  - inspect fused artifact metadata without opening it
+- `encrypt` / `decrypt`
+  - use the older encrypted blob format instead of the fused artifact format
 
 ## Top-Level Helper Guide
 
@@ -233,6 +268,23 @@ Fused helpers exposed through `crypto` include:
 - `inspectArtifact`
 - `repackArtifact`
 
+What they do:
+
+- `fuse`
+  - wrap prepared bytes in the fused shell
+- `unfuse`
+  - remove the shell and return the inner bytes
+- `inspectFused`
+  - inspect shell metadata without opening the inner payload
+- `protect`
+  - compress, encrypt, and shell bytes into a standard fused artifact
+- `open`
+  - reverse the full fused flow and return the original bytes
+- `inspectArtifact`
+  - inspect artifact metadata without opening it
+- `repackArtifact`
+  - rewrite an artifact with new preset or pipeline options
+
 ## WASM And Backend Behavior
 
 The browser package has two backend modes:
@@ -246,6 +298,13 @@ Important behavior:
   backend
 - the older browser primitive APIs can fall back to TypeScript/Web Crypto when
   WASM is unavailable
+
+Practical meaning:
+
+- the TypeScript fallback is a primitives-and-legacy-path fallback
+- it is not currently a fused shell fallback
+- if your browser app depends on `fuse`, `protect`, `inspectArtifact`, or
+  `repackArtifact`, treat WASM as required today
 
 Useful exports:
 
