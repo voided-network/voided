@@ -83,7 +83,7 @@ describe('Frontend Compression Tests', () => {
             const data = generateTestData(500, 'repetitive');
             const result = await compress(data);
 
-            expect(['gzip', 'brotli', 'none']).toContain(result.algorithm);
+            expect(['gzip', 'none']).toContain(result.algorithm);
         });
 
         test('should respect explicit gzip algorithm', async () => {
@@ -93,11 +93,11 @@ describe('Frontend Compression Tests', () => {
             expect(result.algorithm).toBe('gzip');
         });
 
-        test('should respect explicit brotli algorithm', async () => {
+        test('should normalize explicit brotli requests to gzip in the TypeScript fallback', async () => {
             const data = generateTestData(500, 'repetitive');
             const result = await compress(data, { algorithm: 'brotli' });
 
-            expect(result.algorithm).toBe('brotli');
+            expect(result.algorithm).toBe('gzip');
         });
 
         test('should respect none algorithm', async () => {
@@ -186,12 +186,13 @@ describe('Frontend Compression Tests', () => {
             expect(highLevel.compressionRatio).toBeLessThanOrEqual(lowLevel.compressionRatio);
         });
 
-        test('should respect compression level for brotli', async () => {
+        test('should normalize brotli compression levels to gzip in the TypeScript fallback', async () => {
             const data = generateTestData(1000, 'repetitive');
             const lowLevel = await compress(data, { algorithm: 'brotli', compressionLevel: 1 });
-            const highLevel = await compress(data, { algorithm: 'brotli', compressionLevel: 11 });
+            const highLevel = await compress(data, { algorithm: 'brotli', compressionLevel: 9 });
 
-            // Higher compression level should generally give better compression
+            expect(lowLevel.algorithm).toBe('gzip');
+            expect(highLevel.algorithm).toBe('gzip');
             expect(highLevel.compressionRatio).toBeLessThanOrEqual(lowLevel.compressionRatio);
         });
     });
@@ -206,7 +207,7 @@ describe('Frontend Compression Tests', () => {
             expect(analysis.brotliSize).toBeGreaterThan(0);
             expect(analysis.gzipRatio).toBeGreaterThan(0);
             expect(analysis.brotliRatio).toBeGreaterThan(0);
-            expect(['gzip', 'brotli', 'none']).toContain(analysis.recommendation);
+            expect(['gzip', 'none']).toContain(analysis.recommendation);
         });
 
         test('should recommend none for small data', async () => {
@@ -220,10 +221,7 @@ describe('Frontend Compression Tests', () => {
             const largeData = generateTestData(1000, 'repetitive');
             const analysis = await analyzeCompression(largeData);
 
-            // Should recommend the algorithm with best compression ratio
-            if (analysis.brotliRatio < analysis.gzipRatio && analysis.brotliRatio < 0.9) {
-                expect(analysis.recommendation).toBe('brotli');
-            } else if (analysis.gzipRatio < 0.9) {
+            if (analysis.gzipRatio < 0.9) {
                 expect(analysis.recommendation).toBe('gzip');
             } else {
                 expect(analysis.recommendation).toBe('none');
@@ -289,4 +287,4 @@ describe('Frontend Compression Tests', () => {
             }
         });
     });
-}); 
+});

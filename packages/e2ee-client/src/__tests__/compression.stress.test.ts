@@ -157,8 +157,8 @@ describe('Compression Stress Tests', () => {
     describe('Algorithm Selection Stress Tests', () => {
         test('should consistently choose optimal algorithm for different data types', async () => {
             const testCases = [
-                { data: generateTestData(10000, 'repetitive'), expected: 'brotli' },
-                { data: generateTestData(10000, 'structured'), expected: 'brotli' },
+                { data: generateTestData(10000, 'repetitive'), expected: 'gzip' },
+                { data: generateTestData(10000, 'structured'), expected: 'gzip' },
                 { data: generateTestData(1000, 'random'), expected: 'none' },
                 { data: generateTestData(100, 'mixed'), expected: 'none' }
             ];
@@ -169,9 +169,9 @@ describe('Compression Stress Tests', () => {
                 if (expected === 'none') {
                     // For small data, the algorithm might still choose compression
                     // if it's effective enough, so we accept either 'none' or a compression algorithm
-                    expect(['gzip', 'brotli', 'none']).toContain(analysis.recommendation);
+                    expect(['gzip', 'none']).toContain(analysis.recommendation);
                 } else {
-                    expect(['gzip', 'brotli']).toContain(analysis.recommendation);
+                    expect(analysis.recommendation).toBe('gzip');
 
                     // Verify the recommendation is actually optimal
                     const compressed = await compress(data, { algorithm: analysis.recommendation });
@@ -188,7 +188,7 @@ describe('Compression Stress Tests', () => {
 
             for (const algorithm of algorithms) {
                 const result = await compress(data, { algorithm });
-                expect(['gzip', 'brotli', 'none']).toContain(result.algorithm);
+                expect(['gzip', 'none']).toContain(result.algorithm);
 
                 // Verify round-trip works
                 const decompressed = await decompress(result.compressed, result.algorithm);
@@ -313,4 +313,4 @@ describe('Compression Stress Tests', () => {
             }
         });
     });
-}); 
+});

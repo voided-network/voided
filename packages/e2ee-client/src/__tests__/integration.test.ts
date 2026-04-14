@@ -88,7 +88,7 @@ describe('E2EE Integration Tests with Compression', () => {
             const analysis = await import('../compression').then(m => m.analyzeCompression(testData));
 
             expect(analysis.originalSize).toBe(testData.length);
-            expect(['gzip', 'brotli', 'none']).toContain(analysis.recommendation);
+            expect(['gzip', 'none']).toContain(analysis.recommendation);
 
             // Use the recommended algorithm
             const compressed = await compress(testData, { algorithm: analysis.recommendation });
@@ -102,7 +102,7 @@ describe('E2EE Integration Tests with Compression', () => {
 
         test('should handle compression analysis for different data types', async () => {
             const testCases = [
-                { data: generateTestData(100, 'repetitive'), expected: 'brotli' },
+                { data: generateTestData(100, 'repetitive'), expected: 'gzip' },
                 { data: generateTestData(100, 'random'), expected: 'none' },
                 { data: 'tiny', expected: 'none' }
             ];
@@ -113,7 +113,7 @@ describe('E2EE Integration Tests with Compression', () => {
                 if (expected === 'none') {
                     expect(analysis.recommendation).toBe('none');
                 } else {
-                    expect(['gzip', 'brotli']).toContain(analysis.recommendation);
+                    expect(analysis.recommendation).toBe('gzip');
                 }
             }
         });
@@ -127,7 +127,7 @@ describe('E2EE Integration Tests with Compression', () => {
             const analysis = await import('../compression').then(m => m.analyzeCompression(testData));
 
             expect(analysis.originalSize).toBe(testData.length);
-            expect(analysis.recommendation).toBe('brotli'); // Should recommend brotli for repetitive data
+            expect(analysis.recommendation).toBe('gzip'); // TypeScript fallback recommends gzip for repetitive data
 
             // Use the recommended algorithm
             const compressed = await compress(testData, { algorithm: analysis.recommendation });
@@ -139,7 +139,7 @@ describe('E2EE Integration Tests with Compression', () => {
 
         test('should handle compression analysis for different data types', async () => {
             const testCases = [
-                { data: generateTestData(100, 'repetitive'), expected: 'brotli' },
+                { data: generateTestData(100, 'repetitive'), expected: 'gzip' },
                 { data: generateTestData(100, 'random'), expected: 'none' },
                 { data: 'tiny', expected: 'none' }
             ];
@@ -150,7 +150,7 @@ describe('E2EE Integration Tests with Compression', () => {
                 if (expected === 'none') {
                     expect(analysis.recommendation).toBe('none');
                 } else {
-                    expect(['gzip', 'brotli']).toContain(analysis.recommendation);
+                    expect(analysis.recommendation).toBe('gzip');
                 }
             }
         });
@@ -203,4 +203,4 @@ describe('E2EE Integration Tests with Compression', () => {
             expect(currentData).toBe(testData);
         });
     });
-}); 
+});

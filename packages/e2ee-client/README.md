@@ -278,7 +278,7 @@ const plaintext = new TextEncoder().encode("hello bytes");
 
 const protectedResult = await crypto.protect(plaintext, key, {
   preset: "balanced",
-  compressionAlgorithm: "brotli",
+  compressionAlgorithm: "gzip",
   encryptionAlgorithm: "xchacha20-poly1305",
 });
 
@@ -358,6 +358,9 @@ Important behavior:
   backend
 - the older browser primitive APIs can fall back to TypeScript/Web Crypto when
   WASM is unavailable
+- in that TypeScript fallback, compression support is intentionally limited to
+  `gzip` and `none`
+- real browser-side `brotli` support remains part of the Rust/WASM path
 
 Practical meaning:
 

@@ -2,9 +2,6 @@
 import { gzipSync, gunzipSync, strToU8, strFromU8 } from 'fflate';
 import { assertWithinClientUploadLimit } from './limits';
 
-// Brotli will be loaded dynamically if available
-let brotliModule: any = null;
-
 export interface CompressionResult {
     compressed: Uint8Array;
     algorithm: 'gzip' | 'brotli' | 'none';
@@ -27,18 +24,23 @@ function hasGzipSupport(): boolean {
 }
 
 /**
- * Check if brotli compression is available
+ * The TypeScript fallback intentionally supports gzip and none only.
+ * Brotli remains available through the Rust/WASM backend.
  */
-async function hasBrotliSupport(): Promise<boolean> {
-    if (!brotliModule) {
-        try {
-            brotliModule = await import('brotli-wasm');
-        } catch (error) {
-            //if (process.env.NODE_ENV !== 'test') console.warn('Brotli compression not available:', error);
-            return false;
-        }
-    }
-    return typeof brotliModule.compress === 'function' && typeof brotliModule.decompress === 'function';
+function hasBrotliSupport(): boolean {
+    return false;
+}
+
+/**
+ * Normalize requested algorithms for the TypeScript fallback.
+ * Explicit brotli requests degrade to gzip instead of loading extra browser-only
+ * runtime glue. The higher-level WASM backend still exposes real brotli support.
+ */
+function normalizeRequestedAlgorithm(
+    algorithm: 'gzip' | 'brotli' | 'none' | 'auto'
+): 'gzip' | 'none' | 'auto' {
+    if (algorithm === 'brotli') return 'gzip';
+    return algorithm;
 }
 
 /**
@@ -74,10 +76,11 @@ function isLikelyCompressible(data: Uint8Array): boolean {
 /**
  * Choose optimal compression algorithm based on data characteristics
  */
-function chooseOptimalAlgorithm(data: Uint8Array, options: CompressionOptions): 'gzip' | 'brotli' | 'none' {
-    const { algorithm = 'auto', minSizeThreshold = 100 } = options;
+function chooseOptimalAlgorithm(data: Uint8Array, options: CompressionOptions): 'gzip' | 'none' {
+    const requestedAlgorithm = normalizeRequestedAlgorithm(options.algorithm ?? 'auto');
+    const { minSizeThreshold = 100 } = options;
 
-    if (algorithm !== 'auto') return algorithm;
+    if (requestedAlgorithm !== 'auto') return requestedAlgorithm;
 
     // Don't compress small data
     if (data.length < minSizeThreshold) return 'none';
@@ -126,6 +129,7 @@ export async function compress(
         minSizeThreshold = 100,
         compressionLevel = 6
     } = options;
+    const requestedAlgorithm = normalizeRequestedAlgorithm(algorithm);
 
     // Use TextEncoder for consistent UTF-8 encoding so TextDecoder on decrypt is a true inverse
     const input = typeof data === 'string' ? new TextEncoder().encode(data) : data;
@@ -145,12 +149,12 @@ export async function compress(
     }
 
     // Choose optimal algorithm
-    const optimalAlgorithm = chooseOptimalAlgorithm(input, options);
+    const optimalAlgorithm = chooseOptimalAlgorithm(input, { ...options, algorithm: requestedAlgorithm });
 
     // Decide an adaptive compression level for performance when using auto selection.
     // We favor speed for small/medium payloads in concurrent scenarios.
     let adaptiveLevel = compressionLevel;
-    if (optimalAlgorithm === 'gzip' && (algorithm === 'auto')) {
+    if (optimalAlgorithm === 'gzip' && (requestedAlgorithm === 'auto')) {
         if (originalSize <= 1 * 1024 * 1024) {
             // ≤ 1MB: prioritize speed
             adaptiveLevel = 1;
@@ -171,26 +175,12 @@ export async function compress(
 
     try {
         let compressed: Uint8Array;
-        let usedAlgorithm: 'gzip' | 'brotli';
+        const usedAlgorithm: 'gzip' = 'gzip';
 
-        if (optimalAlgorithm === 'brotli') {
-            if (await hasBrotliSupport()) {
-                compressed = brotliModule.compress(input, { quality: compressionLevel });
-                usedAlgorithm = 'brotli';
-            } else if (hasGzipSupport()) {
-                compressed = gzipSync(input, { level: adaptiveLevel as 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 });
-                usedAlgorithm = 'gzip';
-            } else {
-                throw new Error('No compression algorithms available');
-            }
+        if (hasGzipSupport()) {
+            compressed = gzipSync(input, { level: adaptiveLevel as 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 });
         } else {
-            // gzip
-            if (hasGzipSupport()) {
-                compressed = gzipSync(input, { level: adaptiveLevel as 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 });
-                usedAlgorithm = 'gzip';
-            } else {
-                throw new Error('Gzip compression not available');
-            }
+            throw new Error('Gzip compression not available');
         }
 
         const compressedSize = compressed.length;
@@ -235,16 +225,14 @@ export async function decompress(
 
     try {
         if (algorithm === 'brotli') {
-            if (!(await hasBrotliSupport())) {
-                throw new Error('Brotli decompression not available');
-            }
-            return brotliModule.decompress(compressedData);
-        } else {
-            if (!hasGzipSupport()) {
-                throw new Error('Gzip decompression not available');
-            }
-            return gunzipSync(compressedData);
+            throw new Error('Brotli decompression requires the Rust WASM backend in e2ee-client');
         }
+
+        if (!hasGzipSupport()) {
+            throw new Error('Gzip decompression not available');
+        }
+
+        return gunzipSync(compressedData);
     } catch (error) {
         throw new Error(`Decompression failed: ${error instanceof Error ? error.message : String(error)}`);
     }
@@ -292,27 +280,15 @@ export async function analyzeCompression(data: string | Uint8Array): Promise<{
         }
     }
 
-    // Test brotli compression
+    // The TypeScript fallback does not benchmark brotli. Real brotli support
+    // remains available through the Rust/WASM backend.
     let brotliSize = originalSize;
     let brotliRatio = 1.0;
-    if (await hasBrotliSupport()) {
-        try {
-            const brotliResult = brotliModule.compress(input, { quality: 6 });
-            brotliSize = brotliResult.length;
-            brotliRatio = brotliSize / originalSize;
-        } catch (error) {
-            //if (process.env.NODE_ENV !== 'test') console.warn('Brotli analysis failed:', error);
-        }
-    }
 
     // Determine recommendation
     let recommendation: 'gzip' | 'brotli' | 'none';
-    if (gzipRatio < 0.9 || brotliRatio < 0.9) {
-        if (brotliRatio < gzipRatio) {
-            recommendation = 'brotli';
-        } else {
-            recommendation = 'gzip';
-        }
+    if (gzipRatio < 0.9) {
+        recommendation = 'gzip';
     } else {
         recommendation = 'none';
     }
@@ -325,4 +301,4 @@ export async function analyzeCompression(data: string | Uint8Array): Promise<{
         brotliRatio,
         recommendation
     };
-} 
+}

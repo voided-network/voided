@@ -285,7 +285,7 @@ describe('Compression Fuzz Tests', () => {
                         const decompressedString = typeof decompressed === 'string' ? decompressed : uint8ArrayToString(decompressed);
 
                         expect(decompressedString).toBe(originalString);
-                        expect(['gzip', 'brotli', 'none']).toContain(result.algorithm);
+                        expect(['gzip', 'none']).toContain(result.algorithm);
                     } catch (error) {
                         expect(error).toBeDefined();
                     }
@@ -334,7 +334,7 @@ describe('Compression Fuzz Tests', () => {
                     expect(analysis.brotliSize).toBeGreaterThan(0);
                     expect(analysis.gzipRatio).toBeGreaterThan(0);
                     expect(analysis.brotliRatio).toBeGreaterThan(0);
-                    expect(['gzip', 'brotli', 'none']).toContain(analysis.recommendation);
+                    expect(['gzip', 'none']).toContain(analysis.recommendation);
                 } catch (error) {
                     expect(error).toBeDefined();
                 }
@@ -378,4 +378,4 @@ describe('Compression Fuzz Tests', () => {
             }
         });
     });
-}); 
+});

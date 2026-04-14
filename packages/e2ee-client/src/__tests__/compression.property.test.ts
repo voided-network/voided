@@ -74,7 +74,7 @@ describe('Compression Property-Based Tests', () => {
                     }
 
                     const result = await compress(data, { algorithm: algorithm as 'gzip' | 'brotli' | 'auto' | 'none' });
-                    return ['gzip', 'brotli', 'none'].includes(result.algorithm);
+                    return ['gzip', 'none'].includes(result.algorithm);
                 }),
                 { numRuns: 50, timeout: 10000 }
             )
@@ -115,7 +115,7 @@ describe('Compression Property-Based Tests', () => {
                         analysis.brotliSize >= 0 &&
                         analysis.gzipRatio >= 0 &&
                         analysis.brotliRatio >= 0 &&
-                        ['gzip', 'brotli', 'none'].includes(analysis.recommendation);
+                        ['gzip', 'none'].includes(analysis.recommendation);
                 }),
                 { numRuns: 100, timeout: 10000 }
             )
@@ -128,11 +128,6 @@ describe('Compression Property-Based Tests', () => {
 
                     if (analysis.recommendation === 'none') {
                         return analysis.gzipRatio >= 0.9 && analysis.brotliRatio >= 0.9;
-                    }
-
-                    if (analysis.recommendation === 'brotli') {
-                        return analysis.brotliRatio <= analysis.gzipRatio &&
-                            analysis.brotliRatio < 0.9;
                     }
 
                     if (analysis.recommendation === 'gzip') {
@@ -329,4 +324,4 @@ describe('Compression Property-Based Tests', () => {
             )
         );
     });
-}); 
+});
