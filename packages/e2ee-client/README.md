@@ -16,6 +16,7 @@ At a high level, the package exposes four layers:
 
 - [What This Package Is For](#what-this-package-is-for)
 - [Installation](#installation)
+- [Recommended Browser Path](#recommended-browser-path)
 - [Package Layers](#package-layers)
 - [Quick Start](#quick-start)
 - [What Fused Means In The Browser](#what-fused-means-in-the-browser)
@@ -49,6 +50,29 @@ of the browser, use `@voideddev/enc-server`.
 npm install @voideddev/e2ee-client
 ```
 
+If you plan to use fused helpers in the browser, treat the WASM runtime as part
+of the normal package requirement. The TypeScript fallback is useful for the
+older browser encryption path and primitive helpers, but it is not the current
+fused artifact path.
+
+## Recommended Browser Path
+
+If you are choosing quickly and do not need a custom integration, start here:
+
+1. create a `VoidedE2EEClient`
+2. use `protect` to produce a fused artifact
+3. use `inspectProtected` when you want metadata without opening it
+4. use `open` to restore the original text
+
+That is the normal browser-facing Voided v2 path.
+
+Use a different layer only when you have a clear reason:
+
+- use top-level helpers when you want the same browser behavior with less setup
+- use `crypto` when you want `Uint8Array` control and explicit backend control
+- use the WASM loader when you want to manage initialization or readiness
+  yourself
+
 ## Package Layers
 
 ### `VoidedE2EEClient`
@@ -59,6 +83,8 @@ Use this when you want:
 - default IndexedDB-backed storage
 - high-level string-oriented APIs
 - stateful operations like key import, export, and rotation
+
+This is the recommended entry point for most browser applications.
 
 ### Top-Level Helpers
 
@@ -75,6 +101,9 @@ The package also exports convenience functions like:
 
 These operate through a default singleton client.
 
+This is useful when you want the same fused browser path but do not want to
+hold a client instance yourself.
+
 ### `crypto` Namespace
 
 Use `crypto` when you want direct lower-level control over:
@@ -84,6 +113,9 @@ Use `crypto` when you want direct lower-level control over:
 - primitive crypto helpers
 - fused artifact helpers without the stateful client wrapper
 
+Use this when you want byte-level control or you want to make the WASM/runtime
+choice explicit.
+
 ### WASM Loader
 
 Use the WASM loader when you want:
@@ -91,6 +123,9 @@ Use the WASM loader when you want:
 - explicit backend initialization
 - access to the normalized WASM module
 - visibility into WASM readiness or initialization errors
+
+Use this when startup and readiness are part of your app architecture rather
+than something you want the library to resolve lazily.
 
 ## Quick Start
 
@@ -154,6 +189,15 @@ Use `protect/open` when you want the standard Voided v2 artifact contract.
 Use `fuse/unfuse` only when you already control the inner bytes and only need
 the outer shell.
 
+Another way to think about it:
+
+- `encrypt`
+  - "give me ciphertext"
+- `fuse`
+  - "give these bytes a shell"
+- `protect`
+  - "own the normal browser artifact flow for me"
+
 ## Stateful Client Guide
 
 `VoidedE2EEClient` is the highest-level browser API in the package.
@@ -184,6 +228,15 @@ Common client operations:
 Use the stateful client when you want application-oriented browser behavior and
 do not want to manually wire key bytes into every operation.
 
+Recommended mental model:
+
+- `protect/open`
+  - the current default path for browser artifacts
+- `inspectProtected`
+  - the safe metadata view for those artifacts
+- `encrypt/decrypt`
+  - the older browser blob path, still available but not the main v2 shape
+
 Command intent:
 
 - `protect`
@@ -207,6 +260,9 @@ They are useful when:
 
 The tradeoff is that you are opting into the default singleton client rather
 than a client instance you constructed yourself.
+
+If you are writing a small browser app and only have one logical Voided client,
+the top-level helpers are usually enough.
 
 ## Low-Level Crypto Guide
 
@@ -236,6 +292,10 @@ The `crypto` namespace is the right layer when you want:
 - direct access to low-level primitives
 - explicit backend selection and inspection
 - fused helpers without the stateful client wrapper
+
+Use it when your code already works in bytes, when you are integrating Voided
+into another binary protocol, or when you want to make the WASM dependency
+obvious in the call site.
 
 Primitive helpers exposed through `crypto` include:
 
@@ -306,6 +366,10 @@ Practical meaning:
 - if your browser app depends on `fuse`, `protect`, `inspectArtifact`, or
   `repackArtifact`, treat WASM as required today
 
+If you are wondering whether this is a migration blocker, the practical answer
+is usually no: for the current browser fused path, WASM is the intended runtime
+rather than an optional acceleration layer.
+
 Useful exports:
 
 - `initWasm`
@@ -351,6 +415,18 @@ Recommended starting point:
 
 - `preset: "balanced"`
 
+The normal browser artifact lifecycle is:
+
+1. `protect`
+   - produce a fused artifact from text or bytes
+2. `inspectProtected` or `inspectArtifact`
+   - read preset, sizes, and envelope metadata
+3. `open`
+   - recover the original plaintext or bytes
+4. `repackArtifact`
+   - rewrite an existing artifact when you need different preset or pipeline
+     settings
+
 The stateful client returns a browser-friendly `ProtectedBlob` with fields such
 as:
 
@@ -374,6 +450,9 @@ Important caveats:
   signature or forward-secrecy options
 - those older options still belong to the stateful `encrypt/decrypt` path for
   now
+
+In other words, the fused artifact flow is the storage/artifact flow. It is not
+trying to replace every older high-level browser feature in one API.
 
 ## Key Storage And Lifecycle
 
