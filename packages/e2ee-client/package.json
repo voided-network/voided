@@ -1,7 +1,7 @@
 {
   "name": "@voideddev/e2ee-client",
   "version": "0.3.0",
-  "description": "Browser-based E2EE client library for true end-to-end encryption including keys, crypto, compression, and local storage adapters.",
+  "description": "Browser-based E2EE client library for keys, crypto, fused artifacts, compression, and local storage adapters.",
   "type": "module",
   "main": "dist/index.cjs",
   "module": "dist/index.js",
@@ -45,6 +45,7 @@
     "build:all": "npm run copy:wasm && npm run build",
     "test": "jest --testPathIgnorePatterns=gb-scale --testPathIgnorePatterns=benchmark-all --forceExit",
     "test:integration": "node tests/integration.test.mjs",
+    "test:wasm": "node --experimental-wasm-modules wasm/test-wasm.mjs",
     "test:memory": "node --max-old-space-size=8192 ./node_modules/.bin/jest",
     "test:benchmark": "jest --testNamePattern='benchmark' --maxWorkers=1 --testTimeout=6000 --verbose",
     "test:all": "npm run test:integration && npm run test",
@@ -72,6 +73,7 @@
     "encryption",
     "browser",
     "client-side",
+    "fused-shell",
     "privacy",
     "rust",
     "wasm"

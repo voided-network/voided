@@ -1,8 +1,8 @@
 # @voideddev/enc-server
 
 `@voideddev/enc-server` is the Node.js Voided library. It exposes the native
-Rust-backed primitives for hashing, compression, encryption, and utility
-operations while Voided moves toward a fused-first v2 surface.
+Rust-backed primitives for hashing, compression, encryption, fused shell
+operations, and full-flow artifact handling.
 
 Today the runtime layering is:
 
@@ -24,9 +24,9 @@ Deprecated map-first APIs such as `encryptWithMap`, `VoidedService`, and map
 generation helpers have been removed from this branch. That old behavior now
 belongs to v1 only.
 
-## Roadmap Note
+## Current v2 Surface
 
-The v2 direction is fused-first:
+Voided v2 is fused-first:
 
 1. compression
 2. encryption

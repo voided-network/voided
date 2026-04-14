@@ -8,12 +8,10 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 
 async function runTests() {
     const files = await readdir(__dirname);
-    // Skip large-data tests plus removed map-first coverage.
+    // Skip large-data, benchmark, and slow integration coverage in this local runner.
     const skipFiles = [
         'batch.operations.test.mjs',
         'benchmark-all.e2e.test.mjs',
-        'map-analysis.test.mjs',
-        'obfuscation.edge.test.mjs',
         'pipeline.test.mjs',
         'property.test.mjs',
         'reencrypt.edge.test.mjs',

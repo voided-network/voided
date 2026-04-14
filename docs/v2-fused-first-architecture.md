@@ -1,10 +1,10 @@
 # Voided v2 Fused-First Architecture
 
-Status: proposed starting point for implementation work
+Status: implemented fused-first architecture with ongoing cleanup and release work
 
 ## Summary
 
-Voided v2 should move from a map-first product shape to a fused-first product
+Voided v2 has moved from a map-first product shape to a fused-first product
 shape.
 
 The primary full flow should be:
@@ -14,7 +14,9 @@ The primary full flow should be:
 3. fused shell
 
 Map-based obfuscation is a deprecated v1 concern. It should not remain inside
-the Voided v2 product surface, policy surface, or runtime defaults.
+the Voided v2 product surface, policy surface, or runtime defaults, and any
+remaining mentions should be treated as migration-history cleanup rather than
+active runtime scope.
 
 This lets Voided tell the truth about what the system is actually good at:
 
@@ -35,19 +37,19 @@ This lets Voided tell the truth about what the system is actually good at:
 - Give Slipner one clean consumption model for write, read, and migration.
 - Keep the stack lightweight and native. No Docker, no extra service tier.
 
-## Current mismatch
+## Previous mismatch
 
-The current public Node surface is still shaped around map-first naming:
+The previous public Node surface was shaped around map-first naming:
 
 - `encryptWithMap`
 - `decryptWithMap`
 - `VoidedService`
 - direct map generation and analysis helpers
 
-At the same time, the shared Rust core already has the basic shell-domain key
-derivation helpers, and the fused shell work now lives outside the product in
-research code. That means the product contract and the research signal are
-pointing in different directions.
+That mismatch has now been removed in the runtime stack: the shared Rust core,
+Node binding, WASM binding, and both wrapper packages all expose the fused
+artifact model directly. Remaining work is now cleanup, test parity, and
+release alignment rather than product-surface redesign.
 
 Voided v2 should fix that mismatch directly instead of trying to cosmetically
 rebrand the old map-first API. Old map users can stay on the deprecated v1

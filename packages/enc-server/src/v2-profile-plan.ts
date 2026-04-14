@@ -40,7 +40,7 @@ export interface VoidedV2PresetPlanEntry {
   notes: readonly string[];
 }
 
-export const VOIDED_V2_PRESET_PLAN = [
+export const VOIDED_V2_PRESET_PLAN: readonly VoidedV2PresetPlanEntry[] = [
   {
     id: "fused.compact.v2",
     alias: "compact",
@@ -83,8 +83,7 @@ export const VOIDED_V2_PRESET_PLAN = [
       "Recommended high-security role alias.",
     ],
   },
-]
-  as const satisfies readonly VoidedV2PresetPlanEntry[];
+];
 
 const PRESET_ALIAS_MAP: Readonly<Record<VoidedV2PresetAlias, VoidedV2PresetId>> = {
   compact: "fused.compact.v2",

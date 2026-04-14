@@ -252,37 +252,68 @@ await test('compress/decompress brotli', () => {
 });
 
 // ============================================================================
-// OBFUSCATION TESTS
+// FUSED SHELL TESTS
 // ============================================================================
 
-console.log('\n=== Obfuscation Tests ===\n');
+console.log('\n=== Fused Shell Tests ===\n');
 
-await test('generateMap creates mappings', () => {
-  const map = native.generateMap(0.5, 'test-seed', 'abc');
-  
-  if (!map['a'] || map['a'].length === 0) throw new Error('No mappings for "a"');
-  if (!map['b'] || map['b'].length === 0) throw new Error('No mappings for "b"');
-});
+await test('fuse/unfuse roundtrip', () => {
+  const key = native.generateKey();
+  const payload = Buffer.from('native fused roundtrip '.repeat(512));
 
-await test('obfuscate/deobfuscate roundtrip', () => {
-  const map = native.generateMap(0.5, 'roundtrip-test', 'Hello');
-  const text = 'Hello';
-  
-  const result = native.obfuscate(text, map, 'seed');
-  log(`  Original: "${text}" -> Obfuscated: "${result.obfuscated}"`);
-  
-  const recovered = native.deobfuscate(result.obfuscated, map);
-  if (recovered !== text) {
-    throw new Error(`Recovery failed: "${recovered}" !== "${text}"`);
+  const shell = native.fuse(payload, key, 'balanced');
+  const info = native.inspectFused(shell);
+  const restored = native.unfuse(shell, key);
+
+  if (info.preset !== 'balanced') throw new Error(`Wrong preset: ${info.preset}`);
+  if (restored.toString() !== payload.toString()) {
+    throw new Error('Fused roundtrip mismatch');
   }
 });
 
-await test('analyzeMap returns statistics', () => {
-  const map = native.generateMap(0.5, 'analyze-test', 'abc');
-  const analysis = native.analyzeMap(map);
-  
-  if (typeof analysis.totalMappings !== 'number') throw new Error('Missing totalMappings');
-  if (typeof analysis.expansionRatio !== 'number') throw new Error('Missing expansionRatio');
+await test('protect/open roundtrip', () => {
+  const key = native.generateKey();
+  const payload = Buffer.from('native protected artifact '.repeat(2048));
+
+  const result = native.protect(
+    payload,
+    key,
+    'concealed',
+    'brotli',
+    undefined,
+    'xchacha20-poly1305',
+  );
+  const info = native.inspectArtifact(result.artifact);
+  const restored = native.open(result.artifact, key);
+
+  if (info.preset !== 'concealed') throw new Error(`Wrong preset: ${info.preset}`);
+  if (info.encryptionAlgorithm !== 'xchacha20-poly1305') {
+    throw new Error(`Wrong encryption algorithm: ${info.encryptionAlgorithm}`);
+  }
+  if (restored.toString() !== payload.toString()) {
+    throw new Error('Protected artifact roundtrip mismatch');
+  }
+});
+
+await test('repackArtifact changes preset without changing plaintext', () => {
+  const key = native.generateKey();
+  const payload = Buffer.from('native repack artifact '.repeat(1024));
+
+  const initial = native.protect(payload, key, 'balanced', 'brotli', undefined, 'xchacha20-poly1305');
+  const repacked = native.repackArtifact(
+    initial.artifact,
+    key,
+    'compact',
+    'brotli',
+    undefined,
+    'xchacha20-poly1305',
+  );
+  const restored = native.open(repacked.artifact, key);
+
+  if (repacked.preset !== 'compact') throw new Error(`Wrong repacked preset: ${repacked.preset}`);
+  if (restored.toString() !== payload.toString()) {
+    throw new Error('Repacked artifact roundtrip mismatch');
+  }
 });
 
 // ============================================================================

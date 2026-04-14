@@ -4,9 +4,9 @@ Voided is the source repository for the Voided encryption libraries. The workspa
 
 ## Libraries
 
-- `@voideddev/e2ee-client`: browser-side encryption, key management, chunking, and optional Rust/WASM acceleration
-- `@voideddev/enc-server`: server-side compression, authenticated encryption, obfuscation, and streaming helpers backed by native Rust
-- `voided-core`: shared Rust implementation used by the native Node and WASM bindings
+- `@voideddev/e2ee-client`: browser-side encryption, key management, chunking, and fused artifact helpers backed by `voided-wasm`
+- `@voideddev/enc-server`: server-side hashing, compression, authenticated encryption, fused shell, and artifact inspection helpers backed by native Rust
+- `voided-core`: shared Rust implementation used by the native Node and WASM bindings, including the fused shell and full-flow artifact pipeline
 
 ## Repository Layout
 
@@ -46,9 +46,9 @@ Cross-platform native builds require Zig to be installed locally, set via `VOIDE
 - [`packages/enc-server/README.md`](packages/enc-server/README.md)
 - [`crates/voided-core/README.md`](crates/voided-core/README.md)
 
-## Voided v2 Direction
+## Voided v2
 
-The planned Voided v2 product direction is fused-first:
+Voided v2 is fused-first:
 
 1. compression
 2. encryption
@@ -63,15 +63,17 @@ The runtime layering that should stay aligned through the migration is:
 - `@voideddev/e2ee-client` as the browser wrapper over `voided-wasm`
 
 That means map-based obfuscation is a deprecated v1 concern, not part of the
-Voided v2 product surface. New architecture work should target a preset-first
-fused shell surface instead.
+Voided v2 product surface. Current work should target the preset-first fused
+shell surface instead of reviving legacy map APIs.
 
 The detailed plan lives in
 [`docs/v2-fused-first-architecture.md`](docs/v2-fused-first-architecture.md).
 
 ## Examples
 
-Repository-level examples live in [`examples/`](examples). Package-specific examples live alongside each package.
+Repository-level examples live in [`examples/`](examples) and focus on the
+current fused shell and full-flow artifact APIs. Package-specific examples live
+alongside each package.
 
 ## Release Notes
 

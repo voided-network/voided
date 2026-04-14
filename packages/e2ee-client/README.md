@@ -1,6 +1,9 @@
 # @voideddev/e2ee-client
 
-`@voideddev/e2ee-client` is the browser-side Voided library. It provides end-to-end encryption, browser storage, key import/export, chunking for large payloads, and an optional Rust/WASM backend behind a stable TypeScript API.
+`@voideddev/e2ee-client` is the browser-side Voided library. It provides
+end-to-end encryption, fused artifact helpers, browser storage, key
+import/export, chunking for large payloads, and an optional Rust/WASM backend
+behind a stable TypeScript API.
 
 Today the runtime layering is:
 
@@ -22,8 +25,10 @@ import { VoidedE2EEClient } from "@voideddev/e2ee-client";
 
 const client = new VoidedE2EEClient();
 
-const encrypted = await client.encrypt("Private browser-side data");
-const decrypted = await client.decrypt(encrypted);
+const protectedBlob = await client.protect("Private browser-side data", {
+  preset: "balanced",
+});
+const decrypted = await client.open(protectedBlob);
 const exportedKey = await client.exportKey();
 
 console.log(decrypted);

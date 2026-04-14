@@ -6,7 +6,7 @@
     "packages/*"
   ],
   "type": "module",
-  "description": "voideddev - Secure data transmission with E2EE and server-side encryption",
+  "description": "voideddev - Fused-first data protection with native Rust and WASM bindings",
   "scripts": {
     "build": "node scripts/build-all.js",
     "build:rust": "node scripts/build-all.js --rust",
@@ -36,7 +36,9 @@
     "e2ee",
     "privacy",
     "security",
-    "obfuscation"
+    "compression",
+    "wasm",
+    "fused-shell"
   ],
   "license": "MIT",
   "repository": {

@@ -5,9 +5,8 @@ export interface Metric {
   originalSize: number;
   compressedSize: number;
   encryptedSize?: number;
-  storedSize?: number;
+  storedSize: number;
   compressionRatio: number;
-  obfuscatedSize: number;
   expansionRatio: number;
   computeUnits: number;
   algorithm: string;
@@ -65,12 +64,11 @@ export class StatsTracker {
     const rows = this.metrics.map((m) => ({
       label: m.label,
       start: m.originalSize,
-      stored: m.storedSize ?? m.obfuscatedSize,
-      delta: (m.storedSize ?? m.obfuscatedSize) - m.originalSize,
+      stored: m.storedSize,
+      delta: m.storedSize - m.originalSize,
       pct:
         (
-          (((m.storedSize ?? m.obfuscatedSize) - m.originalSize) /
-            m.originalSize) *
+          ((m.storedSize - m.originalSize) / m.originalSize) *
           100
         ).toFixed(1) + "%",
       duration: m.durationMs + "ms",

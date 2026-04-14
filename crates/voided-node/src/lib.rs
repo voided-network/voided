@@ -475,7 +475,9 @@ fn shell_info_from_core(info: voided_core::shell::FusedShellInfo) -> FusedShellI
     }
 }
 
-fn artifact_info_from_core(info: voided_core::shell::ProtectedArtifactInfo) -> ProtectedArtifactInfo {
+fn artifact_info_from_core(
+    info: voided_core::shell::ProtectedArtifactInfo,
+) -> ProtectedArtifactInfo {
     ProtectedArtifactInfo {
         version: info.version as u32,
         preset: info.preset_label,

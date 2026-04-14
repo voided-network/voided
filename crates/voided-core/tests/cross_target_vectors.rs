@@ -212,40 +212,25 @@ fn test_hkdf_vectors() {
     assert_eq!(key.as_bytes(), key2.as_bytes());
 }
 
-/// Test obfuscation determinism
+/// Test fused shell determinism with a fixed nonce.
 #[test]
-#[cfg(feature = "obfuscation")]
-fn test_obfuscation_determinism() {
-    use voided_core::obfuscation::{
-        deobfuscate, generate_map, obfuscate, GenerateMapOptions, ObfuscationOptions,
-        SelectionStrategy,
+fn test_fused_shell_determinism() {
+    use voided_core::encryption::Key;
+    use voided_core::shell::{
+        fuse_bytes, unfuse_bytes, FusedPreset, FusedShellOptions, SHELL_NONCE_SIZE,
     };
 
-    let opts = GenerateMapOptions {
-        temperature: 0.5,
-        seed: Some("test-seed-123".to_string()),
-        charset: Some("abc".to_string()),
+    let key = Key::from_bytes(&[0x11; 32]).expect("valid key");
+    let payload = b"cross-target fused determinism".repeat(64);
+    let options = FusedShellOptions {
+        preset: FusedPreset::Balanced,
+        chunk_size: Some(256),
+        shell_nonce: Some([7u8; SHELL_NONCE_SIZE]),
     };
 
-    let map1 = generate_map(Some(opts.clone()));
-    let map2 = generate_map(Some(opts));
+    let first = fuse_bytes(&payload, &key, Some(options.clone())).expect("first fuse");
+    let second = fuse_bytes(&payload, &key, Some(options)).expect("second fuse");
 
-    // Maps should be identical with same seed
-    assert_eq!(map1, map2);
-
-    // Obfuscation should be deterministic with same seed
-    let text = "abc";
-    let obf_opts = ObfuscationOptions {
-        seed: "obf-seed".to_string(),
-        strategy: SelectionStrategy::Random,
-    };
-
-    let result1 = obfuscate(text, &map1, Some(obf_opts.clone()));
-    let result2 = obfuscate(text, &map2, Some(obf_opts));
-
-    assert_eq!(result1.obfuscated, result2.obfuscated);
-
-    // Deobfuscation should recover original
-    let recovered = deobfuscate(&result1.obfuscated, &map1);
-    assert_eq!(recovered, text);
+    assert_eq!(first, second);
+    assert_eq!(unfuse_bytes(&first, &key).expect("unfuse"), payload);
 }

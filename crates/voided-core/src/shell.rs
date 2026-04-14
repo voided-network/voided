@@ -520,7 +520,11 @@ pub fn unfuse(envelope: &FusedShellEnvelope, master_key: &Key) -> Result<Vec<u8>
 }
 
 /// Serialize a fused shell envelope directly.
-pub fn fuse_bytes(data: &[u8], master_key: &Key, options: Option<FusedShellOptions>) -> Result<Vec<u8>> {
+pub fn fuse_bytes(
+    data: &[u8],
+    master_key: &Key,
+    options: Option<FusedShellOptions>,
+) -> Result<Vec<u8>> {
     Ok(fuse(data, master_key, options)?.to_bytes())
 }
 

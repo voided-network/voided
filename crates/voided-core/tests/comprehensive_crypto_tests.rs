@@ -16,10 +16,9 @@ use voided_core::util::{random_bytes, secure_wipe};
 #[cfg(feature = "compression")]
 use voided_core::compression::{compress, decompress, CompressionAlgorithm, CompressionOptions};
 
-#[cfg(feature = "obfuscation")]
-use voided_core::obfuscation::{
-    analyze_map, deobfuscate, generate_map, obfuscate, GenerateMapOptions, ObfuscationOptions,
-    SelectionStrategy,
+#[cfg(feature = "compression")]
+use voided_core::shell::{
+    inspect_artifact, open, protect, repack_artifact, FusedPreset, ProtectOptions,
 };
 
 /// Test logging macro for detailed output
@@ -730,138 +729,98 @@ fn test_compression_incompressible() {
 }
 
 // =============================================================================
-// OBFUSCATION TESTS
+// FUSED SHELL TESTS
 // =============================================================================
 
-#[cfg(feature = "obfuscation")]
+#[cfg(feature = "compression")]
 #[test]
-fn test_obfuscation_temperatures() {
-    const TEST: &str = "obfuscation_temps";
-    log_test!(TEST, "Testing obfuscation at different temperatures");
+fn test_fused_presets_roundtrip() {
+    const TEST: &str = "fused_presets";
+    log_test!(TEST, "Testing fused protect/open roundtrips across presets");
 
-    let test_string = "Hello";
-    let seed = "test-seed-12345";
+    let key = generate_key();
+    let payload = b"Voided fused full-flow coverage ".repeat(4096);
 
-    for temp in [0.0, 0.25, 0.5, 0.75, 1.0] {
-        log_info!(TEST, "Temperature: {:.2}", temp);
-
-        let opts = GenerateMapOptions {
-            temperature: temp,
-            seed: Some(seed.to_string()),
-            charset: Some("Helo".to_string()), // Just the chars we need
-        };
-
-        let map = generate_map(Some(opts));
-        let analysis = analyze_map(&map);
-
-        log_info!(TEST, "  Total mappings: {}", analysis.total_mappings);
-        log_info!(
-            TEST,
-            "  Avg mappings/char: {:.2}",
-            analysis.average_mappings_per_char
-        );
-        log_info!(
-            TEST,
-            "  Avg mapping length: {:.2}",
-            analysis.average_mapping_length
-        );
-        log_info!(TEST, "  Expansion ratio: {:.2}x", analysis.expansion_ratio);
-
-        let obf_opts = ObfuscationOptions {
-            seed: "obf-seed".to_string(),
-            strategy: SelectionStrategy::Random,
-        };
-
-        let result = obfuscate(test_string, &map, Some(obf_opts));
-        log_info!(TEST, "  Obfuscated: '{}'", result.obfuscated);
-        log_info!(
-            TEST,
-            "  Original len: {}, Obfuscated len: {}",
-            result.stats.original_length,
-            result.stats.obfuscated_length
-        );
-
-        let deobfuscated = deobfuscate(&result.obfuscated, &map);
-        assert_eq!(deobfuscated, test_string);
-        log_success!(TEST, "  Temperature {:.2} roundtrip OK", temp);
-    }
-}
-
-#[cfg(feature = "obfuscation")]
-#[test]
-fn test_obfuscation_selection_strategies() {
-    const TEST: &str = "obfuscation_strategies";
-    log_test!(TEST, "Testing obfuscation selection strategies");
-
-    let opts = GenerateMapOptions {
-        temperature: 0.5,
-        seed: Some("strategy-test".to_string()),
-        charset: Some("abc".to_string()),
-    };
-    let map = generate_map(Some(opts));
-
-    let test_string = "aabbcc";
-
-    for strategy in [
-        SelectionStrategy::Random,
-        SelectionStrategy::RoundRobin,
-        SelectionStrategy::Shortest,
-        SelectionStrategy::Longest,
+    for preset in [
+        FusedPreset::Compact,
+        FusedPreset::Balanced,
+        FusedPreset::Concealed,
     ] {
-        let strategy_name = match strategy {
-            SelectionStrategy::Random => "Random",
-            SelectionStrategy::RoundRobin => "RoundRobin",
-            SelectionStrategy::Shortest => "Shortest",
-            SelectionStrategy::Longest => "Longest",
-        };
+        let protected = protect(
+            &payload,
+            &key,
+            Some(ProtectOptions {
+                preset,
+                ..ProtectOptions::default()
+            }),
+        )
+        .expect("protect failed");
+        let info = inspect_artifact(&protected.artifact).expect("inspect failed");
+        let restored = open(&protected.artifact, &key).expect("open failed");
 
-        let obf_opts = ObfuscationOptions {
-            seed: "test".to_string(),
-            strategy,
-        };
-
-        let result = obfuscate(test_string, &map, Some(obf_opts));
         log_info!(
             TEST,
-            "{}: '{}' (len: {})",
-            strategy_name,
-            result.obfuscated,
-            result.stats.obfuscated_length
+            "{:?}: protected={} compressed={} chunks={}",
+            preset,
+            info.protected_size,
+            info.compressed_size,
+            info.shell_chunk_count
         );
 
-        let deobfuscated = deobfuscate(&result.obfuscated, &map);
-        assert_eq!(deobfuscated, test_string);
-        log_success!(TEST, "  {} strategy roundtrip OK", strategy_name);
+        assert_eq!(info.preset, preset);
+        assert_eq!(restored, payload);
+        log_success!(TEST, "  {:?} preset roundtrip OK", preset);
     }
 }
 
-#[cfg(feature = "obfuscation")]
+#[cfg(feature = "compression")]
 #[test]
-fn test_obfuscation_special_characters() {
-    const TEST: &str = "obfuscation_special";
-    log_test!(TEST, "Testing obfuscation with special characters");
+fn test_fused_tamper_detection() {
+    const TEST: &str = "fused_tamper";
+    log_test!(TEST, "Testing fused artifact tamper detection");
 
-    let charset = "abc123!@# \n\t";
-    let opts = GenerateMapOptions {
-        temperature: 0.5,
-        seed: Some("special-test".to_string()),
-        charset: Some(charset.to_string()),
-    };
-    let map = generate_map(Some(opts));
+    let key = generate_key();
+    let payload = b"tamper-me".repeat(2048);
+    let protected = protect(&payload, &key, None).expect("protect failed");
+    let mut tampered = protected.artifact.clone();
+    let pivot = tampered.len() / 2;
+    tampered[pivot] ^= 0x5A;
 
-    let test_cases = ["abc", "123", "!@#", "a1!", "a b c", "a\nb\tc"];
+    assert!(open(&tampered, &key).is_err());
+    log_success!(TEST, "Tampered artifact rejected");
+}
 
-    for test in test_cases {
-        let obf_opts = ObfuscationOptions {
-            seed: "test".to_string(),
-            strategy: SelectionStrategy::Random,
-        };
+#[cfg(feature = "compression")]
+#[test]
+fn test_fused_repack_preserves_plaintext() {
+    const TEST: &str = "fused_repack";
+    log_test!(TEST, "Testing fused repack behavior");
 
-        let result = obfuscate(test, &map, Some(obf_opts));
-        log_info!(TEST, "Input: {:?} -> Output: '{}'", test, result.obfuscated);
+    let key = generate_key();
+    let payload = random_bytes(96 * 1024);
+    let initial = protect(
+        &payload,
+        &key,
+        Some(ProtectOptions {
+            preset: FusedPreset::Balanced,
+            ..ProtectOptions::default()
+        }),
+    )
+    .expect("initial protect failed");
 
-        let deobfuscated = deobfuscate(&result.obfuscated, &map);
-        assert_eq!(deobfuscated, test, "Roundtrip failed for: {:?}", test);
-        log_success!(TEST, "  Special char test passed: {:?}", test);
-    }
+    let repacked = repack_artifact(
+        &initial.artifact,
+        &key,
+        Some(ProtectOptions {
+            preset: FusedPreset::Concealed,
+            ..ProtectOptions::default()
+        }),
+    )
+    .expect("repack failed");
+    let info = inspect_artifact(&repacked.artifact).expect("inspect failed");
+    let restored = open(&repacked.artifact, &key).expect("open failed");
+
+    assert_eq!(info.preset, FusedPreset::Concealed);
+    assert_eq!(restored, payload);
+    log_success!(TEST, "Repacked artifact kept plaintext intact");
 }

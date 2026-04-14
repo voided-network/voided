@@ -1,7 +1,7 @@
 {
   "name": "@voideddev/enc-server",
   "version": "0.2.5",
-  "description": "Server-side encryption, hashing, and compression library backed by Rust",
+  "description": "Server-side hashing, compression, encryption, and fused artifact library backed by Rust",
   "type": "module",
   "main": "dist/index.cjs",
   "module": "dist/index.js",
@@ -62,6 +62,7 @@
   "keywords": [
     "encryption",
     "compression",
+    "fused-shell",
     "security",
     "rust",
     "native"

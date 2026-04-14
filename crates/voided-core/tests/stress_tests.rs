@@ -23,10 +23,10 @@ use voided_core::util::{constant_time_compare, random_bytes, secure_wipe};
 #[cfg(feature = "compression")]
 use voided_core::compression::{compress, decompress, CompressionAlgorithm, CompressionOptions};
 
-#[cfg(feature = "obfuscation")]
-use voided_core::obfuscation::{
-    analyze_map, deobfuscate, generate_map, obfuscate, GenerateMapOptions, ObfuscationOptions,
-    SelectionStrategy,
+#[cfg(feature = "compression")]
+use voided_core::shell::{
+    fuse_bytes, inspect_artifact, open, protect, repack_artifact, unfuse_bytes, FusedPreset,
+    FusedShellOptions, ProtectOptions, DEFAULT_CHUNK_SIZE, SHELL_NONCE_SIZE,
 };
 
 use std::collections::HashSet;
@@ -585,171 +585,100 @@ mod compression_stress {
 }
 
 // ============================================================================
-// OBFUSCATION STRESS TESTS
+// FUSED SHELL STRESS TESTS
 // ============================================================================
 
-#[cfg(feature = "obfuscation")]
-mod obfuscation_stress {
+#[cfg(feature = "compression")]
+mod fused_shell_stress {
     use super::*;
 
-    /// Test obfuscation determinism guarantee
     #[test]
-    fn test_obfuscation_determinism() {
-        let seed = "determinism-test-seed";
-        let charset = "abcdefghij";
+    fn test_fused_shell_roundtrip_boundaries() {
+        let key = Key::from_bytes(&[0xA5; 32]).expect("valid key");
+        let sizes = [0usize, 1, 31, 32, 33, 255, 4096, DEFAULT_CHUNK_SIZE + 257];
 
-        // Generate map twice with same seed - should be identical
-        let opts1 = GenerateMapOptions {
-            temperature: 0.5,
-            seed: Some(seed.to_string()),
-            charset: Some(charset.to_string()),
-        };
-        let opts2 = GenerateMapOptions {
-            temperature: 0.5,
-            seed: Some(seed.to_string()),
-            charset: Some(charset.to_string()),
-        };
+        for preset in [
+            FusedPreset::Compact,
+            FusedPreset::Balanced,
+            FusedPreset::Concealed,
+        ] {
+            for size in sizes {
+                let payload = random_bytes(size);
+                let shell = fuse_bytes(
+                    &payload,
+                    &key,
+                    Some(FusedShellOptions {
+                        preset,
+                        chunk_size: None,
+                        shell_nonce: Some([preset as u8 + 1; SHELL_NONCE_SIZE]),
+                    }),
+                )
+                .expect("fuse");
+                let restored = unfuse_bytes(&shell, &key).expect("unfuse");
 
-        let map1 = generate_map(Some(opts1));
-        let map2 = generate_map(Some(opts2));
-
-        assert_eq!(map1, map2, "Maps with same seed should be identical");
-
-        // Obfuscate with same seed - should produce same output
-        let text = "abcdefghij";
-        let obf_opts = ObfuscationOptions {
-            seed: "obf-seed".to_string(),
-            strategy: SelectionStrategy::Random,
-        };
-
-        let result1 = obfuscate(text, &map1, Some(obf_opts.clone()));
-        let result2 = obfuscate(text, &map2, Some(obf_opts));
-
-        assert_eq!(
-            result1.obfuscated, result2.obfuscated,
-            "Same seed should produce same output"
-        );
-    }
-
-    /// Test obfuscation with unicode characters
-    #[test]
-    fn test_obfuscation_unicode() {
-        let charset = "Hello世界🌍";
-        let opts = GenerateMapOptions {
-            temperature: 0.5,
-            seed: Some("unicode-test".to_string()),
-            charset: Some(charset.to_string()),
-        };
-
-        let map = generate_map(Some(opts));
-
-        // Verify all characters are mapped
-        for ch in charset.chars() {
-            assert!(map.contains_key(&ch), "Character '{}' should be mapped", ch);
-        }
-
-        // Test roundtrip
-        let obf_opts = ObfuscationOptions {
-            seed: "test".to_string(),
-            strategy: SelectionStrategy::Random,
-        };
-
-        let result = obfuscate(charset, &map, Some(obf_opts));
-        let recovered = deobfuscate(&result.obfuscated, &map);
-
-        assert_eq!(recovered, charset, "Unicode roundtrip failed");
-    }
-
-    /// Test all selection strategies produce valid results
-    #[test]
-    fn test_obfuscation_all_strategies() {
-        let opts = GenerateMapOptions {
-            temperature: 0.5,
-            seed: Some("strategy-test".to_string()),
-            charset: Some("test".to_string()),
-        };
-        let map = generate_map(Some(opts));
-
-        let text = "test";
-        let strategies = [
-            SelectionStrategy::Random,
-            SelectionStrategy::RoundRobin,
-            SelectionStrategy::Shortest,
-            SelectionStrategy::Longest,
-        ];
-
-        for strategy in strategies {
-            let obf_opts = ObfuscationOptions {
-                seed: "seed".to_string(),
-                strategy,
-            };
-
-            let result = obfuscate(text, &map, Some(obf_opts));
-            let recovered = deobfuscate(&result.obfuscated, &map);
-
-            assert_eq!(recovered, text, "Strategy {:?} roundtrip failed", strategy);
+                assert_eq!(restored, payload, "Preset {:?} size {}", preset, size);
+            }
         }
     }
 
-    /// Test temperature extremes
     #[test]
-    fn test_obfuscation_temperature_extremes() {
-        let temperatures = [0.0, 0.001, 0.5, 0.999, 1.0];
+    fn test_fused_protect_open_large_payloads() {
+        let key = Key::from_bytes(&[0x5C; 32]).expect("valid key");
 
-        for temp in temperatures {
-            let opts = GenerateMapOptions {
-                temperature: temp,
-                seed: Some(format!("temp-{}", temp)),
-                charset: Some("abc".to_string()),
-            };
+        for preset in [
+            FusedPreset::Compact,
+            FusedPreset::Balanced,
+            FusedPreset::Concealed,
+        ] {
+            let payload = b"voided fused artifact stress ".repeat(24 * 1024);
+            let protected = protect(
+                &payload,
+                &key,
+                Some(ProtectOptions {
+                    preset,
+                    shell_chunk_size: Some(8 * 1024),
+                    ..ProtectOptions::default()
+                }),
+            )
+            .expect("protect");
+            let info = inspect_artifact(&protected.artifact).expect("inspect");
+            let restored = open(&protected.artifact, &key).expect("open");
 
-            let map = generate_map(Some(opts));
-            let analysis = analyze_map(&map);
-
-            eprintln!(
-                "Temperature {}: {} mappings, {:.2}x expansion",
-                temp, analysis.total_mappings, analysis.expansion_ratio
-            );
-
-            // Verify map is functional
-            let obf_opts = ObfuscationOptions {
-                seed: "test".to_string(),
-                strategy: SelectionStrategy::Random,
-            };
-
-            let result = obfuscate("abc", &map, Some(obf_opts));
-            let recovered = deobfuscate(&result.obfuscated, &map);
-
-            assert_eq!(recovered, "abc", "Temperature {} roundtrip failed", temp);
+            assert_eq!(info.preset, preset);
+            assert_eq!(info.original_size, payload.len());
+            assert_eq!(restored, payload, "Preset {:?} protect/open failed", preset);
         }
     }
 
-    /// Test obfuscation with empty and special inputs
     #[test]
-    fn test_obfuscation_special_inputs() {
-        let opts = GenerateMapOptions {
-            temperature: 0.5,
-            seed: Some("special-test".to_string()),
-            charset: Some("abc \t\n".to_string()),
-        };
-        let map = generate_map(Some(opts));
+    fn test_repack_artifact_across_presets() {
+        let key = Key::from_bytes(&[0x6D; 32]).expect("valid key");
+        let payload = random_bytes(DEFAULT_CHUNK_SIZE * 3 + 111);
+        let initial = protect(
+            &payload,
+            &key,
+            Some(ProtectOptions {
+                preset: FusedPreset::Balanced,
+                ..ProtectOptions::default()
+            }),
+        )
+        .expect("initial protect");
 
-        let special_inputs = vec!["", " ", "\t", "\n", "   ", "a a a", "\n\t\n", "a\nb\tc"];
+        for preset in [FusedPreset::Compact, FusedPreset::Concealed] {
+            let repacked = repack_artifact(
+                &initial.artifact,
+                &key,
+                Some(ProtectOptions {
+                    preset,
+                    ..ProtectOptions::default()
+                }),
+            )
+            .expect("repack");
+            let restored = open(&repacked.artifact, &key).expect("open");
+            let info = inspect_artifact(&repacked.artifact).expect("inspect");
 
-        for input in special_inputs {
-            let obf_opts = ObfuscationOptions {
-                seed: "test".to_string(),
-                strategy: SelectionStrategy::Random,
-            };
-
-            let result = obfuscate(input, &map, Some(obf_opts));
-            let recovered = deobfuscate(&result.obfuscated, &map);
-
-            assert_eq!(
-                recovered, input,
-                "Special input {:?} roundtrip failed",
-                input
-            );
+            assert_eq!(info.preset, preset);
+            assert_eq!(restored, payload);
         }
     }
 }

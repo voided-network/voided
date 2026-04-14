@@ -65,7 +65,15 @@ try {
 
 console.log('\n=== Crypto Backend Tests ===\n');
 
-const { crypto, getCurrentBackend, isWasmBackendReady } = pkg;
+const {
+  crypto,
+  getCurrentBackend,
+  isWasmBackendReady,
+  initWasm,
+  protect: protectArtifact,
+  open: openArtifact,
+  inspectProtected,
+} = pkg;
 
 await test('getCurrentBackend returns valid backend', async () => {
   const backend = await getCurrentBackend();
@@ -325,6 +333,64 @@ await test('convenience encrypt function exists', () => {
 await test('convenience decrypt function exists', () => {
   if (typeof e2eeDecrypt !== 'function') {
     throw new Error('decrypt should be exported');
+  }
+});
+
+// ============================================================================
+// FUSED ARTIFACT TESTS
+// ============================================================================
+
+console.log('\n=== Fused Artifact Tests ===\n');
+
+await test('protect/open roundtrip with preset inspection', async () => {
+  try {
+    await initWasm();
+  } catch (error) {
+    log(`  Skipping WASM-only fused roundtrip in Node integration harness: ${error.message || error}`);
+    return;
+  }
+  if (!isWasmBackendReady()) {
+    log('  Skipping WASM-only fused roundtrip in Node integration harness');
+    return;
+  }
+
+  const plaintext = 'browser fused artifact '.repeat(4096);
+  const protectedBlob = await protectArtifact(plaintext, { preset: 'balanced' });
+  const info = await inspectProtected(protectedBlob);
+  const restored = await openArtifact(protectedBlob);
+
+  if (info.preset !== 'balanced') {
+    throw new Error(`Expected balanced preset, got ${info.preset}`);
+  }
+  if (restored !== plaintext) {
+    throw new Error('protect/open roundtrip failed');
+  }
+});
+
+await test('concealed preset handles larger payloads', async () => {
+  try {
+    await initWasm();
+  } catch (error) {
+    log(`  Skipping WASM-only large fused artifact check: ${error.message || error}`);
+    return;
+  }
+  if (!isWasmBackendReady()) {
+    log('  Skipping WASM-only large fused artifact check in Node integration harness');
+    return;
+  }
+  const plaintext = 'concealed fused payload '.repeat(12 * 1024);
+  const protectedBlob = await protectArtifact(plaintext, { preset: 'concealed' });
+  const info = await inspectProtected(protectedBlob);
+  const restored = await openArtifact(protectedBlob);
+
+  if (info.preset !== 'concealed') {
+    throw new Error(`Expected concealed preset, got ${info.preset}`);
+  }
+  if (info.protectedSize <= 0) {
+    throw new Error('Protected artifact should report a positive size');
+  }
+  if (restored !== plaintext) {
+    throw new Error('Large fused artifact roundtrip failed');
   }
 });
 

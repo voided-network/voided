@@ -117,6 +117,34 @@ for (const preset of ['compact', 'balanced', 'concealed']) {
   });
 }
 
+await test('protect/open handles a large fused artifact payload', () => {
+  const key = generateKey();
+  const plaintext = Buffer.alloc(192 * 1024);
+  let state = 0x12345678;
+  for (let index = 0; index < plaintext.length; index += 1) {
+    state = (state * 1664525 + 1013904223) >>> 0;
+    plaintext[index] = (state >>> 24) & 0xff;
+  }
+  const protectedArtifact = protect(plaintext, key, {
+    preset: 'concealed',
+    compressionAlgorithm: 'brotli',
+    encryptionAlgorithm: 'xchacha20-poly1305',
+    shellChunkSize: 8 * 1024,
+  });
+  const info = inspectArtifact(protectedArtifact.artifact);
+  const restored = open(protectedArtifact.artifact, key);
+
+  if (!restored.equals(plaintext)) {
+    throw new Error('large protect/open roundtrip should restore the plaintext');
+  }
+  if (info.preset !== 'concealed') {
+    throw new Error(`expected concealed preset, got ${info.preset}`);
+  }
+  if (info.shellChunkCount < 2) {
+    throw new Error(`expected multiple shell chunks, got ${info.shellChunkCount}`);
+  }
+});
+
 await test('repackArtifact changes preset without changing plaintext', () => {
   const key = generateKey();
   const plaintext = Buffer.from('balanced default payload '.repeat(2048));

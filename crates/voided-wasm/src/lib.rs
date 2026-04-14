@@ -465,7 +465,9 @@ fn shell_info_from_core(info: voided_core::shell::FusedShellInfo) -> FusedShellI
     }
 }
 
-fn artifact_info_from_core(info: voided_core::shell::ProtectedArtifactInfo) -> ProtectedArtifactInfo {
+fn artifact_info_from_core(
+    info: voided_core::shell::ProtectedArtifactInfo,
+) -> ProtectedArtifactInfo {
     ProtectedArtifactInfo {
         version: info.version as u32,
         preset: info.preset_label,
@@ -531,7 +533,8 @@ pub fn unfuse(data: &[u8], key: &[u8]) -> Result<Vec<u8>, JsValue> {
 /// Inspect a fused shell envelope without a key.
 #[wasm_bindgen(js_name = inspectFused)]
 pub fn inspect_fused(data: &[u8]) -> Result<JsValue, JsValue> {
-    let info = voided_core::shell::inspect_fused(data).map_err(|e| JsValue::from_str(&e.to_string()))?;
+    let info =
+        voided_core::shell::inspect_fused(data).map_err(|e| JsValue::from_str(&e.to_string()))?;
     serde_wasm_bindgen::to_value(&shell_info_from_core(info))
         .map_err(|e| JsValue::from_str(&e.to_string()))
 }
@@ -578,8 +581,8 @@ pub fn open_artifact(artifact: &[u8], key: &[u8]) -> Result<Vec<u8>, JsValue> {
 /// Inspect a fused protected artifact without a key.
 #[wasm_bindgen(js_name = inspectArtifact)]
 pub fn inspect_artifact(artifact: &[u8]) -> Result<JsValue, JsValue> {
-    let info =
-        voided_core::shell::inspect_artifact(artifact).map_err(|e| JsValue::from_str(&e.to_string()))?;
+    let info = voided_core::shell::inspect_artifact(artifact)
+        .map_err(|e| JsValue::from_str(&e.to_string()))?;
     serde_wasm_bindgen::to_value(&artifact_info_from_core(info))
         .map_err(|e| JsValue::from_str(&e.to_string()))
 }
