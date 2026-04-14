@@ -1,6 +1,6 @@
 {
   "name": "@voideddev/e2ee-client",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "description": "Browser-based E2EE client library for keys, crypto, fused artifacts, compression, and local storage adapters.",
   "type": "module",
   "main": "dist/index.cjs",
