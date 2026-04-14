@@ -49,14 +49,14 @@ Default backend-oriented build:
 
 ```toml
 [dependencies]
-voided-core = "0.1.1"
+voided-core = "0.1.2"
 ```
 
 Browser-oriented build:
 
 ```toml
 [dependencies]
-voided-core = { version = "0.1.1", default-features = false, features = ["browser"] }
+voided-core = { version = "0.1.2", default-features = false, features = ["browser"] }
 ```
 
 The default feature set is `backend`.
