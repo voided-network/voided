@@ -119,7 +119,7 @@ system under a new name.
 It is the outer container layer that wraps already-prepared bytes into a
 versioned, preset-driven, inspectable envelope.
 
-In the standard Voided v2 flow, the bytes going into the shell are:
+In the standard Voided protected flow, the bytes going into the shell are:
 
 1. optionally compressed
 2. encrypted with an AEAD
@@ -136,6 +136,11 @@ What the shell adds on top of the encrypted payload:
 The shell does not replace encryption. It sits outside encryption and gives the
 encrypted payload a first-class artifact shape.
 
+Current protected artifacts use the v3 protect-level monolith path: compression,
+encryption, and shelling still run in the safe order above, but the shell state
+is now derived from the full-flow artifact plan rather than only from encrypted
+payload length. Legacy v1 and v2 protected artifacts remain openable.
+
 If you already have the bytes you want inside the shell, use shell primitives.
 If you want Voided to do the whole flow for you, use full-flow helpers.
 
@@ -145,7 +150,9 @@ This is a development benchmark snapshot, not a product guarantee. It was run
 outside this repository against the real package functions. Voided rows use the
 full `protect/open` flow with Brotli level 6, XChaCha20-Poly1305, the
 `balanced` shell preset, deterministic shell nonces for repeatability, and an
-eight-file public corpus totaling `2,276,665` bytes.
+eight-file public corpus totaling `2,276,665` bytes. The v1 package row was run
+back-to-back against the archived v1 package; the v3 row was run against this
+checkout.
 
 Corpus mix: Project Gutenberg prose/play/legal text, RFC 8446, CommonMark spec
 source, Iris CSV, and Swagger Petstore OpenAPI YAML.
@@ -162,19 +169,19 @@ Benchmark column notes:
 
 | candidate | output bytes | overhead | encode MiB/s | decode MiB/s | aead/tamper | artifact | efficiency | size | value | avalanche |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| `xchacha20-poly1305-raw` | 2,276,985 | 0.171% | 243.89 | 245.81 | 100.00 | 95.99 | 80.37 | 99.34 | 93.99 | 0.000 |
-| `aes-256-gcm-raw` | 2,276,889 | 0.120% | 129.35 | 128.72 | 100.00 | 98.38 | 57.22 | 99.53 | 88.83 | 0.000 |
-| `gzip+xchacha20-poly1305` | 812,369 | -70.546% | 29.35 | 193.18 | 100.00 | 95.60 | 47.37 | 100.00 | 85.74 | 0.283 |
-| `brotli+xchacha20-poly1305` | 744,106 | -72.588% | 29.88 | 203.31 | 100.00 | 96.78 | 44.09 | 100.00 | 85.22 | 0.329 |
-| `voided-protect-v1-package` | 749,780 | -72.263% | 24.37 | 123.96 | 100.00 | 96.72 | 35.16 | 100.00 | 82.97 | 0.497 |
-| `voided-protect-v2-current` | 749,981 | -72.249% | 25.56 | 112.65 | 100.00 | 95.59 | 33.18 | 100.00 | 82.19 | 0.499 |
+| `xchacha20-poly1305-raw` | 2,276,985 | 0.171% | 156.32 | 155.77 | 100.00 | 95.99 | 64.40 | 99.34 | 90.00 | 0.000 |
+| `aes-256-gcm-raw` | 2,276,889 | 0.120% | 82.17 | 82.44 | 100.00 | 98.38 | 41.87 | 99.53 | 84.99 | 0.000 |
+| `gzip+xchacha20-poly1305` | 812,369 | -70.546% | 19.01 | 126.93 | 100.00 | 95.60 | 36.68 | 100.00 | 83.07 | 0.283 |
+| `brotli+xchacha20-poly1305` | 744,106 | -72.588% | 19.11 | 126.31 | 100.00 | 96.78 | 33.96 | 100.00 | 82.69 | 0.329 |
+| `voided-protect-v1-package` | 749,780 | -72.263% | 16.73 | 88.42 | 100.00 | 95.86 | 27.83 | 100.00 | 80.92 | 0.495 |
+| `voided-protect-v3-current` | 749,981 | -72.249% | 17.29 | 75.94 | 100.00 | 95.87 | 25.37 | 100.00 | 80.31 | 0.496 |
 
-Read: full-flow Voided v1 and v2 both preserve the actual cryptographic gate in
-this benchmark: roundtrip succeeds and tampering is rejected. V2 is not easier
-to decrypt based on these numbers. The current v2 shell is, however, not a
-universal performance/value win over v1: it is slightly larger, slower to open,
-and lower on artifact byte-statistics on this corpus. Its main measurable win is
-high plaintext-change avalanche after the full flow.
+Read: full-flow Voided v1 and v3 both preserve the actual cryptographic gate in
+this benchmark: roundtrip succeeds and tampering is rejected. V3 is the first
+protect-level monolith implementation, but it is not a universal
+performance/value win over v1 on this corpus: it is slightly larger and slower
+to open. Its main release value is architectural correctness for the new
+monolith path while preserving the high full-flow avalanche behavior.
 
 ## Command Map
 
