@@ -136,12 +136,10 @@ What the shell adds on top of the encrypted payload:
 The shell does not replace encryption. It sits outside encryption and gives the
 encrypted payload a first-class artifact shape.
 
-Current protected artifacts use the v4 implicit-route monolith path:
-compression, encryption, and shelling still run in the safe order above, but
-the visible artifact no longer starts with the legacy `VOF2` header. The
-existing master key derives the route plan at open/protect time, so there is no
-map file and no second stored data key. Legacy v1, v2, and v3 protected
-artifacts remain openable.
+Current protected artifacts use the v3 protect-level monolith path: compression,
+encryption, and shelling still run in the safe order above, but the shell state
+is now derived from the full-flow artifact plan rather than only from encrypted
+payload length. Legacy v1 and v2 protected artifacts remain openable.
 
 If you already have the bytes you want inside the shell, use shell primitives.
 If you want Voided to do the whole flow for you, use full-flow helpers.
@@ -202,36 +200,24 @@ Corpus: `synthetic` | fixtures: `11` | input bytes: `1,885,227` | samples:
 | `gzip+xchacha20-poly1305` | 0 | 0 / 33 | 0 / 11 |
 | `brotli+xchacha20-poly1305` | 0 | 0 / 33 | 0 / 11 |
 
-### Misdirection Surface
-
-| candidate | known Voided magic prefix hits / trials |
-|---|---:|
-| `voided-protect-current` | 0 / 11 |
-| `voided-c1e-current` | 11 / 11 |
-| `voided-fuse-shell-current` | 11 / 11 |
-| `xchacha20-poly1305-raw` | 0 / 11 |
-| `aes-256-gcm-raw` | 0 / 11 |
-| `gzip+xchacha20-poly1305` | 0 / 11 |
-| `brotli+xchacha20-poly1305` | 0 / 11 |
-
 ### Size And Speed
 
 | candidate | output bytes | byte delta | output/input | overhead % | median enc MiB/s | median dec MiB/s | weighted enc MiB/s | weighted dec MiB/s |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|
-| `voided-protect-current` | 1,377,328 | -507,899 | 0.730590 | -26.941000 | 43.325 | 5.535 | 39.994 | 43.709 |
-| `voided-c1e-current` | 1,376,389 | -508,838 | 0.730092 | -26.990808 | 57.282 | 30.547 | 85.926 | 158.964 |
-| `voided-fuse-shell-current` | 1,886,119 | 892 | 1.000473 | 0.047315 | 81.020 | 66.393 | 81.865 | 66.703 |
-| `xchacha20-poly1305-raw` | 1,885,667 | 440 | 1.000233 | 0.023339 | 195.047 | 193.626 | 196.748 | 193.776 |
-| `aes-256-gcm-raw` | 1,885,535 | 308 | 1.000163 | 0.016338 | 84.001 | 84.363 | 84.456 | 84.760 |
-| `gzip+xchacha20-poly1305` | 1,389,776 | -495,451 | 0.737193 | -26.280708 | 50.607 | 18.846 | 33.828 | 162.617 |
-| `brotli+xchacha20-poly1305` | 1,376,238 | -508,989 | 0.730012 | -26.998818 | 102.414 | 8.225 | 88.655 | 156.736 |
+| `voided-protect-current` | 1,377,284 | -507,943 | 0.730567 | -26.943334 | 70.934 | 8.429 | 74.631 | 74.249 |
+| `voided-c1e-current` | 1,376,389 | -508,838 | 0.730092 | -26.990808 | 88.239 | 47.531 | 127.120 | 247.761 |
+| `voided-fuse-shell-current` | 1,886,119 | 892 | 1.000473 | 0.047315 | 128.967 | 102.998 | 131.534 | 105.785 |
+| `xchacha20-poly1305-raw` | 1,885,667 | 440 | 1.000233 | 0.023339 | 291.332 | 297.043 | 290.154 | 310.612 |
+| `aes-256-gcm-raw` | 1,885,535 | 308 | 1.000163 | 0.016338 | 130.351 | 130.826 | 132.780 | 133.093 |
+| `gzip+xchacha20-poly1305` | 1,389,776 | -495,451 | 0.737193 | -26.280708 | 73.302 | 29.012 | 52.984 | 244.030 |
+| `brotli+xchacha20-poly1305` | 1,376,238 | -508,989 | 0.730012 | -26.998818 | 161.631 | 11.289 | 136.946 | 250.949 |
 
 ### Artifact Statistics
 
 | candidate | entropy bits/byte | entropy gap | chi-square/df | serial corr | mean bit bias % | max byte freq % | same-input drift % | input-bit delta % | delta minus drift % | input delta len mean |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| `voided-protect-current` | 7.999855 | 0.000145 | 1.084743 | 0.000163 | 0.030276 | 0.405640 | 40.981406 | 47.820535 | 6.839128 | 6.000 |
-| `voided-c1e-current` | 7.999874 | 0.000126 | 0.941307 | -0.000447 | 0.050158 | 0.404537 | 47.381124 | 49.757494 | 2.376369 | 6.000 |
+| `voided-protect-current` | 7.999882 | 0.000118 | 0.880547 | -0.001221 | 0.043437 | 0.403403 | 41.113415 | 44.161890 | 3.048475 | 6.000 |
+| `voided-c1e-current` | 7.999883 | 0.000117 | 0.877620 | 0.000193 | 0.042003 | 0.403738 | 47.114666 | 49.397124 | 2.282458 | 6.000 |
 | `voided-fuse-shell-current` | 7.999898 | 0.000102 | 1.044534 | -0.000696 | 0.026350 | 0.404640 | 0.000000 | 22.833510 | 22.833510 | 0.182 |
 | `xchacha20-poly1305-raw` | 7.999893 | 0.000107 | 1.091969 | 0.000145 | 0.032078 | 0.405957 | 0.000000 | 2.583258 | 2.583258 | 0.091 |
 | `aes-256-gcm-raw` | 7.999892 | 0.000108 | 1.110937 | -0.000797 | 0.038464 | 0.403175 | 0.000000 | 4.282732 | 4.282732 | 0.091 |

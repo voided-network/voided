@@ -755,8 +755,7 @@ fn test_fused_presets_roundtrip() {
             }),
         )
         .expect("protect failed");
-        let info = &protected.info;
-        let public_info = inspect_artifact(&protected.artifact).expect("inspect failed");
+        let info = inspect_artifact(&protected.artifact).expect("inspect failed");
         let restored = open(&protected.artifact, &key).expect("open failed");
 
         log_info!(
@@ -769,7 +768,6 @@ fn test_fused_presets_roundtrip() {
         );
 
         assert_eq!(info.preset, preset);
-        assert_eq!(public_info.preset_label, "opaque");
         assert_eq!(restored, payload);
         log_success!(TEST, "  {:?} preset roundtrip OK", preset);
     }
@@ -819,12 +817,10 @@ fn test_fused_repack_preserves_plaintext() {
         }),
     )
     .expect("repack failed");
-    let info = &repacked.info;
-    let public_info = inspect_artifact(&repacked.artifact).expect("inspect failed");
+    let info = inspect_artifact(&repacked.artifact).expect("inspect failed");
     let restored = open(&repacked.artifact, &key).expect("open failed");
 
     assert_eq!(info.preset, FusedPreset::Concealed);
-    assert_eq!(public_info.preset_label, "opaque");
     assert_eq!(restored, payload);
     log_success!(TEST, "Repacked artifact kept plaintext intact");
 }
