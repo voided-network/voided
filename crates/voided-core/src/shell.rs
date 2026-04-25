@@ -24,13 +24,15 @@ pub const SHELL_TAG_SIZE: usize = 16;
 pub const FUSED_SHELL_MAGIC: [u8; 4] = *b"VFS2";
 
 /// Fused shell envelope version.
-pub const FUSED_SHELL_VERSION: u8 = 0x01;
+pub const FUSED_SHELL_VERSION: u8 = 0x02;
+const FUSED_SHELL_V1_VERSION: u8 = 0x01;
 
 /// Protected artifact magic bytes.
 pub const PROTECTED_ARTIFACT_MAGIC: [u8; 4] = *b"VOF2";
 
 /// Protected artifact version.
-pub const PROTECTED_ARTIFACT_VERSION: u8 = 0x01;
+pub const PROTECTED_ARTIFACT_VERSION: u8 = 0x02;
+const PROTECTED_ARTIFACT_V1_VERSION: u8 = 0x01;
 
 /// Shell nonce size in bytes.
 pub const SHELL_NONCE_SIZE: usize = 12;
@@ -38,10 +40,28 @@ pub const SHELL_NONCE_SIZE: usize = 12;
 /// Default fused shell chunk size in bytes.
 pub const DEFAULT_CHUNK_SIZE: usize = 16 * 1024;
 
-const MIN_CHUNK_SIZE: usize = 256;
 const MAX_CHUNK_SIZE: usize = 1024 * 1024;
 const FUSED_SHELL_HEADER_LEN: usize = 4 + 1 + 1 + 4 + SHELL_NONCE_SIZE;
 const PROTECTED_ARTIFACT_HEADER_LEN: usize = 4 + 1 + 1 + 1 + 1 + 4 + 8 + 8 + SHELL_NONCE_SIZE;
+const FIELD_MONOLITH_STATE_PURPOSE: &str = "field-monolith.state.v0";
+const FIELD_MONOLITH_PLAN_PURPOSE: &str = "field-monolith.plan.v0";
+const FIELD_MONOLITH_AUTO_CHUNK_SIZE: usize = 0;
+const FIELD_MONOLITH_ANCHOR_BLOCK_CELLS_COMPACT: usize = 4;
+const FIELD_MONOLITH_ANCHOR_BLOCK_CELLS_DENSE: usize = 8;
+const FIELD_MONOLITH_MIN_CELL_BYTES: usize = 24;
+const FIELD_MONOLITH_EXPERIMENTAL_MIN_CELL_BYTES: usize = 8;
+const FIELD_MONOLITH_MAX_CELL_BYTES: usize = 512;
+const FIELD_MONOLITH_AUTO_TINY_CELL_BYTES: usize = 96;
+const FIELD_MONOLITH_CURRENT_AUTO_TINY_MAX: usize = 224;
+const FIELD_MONOLITH_CURRENT_AUTO_DENSE_SMALL_CELL_BYTES: usize = 96;
+const FIELD_MONOLITH_CURRENT_AUTO_DENSE_SMALL_MAX: usize =
+    FIELD_MONOLITH_CURRENT_AUTO_DENSE_SMALL_CELL_BYTES * FIELD_MONOLITH_ANCHOR_BLOCK_CELLS_DENSE;
+const FIELD_MONOLITH_CURRENT_AUTO_DIFFUSED_SMALL_CELL_BYTES: usize = 128;
+const FIELD_MONOLITH_CURRENT_AUTO_DIFFUSED_SMALL_MAX: usize = 1120;
+const FIELD_MONOLITH_CURRENT_AUTO_DIFFUSED_UPPER_SMALL_CELL_BYTES: usize = 128;
+const FIELD_MONOLITH_AUTO_SMALL_MAX: usize = 1536;
+const FIELD_MONOLITH_AUTO_MID_CELL_BYTES: usize = 256;
+const FIELD_MONOLITH_AUTO_MID_MAX: usize = 16 * 1024;
 
 fn domain_info(domain_label: &str) -> String {
     format!("voided:shell:{domain_label}")
@@ -88,14 +108,6 @@ impl FusedPreset {
             Self::Compact => "compact",
             Self::Balanced => "balanced",
             Self::Concealed => "concealed",
-        }
-    }
-
-    fn default_chunk_size(self) -> usize {
-        match self {
-            Self::Compact => DEFAULT_CHUNK_SIZE,
-            Self::Balanced => DEFAULT_CHUNK_SIZE,
-            Self::Concealed => 8 * 1024,
         }
     }
 }
@@ -200,7 +212,7 @@ impl FusedShellEnvelope {
         }
 
         let version = data[4];
-        if version != FUSED_SHELL_VERSION {
+        if !is_supported_fused_shell_version(version) {
             return Err(Error::UnsupportedVersion(version));
         }
 
@@ -227,12 +239,19 @@ impl FusedShellEnvelope {
     /// Return lightweight envelope metadata.
     pub fn info(&self) -> FusedShellInfo {
         let chunk_size = self.chunk_size.max(1) as usize;
+        let chunk_count = if self.version == FUSED_SHELL_VERSION {
+            field_monolith_infer_geometry(self.payload.len(), chunk_size)
+                .map(|geometry| geometry.chunk_count)
+                .unwrap_or_else(|| chunk_count(self.payload.len(), chunk_size))
+        } else {
+            chunk_count(self.payload.len(), chunk_size)
+        };
         FusedShellInfo {
             version: self.version,
             preset: self.preset,
             preset_label: self.preset.name().to_string(),
             chunk_size: self.chunk_size,
-            chunk_count: chunk_count(self.payload.len(), chunk_size),
+            chunk_count,
             payload_size: self.payload.len(),
             shell_size: self.payload.len() + FUSED_SHELL_HEADER_LEN + SHELL_TAG_SIZE,
             metadata_size: FUSED_SHELL_HEADER_LEN,
@@ -366,7 +385,7 @@ impl ProtectedArtifactEnvelope {
         }
 
         let version = data[4];
-        if version != PROTECTED_ARTIFACT_VERSION {
+        if !is_supported_protected_artifact_version(version) {
             return Err(Error::UnsupportedVersion(version));
         }
 
@@ -404,6 +423,17 @@ impl ProtectedArtifactEnvelope {
 
     fn info(&self) -> ProtectedArtifactInfo {
         let chunk_size = self.chunk_size.max(1) as usize;
+        let field_monolith_geometry = if self.version == PROTECTED_ARTIFACT_VERSION {
+            field_monolith_infer_geometry(self.payload.len(), chunk_size)
+        } else {
+            None
+        };
+        let encrypted_size = field_monolith_geometry
+            .map(|geometry| geometry.original_len)
+            .unwrap_or(self.payload.len());
+        let shell_chunk_count = field_monolith_geometry
+            .map(|geometry| geometry.chunk_count)
+            .unwrap_or_else(|| chunk_count(self.payload.len(), chunk_size));
         ProtectedArtifactInfo {
             version: self.version,
             preset: self.preset,
@@ -412,10 +442,10 @@ impl ProtectedArtifactEnvelope {
             encryption_algorithm: self.encryption_algorithm,
             original_size: self.original_size as usize,
             compressed_size: self.compressed_size as usize,
-            encrypted_size: self.payload.len(),
+            encrypted_size,
             protected_size: self.payload.len() + PROTECTED_ARTIFACT_HEADER_LEN + SHELL_TAG_SIZE,
             shell_chunk_size: self.chunk_size,
-            shell_chunk_count: chunk_count(self.payload.len(), chunk_size),
+            shell_chunk_count,
             shell_nonce: self.nonce,
         }
     }
@@ -485,10 +515,10 @@ pub fn fuse(
     options: Option<FusedShellOptions>,
 ) -> Result<FusedShellEnvelope> {
     let opts = options.unwrap_or_default();
-    let chunk_size = resolve_chunk_size(opts.preset, opts.chunk_size)?;
     let nonce = canonicalize_nonce(opts.shell_nonce.unwrap_or_else(random_nonce));
     let (shell_key, tag_key) = derive_shell_keys(master_key, &nonce)?;
-    let payload = transform_payload(data, &shell_key, &nonce, opts.preset, chunk_size, true)?;
+    let (payload, chunk_size) =
+        field_monolith_encode_payload(data, &shell_key, &nonce, opts.chunk_size)?;
 
     let mut envelope = FusedShellEnvelope {
         version: FUSED_SHELL_VERSION,
@@ -509,14 +539,23 @@ pub fn unfuse(envelope: &FusedShellEnvelope, master_key: &Key) -> Result<Vec<u8>
         return Err(Error::AuthenticationFailed);
     }
 
-    transform_payload(
-        &envelope.payload,
-        &shell_key,
-        &envelope.nonce,
-        envelope.preset,
-        envelope.chunk_size.max(1) as usize,
-        false,
-    )
+    match envelope.version {
+        FUSED_SHELL_VERSION => field_monolith_decode_payload(
+            &envelope.payload,
+            &shell_key,
+            &envelope.nonce,
+            envelope.chunk_size.max(1) as usize,
+        ),
+        FUSED_SHELL_V1_VERSION => transform_payload_v1(
+            &envelope.payload,
+            &shell_key,
+            &envelope.nonce,
+            envelope.preset,
+            envelope.chunk_size.max(1) as usize,
+            false,
+        ),
+        version => Err(Error::UnsupportedVersion(version)),
+    }
 }
 
 /// Serialize a fused shell envelope directly.
@@ -546,7 +585,6 @@ pub fn protect(
     options: Option<ProtectOptions>,
 ) -> Result<ProtectResult> {
     let opts = options.unwrap_or_default();
-    let chunk_size = resolve_chunk_size(opts.preset, opts.shell_chunk_size)?;
     let nonce = canonicalize_nonce(opts.shell_nonce.unwrap_or_else(random_nonce));
 
     let compression_result = compression::compress(
@@ -569,14 +607,8 @@ pub fn protect(
     let encrypted_bytes = encrypted.to_bytes();
 
     let (shell_key, tag_key) = derive_shell_keys(master_key, &nonce)?;
-    let payload = transform_payload(
-        &encrypted_bytes,
-        &shell_key,
-        &nonce,
-        opts.preset,
-        chunk_size,
-        true,
-    )?;
+    let (payload, chunk_size) =
+        field_monolith_encode_payload(&encrypted_bytes, &shell_key, &nonce, opts.shell_chunk_size)?;
 
     let mut envelope = ProtectedArtifactEnvelope {
         version: PROTECTED_ARTIFACT_VERSION,
@@ -606,14 +638,23 @@ pub fn open(artifact: &[u8], master_key: &Key) -> Result<Vec<u8>> {
         return Err(Error::AuthenticationFailed);
     }
 
-    let encrypted_bytes = transform_payload(
-        &envelope.payload,
-        &shell_key,
-        &envelope.nonce,
-        envelope.preset,
-        envelope.chunk_size.max(1) as usize,
-        false,
-    )?;
+    let encrypted_bytes = match envelope.version {
+        PROTECTED_ARTIFACT_VERSION => field_monolith_decode_payload(
+            &envelope.payload,
+            &shell_key,
+            &envelope.nonce,
+            envelope.chunk_size.max(1) as usize,
+        )?,
+        PROTECTED_ARTIFACT_V1_VERSION => transform_payload_v1(
+            &envelope.payload,
+            &shell_key,
+            &envelope.nonce,
+            envelope.preset,
+            envelope.chunk_size.max(1) as usize,
+            false,
+        )?,
+        version => return Err(Error::UnsupportedVersion(version)),
+    };
     let encrypted = EncryptionResult::from_bytes(&encrypted_bytes)?;
     if encrypted.algorithm != envelope.encryption_algorithm {
         return Err(Error::InvalidFormat);
@@ -661,7 +702,1276 @@ fn derive_shell_keys(master_key: &Key, nonce: &[u8; SHELL_NONCE_SIZE]) -> Result
     Ok((shell_key, tag_key))
 }
 
-fn transform_payload(
+fn is_supported_fused_shell_version(version: u8) -> bool {
+    matches!(version, FUSED_SHELL_V1_VERSION | FUSED_SHELL_VERSION)
+}
+
+#[cfg(feature = "compression")]
+fn is_supported_protected_artifact_version(version: u8) -> bool {
+    matches!(
+        version,
+        PROTECTED_ARTIFACT_V1_VERSION | PROTECTED_ARTIFACT_VERSION
+    )
+}
+
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+enum FieldMonolithMutationMode {
+    Direct = 0,
+    StrideSwap = 1,
+    SplitWeave = 2,
+    MirrorWeave = 3,
+}
+
+impl FieldMonolithMutationMode {
+    fn from_bits(bits: u8) -> Self {
+        match bits & 0x03 {
+            0 => Self::Direct,
+            1 => Self::StrideSwap,
+            2 => Self::SplitWeave,
+            _ => Self::MirrorWeave,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+enum FieldMonolithWeaveMode {
+    LeadPad = 0,
+    TrailPad = 1,
+    Alternating = 2,
+    Clustered = 3,
+}
+
+impl FieldMonolithWeaveMode {
+    fn from_bits(bits: u8) -> Self {
+        match bits & 0x03 {
+            0 => Self::LeadPad,
+            1 => Self::TrailPad,
+            2 => Self::Alternating,
+            _ => Self::Clustered,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+struct FieldMonolithState {
+    phase: u8,
+    tension: u8,
+    curvature: u8,
+    drift: u8,
+    echo: u8,
+    reserve: u8,
+    stride: u8,
+    parity: u8,
+}
+
+#[derive(Debug, Clone, Copy)]
+struct FieldMonolithCellPlan {
+    mutation: FieldMonolithMutationMode,
+    weave: FieldMonolithWeaveMode,
+    stride: usize,
+    pad_len: usize,
+}
+
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+struct FieldMonolithSurfaceSummary {
+    digest: u8,
+    front: u8,
+    back: u8,
+    surface_len: usize,
+}
+
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+struct FieldMonolithGeometry {
+    original_len: usize,
+    target_cell_size: usize,
+    chunk_count: usize,
+    block_cells: usize,
+    block_count: usize,
+}
+
+fn field_monolith_encode_payload(
+    data: &[u8],
+    shell_key: &Key,
+    nonce: &[u8; SHELL_NONCE_SIZE],
+    requested_chunk_size: Option<usize>,
+) -> Result<(Vec<u8>, usize)> {
+    let target_cell_size =
+        resolve_field_monolith_current_cell_size(requested_chunk_size, data.len())?;
+    let geometry = field_monolith_current_geometry_profile(data.len(), target_cell_size);
+    let mut state = field_monolith_initial_state(shell_key, nonce, data.len())?;
+    let mut rng = field_monolith_plan_rng(shell_key, nonce, data.len())?;
+    let mut payload = Vec::with_capacity(data.len().saturating_add(geometry.block_count));
+    let mut cursor = 0usize;
+    let mut cell_index = 0u32;
+    let mut block_index = 0u32;
+
+    while cursor < data.len() {
+        let anchor = field_monolith_current_anchor_for_block_with_chunk_count(
+            &state,
+            block_index,
+            &mut rng,
+            target_cell_size,
+            geometry.chunk_count,
+        );
+        payload.push(anchor);
+
+        for ordinal_in_block in 0..geometry.block_cells {
+            if cursor >= data.len() {
+                break;
+            }
+            let remaining = data.len() - cursor;
+            let cell_len = field_monolith_next_cell_len(remaining, target_cell_size);
+            let next_cursor = cursor + cell_len;
+            let plaintext = &data[cursor..next_cursor];
+            let plan =
+                field_monolith_plan_for_anchor_cell(anchor, cell_index, cell_len, ordinal_in_block);
+            let descriptor = field_monolith_descriptor(plan);
+            let (surface, summary) = field_monolith_encode_surface_with_summary(
+                plaintext, &state, plan, cell_index, descriptor,
+            );
+
+            payload.extend_from_slice(&surface);
+            field_monolith_update_state_with_summary(
+                &mut state, descriptor, summary, cell_index, cell_len,
+            );
+            cursor = next_cursor;
+            cell_index = cell_index.wrapping_add(1);
+        }
+
+        block_index = block_index.wrapping_add(1);
+    }
+
+    Ok((payload, target_cell_size))
+}
+
+fn field_monolith_decode_payload(
+    payload: &[u8],
+    shell_key: &Key,
+    nonce: &[u8; SHELL_NONCE_SIZE],
+    target_cell_size: usize,
+) -> Result<Vec<u8>> {
+    let geometry =
+        field_monolith_infer_geometry(payload.len(), target_cell_size).ok_or_else(|| {
+            Error::InvalidConfiguration("field monolith payload geometry was invalid".to_string())
+        })?;
+    let mut state = field_monolith_initial_state(shell_key, nonce, geometry.original_len)?;
+    let mut output = Vec::with_capacity(geometry.original_len);
+    let mut cursor = 0usize;
+    let mut cell_index = 0usize;
+
+    while cell_index < geometry.chunk_count {
+        if cursor + 1 > payload.len() {
+            return Err(Error::TruncatedPayload {
+                expected: cursor + 1,
+                actual: payload.len(),
+            });
+        }
+        let anchor = payload[cursor];
+        cursor += 1;
+
+        for ordinal_in_block in 0..geometry.block_cells {
+            if cell_index >= geometry.chunk_count {
+                break;
+            }
+            let original_len = field_monolith_current_surface_len(
+                payload,
+                cursor,
+                cell_index,
+                geometry.chunk_count,
+                target_cell_size,
+            )?;
+            let next_cursor = cursor.checked_add(original_len).ok_or_else(|| {
+                Error::InvalidConfiguration("field monolith current cursor overflowed".to_string())
+            })?;
+            if next_cursor > payload.len() {
+                return Err(Error::TruncatedPayload {
+                    expected: next_cursor,
+                    actual: payload.len(),
+                });
+            }
+            let surface = &payload[cursor..next_cursor];
+            let plan = field_monolith_plan_for_anchor_cell(
+                anchor,
+                cell_index as u32,
+                original_len,
+                ordinal_in_block,
+            );
+            let descriptor = field_monolith_descriptor(plan);
+            let (decoded, summary) = field_monolith_decode_surface_with_summary(
+                surface,
+                &state,
+                plan,
+                cell_index as u32,
+                original_len,
+                descriptor,
+            )?;
+            output.extend_from_slice(&decoded);
+            field_monolith_update_state_with_summary(
+                &mut state,
+                descriptor,
+                summary,
+                cell_index as u32,
+                original_len,
+            );
+            cursor = next_cursor;
+            cell_index += 1;
+        }
+    }
+
+    if cursor != payload.len() {
+        return Err(Error::InvalidConfiguration(
+            "payload cursor did not end on field monolith current block boundary".to_string(),
+        ));
+    }
+
+    Ok(output)
+}
+
+fn resolve_field_monolith_current_cell_size(
+    requested: Option<usize>,
+    payload_len: usize,
+) -> Result<usize> {
+    let requested = requested.unwrap_or(FIELD_MONOLITH_AUTO_CHUNK_SIZE);
+    let target = if requested == FIELD_MONOLITH_AUTO_CHUNK_SIZE {
+        field_monolith_current_auto_target_cell_size(payload_len)
+    } else {
+        if requested > MAX_CHUNK_SIZE {
+            return Err(Error::InvalidConfiguration(format!(
+                "shell chunk size must be at most {MAX_CHUNK_SIZE} bytes"
+            )));
+        }
+        let min_cell_size = if requested < FIELD_MONOLITH_MIN_CELL_BYTES {
+            FIELD_MONOLITH_EXPERIMENTAL_MIN_CELL_BYTES
+        } else {
+            FIELD_MONOLITH_MIN_CELL_BYTES
+        };
+        requested.clamp(min_cell_size, FIELD_MONOLITH_MAX_CELL_BYTES)
+    };
+
+    Ok(if payload_len == 0 {
+        target
+    } else {
+        target.min(payload_len)
+    })
+}
+
+fn field_monolith_current_auto_target_cell_size(payload_len: usize) -> usize {
+    if payload_len <= FIELD_MONOLITH_CURRENT_AUTO_TINY_MAX {
+        FIELD_MONOLITH_AUTO_TINY_CELL_BYTES
+    } else if payload_len <= FIELD_MONOLITH_CURRENT_AUTO_DENSE_SMALL_MAX {
+        FIELD_MONOLITH_CURRENT_AUTO_DENSE_SMALL_CELL_BYTES
+    } else if payload_len <= FIELD_MONOLITH_CURRENT_AUTO_DIFFUSED_SMALL_MAX {
+        FIELD_MONOLITH_CURRENT_AUTO_DIFFUSED_SMALL_CELL_BYTES
+    } else if payload_len <= FIELD_MONOLITH_AUTO_SMALL_MAX {
+        FIELD_MONOLITH_CURRENT_AUTO_DIFFUSED_UPPER_SMALL_CELL_BYTES
+    } else if payload_len <= FIELD_MONOLITH_AUTO_MID_MAX {
+        FIELD_MONOLITH_AUTO_MID_CELL_BYTES
+    } else {
+        FIELD_MONOLITH_MAX_CELL_BYTES
+    }
+}
+
+fn field_monolith_current_geometry_profile(
+    payload_len: usize,
+    target_cell_size: usize,
+) -> FieldMonolithGeometry {
+    let chunk_count = chunk_count(payload_len, target_cell_size.max(1));
+    let block_cells = field_monolith_current_anchor_block_cells(target_cell_size, chunk_count);
+    let block_count = field_monolith_block_count_for_cells(chunk_count, block_cells);
+    FieldMonolithGeometry {
+        original_len: payload_len,
+        target_cell_size,
+        chunk_count,
+        block_cells,
+        block_count,
+    }
+}
+
+fn field_monolith_infer_geometry(
+    payload_len: usize,
+    target_cell_size: usize,
+) -> Option<FieldMonolithGeometry> {
+    let target_cell_size = target_cell_size.max(1);
+    if payload_len == 0 {
+        return Some(FieldMonolithGeometry {
+            original_len: 0,
+            target_cell_size,
+            chunk_count: 0,
+            block_cells: field_monolith_current_anchor_block_cells(target_cell_size, 0),
+            block_count: 0,
+        });
+    }
+
+    let max_chunks = payload_len
+        .min(
+            payload_len
+                .div_ceil(target_cell_size)
+                .saturating_add(payload_len / FIELD_MONOLITH_ANCHOR_BLOCK_CELLS_COMPACT)
+                .saturating_add(8),
+        )
+        .max(1);
+
+    for chunk_count in 1..=max_chunks {
+        let block_cells = field_monolith_current_anchor_block_cells(target_cell_size, chunk_count);
+        let block_count = field_monolith_block_count_for_cells(chunk_count, block_cells);
+        if block_count > payload_len {
+            continue;
+        }
+        let original_len = payload_len - block_count;
+        let min_original_len = (chunk_count - 1)
+            .saturating_mul(target_cell_size)
+            .saturating_add(1);
+        let max_original_len = chunk_count.saturating_mul(target_cell_size);
+        if (min_original_len..=max_original_len).contains(&original_len) {
+            return Some(FieldMonolithGeometry {
+                original_len,
+                target_cell_size,
+                chunk_count,
+                block_cells,
+                block_count,
+            });
+        }
+    }
+
+    None
+}
+
+fn field_monolith_block_count_for_cells(chunk_count: usize, block_cells: usize) -> usize {
+    if chunk_count == 0 {
+        0
+    } else {
+        1 + (chunk_count - 1) / block_cells.max(1)
+    }
+}
+
+fn field_monolith_anchor_block_cells(target_cell_size: usize) -> usize {
+    if target_cell_size.max(1) <= FIELD_MONOLITH_MAX_CELL_BYTES {
+        FIELD_MONOLITH_ANCHOR_BLOCK_CELLS_DENSE
+    } else {
+        FIELD_MONOLITH_ANCHOR_BLOCK_CELLS_COMPACT
+    }
+}
+
+fn field_monolith_current_anchor_block_cells(target_cell_size: usize, chunk_count: usize) -> usize {
+    if target_cell_size == FIELD_MONOLITH_AUTO_MID_CELL_BYTES
+        && chunk_count > FIELD_MONOLITH_ANCHOR_BLOCK_CELLS_COMPACT
+    {
+        FIELD_MONOLITH_ANCHOR_BLOCK_CELLS_COMPACT
+    } else {
+        field_monolith_anchor_block_cells(target_cell_size)
+    }
+}
+
+fn field_monolith_current_anchor_block_count(chunk_count: usize, target_cell_size: usize) -> usize {
+    let block_cells = field_monolith_current_anchor_block_cells(target_cell_size, chunk_count);
+    field_monolith_block_count_for_cells(chunk_count, block_cells)
+}
+
+fn field_monolith_current_anchor_total_original_len(
+    payload_len: usize,
+    chunk_count: usize,
+    target_cell_size: usize,
+) -> Result<usize> {
+    let anchor_bytes = field_monolith_current_anchor_block_count(chunk_count, target_cell_size);
+    payload_len.checked_sub(anchor_bytes).ok_or_else(|| {
+        Error::InvalidConfiguration(
+            "field monolith current payload underflowed anchor bytes".to_string(),
+        )
+    })
+}
+
+fn field_monolith_current_surface_len(
+    payload: &[u8],
+    cursor: usize,
+    cell_index: usize,
+    chunk_count: usize,
+    chunk_size: usize,
+) -> Result<usize> {
+    if cell_index >= chunk_count {
+        return Err(Error::InvalidConfiguration(
+            "field monolith current cell index exceeded chunk count".to_string(),
+        ));
+    }
+    if cell_index + 1 < chunk_count {
+        let next_cursor = cursor.checked_add(chunk_size).ok_or_else(|| {
+            Error::InvalidConfiguration(
+                "field monolith current non-final cursor overflowed".to_string(),
+            )
+        })?;
+        if next_cursor > payload.len() {
+            return Err(Error::TruncatedPayload {
+                expected: next_cursor,
+                actual: payload.len(),
+            });
+        }
+        return Ok(chunk_size);
+    }
+
+    let total_original_len =
+        field_monolith_current_anchor_total_original_len(payload.len(), chunk_count, chunk_size)?;
+    let consumed_before_last = chunk_size
+        .checked_mul(chunk_count.saturating_sub(1))
+        .ok_or_else(|| {
+            Error::InvalidConfiguration(
+                "field monolith current consumed length overflowed".to_string(),
+            )
+        })?;
+    let original_len = total_original_len
+        .checked_sub(consumed_before_last)
+        .ok_or_else(|| {
+            Error::InvalidConfiguration("field monolith current last cell underflowed".to_string())
+        })?;
+    let next_cursor = cursor.checked_add(original_len).ok_or_else(|| {
+        Error::InvalidConfiguration("field monolith current last cursor overflowed".to_string())
+    })?;
+    if next_cursor > payload.len() {
+        return Err(Error::TruncatedPayload {
+            expected: next_cursor,
+            actual: payload.len(),
+        });
+    }
+    Ok(original_len)
+}
+
+fn field_monolith_initial_state(
+    shell_key: &Key,
+    nonce: &[u8; SHELL_NONCE_SIZE],
+    total_len: usize,
+) -> Result<FieldMonolithState> {
+    let seed = derive_chunk_seed(shell_key, nonce, 0, FIELD_MONOLITH_STATE_PURPOSE, 32)?;
+    let len_mix = (total_len as u64).to_le_bytes();
+    Ok(FieldMonolithState {
+        phase: (seed[0] ^ seed[8].rotate_left(1) ^ len_mix[0]) | 1,
+        tension: seed[1] ^ seed[9].rotate_right(1) ^ len_mix[1],
+        curvature: seed[2] ^ seed[10].rotate_left(2) ^ len_mix[2],
+        drift: seed[3] ^ seed[11].rotate_right(2) ^ len_mix[3],
+        echo: seed[4] ^ seed[12].rotate_left(3) ^ len_mix[4],
+        reserve: seed[5] ^ seed[13].rotate_right(3) ^ len_mix[5],
+        stride: ((seed[6] ^ seed[14] ^ len_mix[6]) & 0x0F).max(1),
+        parity: seed[7] ^ seed[15] ^ len_mix[7],
+    })
+}
+
+fn field_monolith_plan_rng(
+    shell_key: &Key,
+    nonce: &[u8; SHELL_NONCE_SIZE],
+    total_len: usize,
+) -> Result<DeterministicRng> {
+    let seed = derive_chunk_seed(shell_key, nonce, 0, FIELD_MONOLITH_PLAN_PURPOSE, 32)?;
+    let mut seed_bytes = [0u8; 32];
+    seed_bytes.copy_from_slice(&seed[..32]);
+    for (index, byte) in (total_len as u64).to_le_bytes().iter().enumerate() {
+        seed_bytes[24 + index] ^= *byte;
+    }
+    Ok(DeterministicRng::from_seed(&seed_bytes))
+}
+
+fn field_monolith_next_cell_len(remaining: usize, target_cell_size: usize) -> usize {
+    remaining.min(target_cell_size.max(1))
+}
+
+fn field_monolith_cell_band(cell_len: usize) -> usize {
+    match cell_len {
+        0..=64 => 0,
+        65..=96 => 1,
+        97..=160 => 2,
+        _ => 3,
+    }
+}
+
+fn field_monolith_anchor_stride_limit(cell_len: usize) -> usize {
+    match field_monolith_cell_band(cell_len) {
+        0 => 2,
+        1 => 3,
+        _ => 4,
+    }
+}
+
+fn field_monolith_anchor_intensity_limit(cell_len: usize) -> usize {
+    match field_monolith_cell_band(cell_len) {
+        0 => 2,
+        1 => 3,
+        2 => 4,
+        _ => 4,
+    }
+}
+
+fn field_monolith_anchor_baseline_intensity_limit(cell_len: usize) -> usize {
+    match field_monolith_cell_band(cell_len) {
+        0 => 2,
+        1 => 3,
+        2 => 3,
+        _ => 4,
+    }
+}
+
+fn field_monolith_anchor_diffused_pad_len(
+    anchor: u8,
+    cell_index: u32,
+    cell_len: usize,
+    ordinal_in_block: usize,
+) -> usize {
+    let regime = (anchor & 0x03) as usize;
+    let cadence = ((anchor >> 2) & 0x03) as usize;
+    let intensity = ((anchor >> 4) & 0x03) as usize;
+    let stride_seed = ((anchor >> 6) & 0x03) as usize;
+    let band = field_monolith_cell_band(cell_len);
+    let block_cells = field_monolith_anchor_block_cells(cell_len);
+    let block_phase = (cell_index as usize / block_cells) + band;
+    let selector = regime * 3 + cadence * 5 + intensity * 7 + stride_seed * 11 + block_phase;
+    let phase_ordinal = ordinal_in_block % block_cells;
+
+    match field_monolith_anchor_intensity_limit(cell_len) {
+        0 | 1 => 0,
+        2 => {
+            if block_cells > FIELD_MONOLITH_ANCHOR_BLOCK_CELLS_COMPACT {
+                const PATTERNS: [[usize; FIELD_MONOLITH_ANCHOR_BLOCK_CELLS_DENSE]; 4] = [
+                    [0, 1, 0, 1, 1, 0, 1, 0],
+                    [1, 0, 1, 0, 0, 1, 0, 1],
+                    [0, 1, 1, 0, 1, 0, 0, 1],
+                    [1, 0, 0, 1, 0, 1, 1, 0],
+                ];
+                PATTERNS[selector % PATTERNS.len()][phase_ordinal]
+            } else {
+                const PATTERNS: [[usize; FIELD_MONOLITH_ANCHOR_BLOCK_CELLS_COMPACT]; 2] =
+                    [[0, 1, 0, 1], [1, 0, 1, 0]];
+                PATTERNS[selector % PATTERNS.len()][phase_ordinal]
+            }
+        }
+        3 => {
+            if block_cells > FIELD_MONOLITH_ANCHOR_BLOCK_CELLS_COMPACT {
+                const PATTERNS: [[usize; FIELD_MONOLITH_ANCHOR_BLOCK_CELLS_DENSE]; 4] = [
+                    [0, 1, 2, 1, 2, 1, 0, 1],
+                    [1, 2, 1, 0, 1, 0, 1, 2],
+                    [2, 1, 0, 1, 0, 1, 2, 1],
+                    [1, 0, 1, 2, 1, 2, 1, 0],
+                ];
+                PATTERNS[selector % PATTERNS.len()][phase_ordinal]
+            } else {
+                const PATTERNS: [[usize; FIELD_MONOLITH_ANCHOR_BLOCK_CELLS_COMPACT]; 4] =
+                    [[0, 1, 2, 1], [1, 2, 1, 0], [2, 1, 0, 1], [1, 0, 1, 2]];
+                PATTERNS[selector % PATTERNS.len()][phase_ordinal]
+            }
+        }
+        _ => {
+            if block_cells > FIELD_MONOLITH_ANCHOR_BLOCK_CELLS_COMPACT {
+                const PATTERNS: [[usize; FIELD_MONOLITH_ANCHOR_BLOCK_CELLS_DENSE]; 8] = [
+                    [0, 1, 2, 3, 3, 2, 1, 0],
+                    [1, 2, 3, 0, 0, 3, 2, 1],
+                    [2, 3, 0, 1, 1, 0, 3, 2],
+                    [3, 0, 1, 2, 2, 1, 0, 3],
+                    [3, 2, 1, 0, 0, 1, 2, 3],
+                    [2, 1, 0, 3, 3, 0, 1, 2],
+                    [1, 0, 3, 2, 2, 3, 0, 1],
+                    [0, 3, 2, 1, 1, 2, 3, 0],
+                ];
+                PATTERNS[selector % PATTERNS.len()][phase_ordinal]
+            } else {
+                const PATTERNS: [[usize; FIELD_MONOLITH_ANCHOR_BLOCK_CELLS_COMPACT]; 8] = [
+                    [0, 1, 2, 3],
+                    [1, 2, 3, 0],
+                    [2, 3, 0, 1],
+                    [3, 0, 1, 2],
+                    [3, 2, 1, 0],
+                    [2, 1, 0, 3],
+                    [1, 0, 3, 2],
+                    [0, 3, 2, 1],
+                ];
+                PATTERNS[selector % PATTERNS.len()][phase_ordinal]
+            }
+        }
+    }
+}
+
+fn field_monolith_anchor_for_block(
+    state: &FieldMonolithState,
+    block_index: u32,
+    rng: &mut DeterministicRng,
+    base_cell_size: usize,
+) -> u8 {
+    let block0 = block_index as u8;
+    let block1 = (block_index >> 8) as u8;
+    let block2 = (block_index >> 16) as u8;
+    let block3 = (block_index >> 24) as u8;
+    let size0 = base_cell_size as u8;
+    let size1 = (base_cell_size >> 8) as u8;
+    let phase_rot = state.phase.rotate_left(1);
+    let echo_rot = state.echo.rotate_right(1);
+    let size0_rot1 = size0.rotate_left(1);
+    let size0_rot2 = size0.rotate_left(2);
+    let size1_rot1 = size1.rotate_right(1);
+    let regime = (rng.next_u32() as u8 ^ state.phase ^ state.curvature ^ block0 ^ size0) & 0x03;
+    let cadence = (rng.next_u32() as u8 ^ state.echo ^ state.reserve ^ block1 ^ size1) & 0x03;
+    let intensity =
+        (rng.next_u32() as u8 ^ state.parity ^ state.tension ^ block2 ^ size0_rot1) & 0x03;
+    let stride_seed =
+        (rng.next_u32() as u8 ^ state.stride ^ state.drift ^ block3 ^ size1_rot1) & 0x03;
+    let counter_orbit = block0 ^ phase_rot ^ echo_rot ^ size0_rot2 ^ size1_rot1;
+    let cadence = (cadence.wrapping_add(counter_orbit) ^ intensity.rotate_left(1)) & 0x03;
+    let intensity =
+        (intensity.wrapping_add(counter_orbit.rotate_right(1)) ^ stride_seed.rotate_left(1)) & 0x03;
+    let stride_seed =
+        (stride_seed.wrapping_add(counter_orbit.rotate_left(1)) ^ regime.rotate_right(1)) & 0x03;
+
+    regime | (cadence << 2) | (intensity << 4) | (stride_seed << 6)
+}
+
+fn field_monolith_anchor_baseline_for_block(
+    state: &FieldMonolithState,
+    block_index: u32,
+    rng: &mut DeterministicRng,
+    base_cell_size: usize,
+) -> u8 {
+    let block_mix = block_index.to_le_bytes();
+    let size_mix = (base_cell_size as u16).to_le_bytes();
+    let regime =
+        (rng.next_u32() as u8 ^ state.phase ^ state.curvature ^ block_mix[0] ^ size_mix[0]) & 0x03;
+    let cadence =
+        (rng.next_u32() as u8 ^ state.echo ^ state.reserve ^ block_mix[1] ^ size_mix[1]) & 0x03;
+    let intensity = (rng.next_u32() as u8
+        ^ state.parity
+        ^ state.tension
+        ^ block_mix[2]
+        ^ size_mix[0].rotate_left(1))
+        & 0x03;
+    let stride_seed = (rng.next_u32() as u8
+        ^ state.stride
+        ^ state.drift
+        ^ block_mix[3]
+        ^ size_mix[1].rotate_right(1))
+        & 0x03;
+
+    regime | (cadence << 2) | (intensity << 4) | (stride_seed << 6)
+}
+
+fn field_monolith_current_anchor_for_block_with_chunk_count(
+    state: &FieldMonolithState,
+    block_index: u32,
+    rng: &mut DeterministicRng,
+    base_cell_size: usize,
+    _chunk_count: usize,
+) -> u8 {
+    if base_cell_size >= FIELD_MONOLITH_AUTO_MID_CELL_BYTES {
+        field_monolith_anchor_baseline_for_block(state, block_index, rng, base_cell_size)
+    } else {
+        field_monolith_anchor_for_block(state, block_index, rng, base_cell_size)
+    }
+}
+
+fn field_monolith_plan_for_anchor_cell(
+    anchor: u8,
+    cell_index: u32,
+    cell_len: usize,
+    ordinal_in_block: usize,
+) -> FieldMonolithCellPlan {
+    if cell_len >= FIELD_MONOLITH_CURRENT_AUTO_DIFFUSED_SMALL_CELL_BYTES {
+        return field_monolith_plan_for_anchor_baseline_cell(
+            anchor,
+            cell_index,
+            cell_len,
+            ordinal_in_block,
+        );
+    }
+
+    let regime = anchor & 0x03;
+    let cadence = (anchor >> 2) & 0x03;
+    let intensity = (anchor >> 4) & 0x03;
+    let stride_seed = (anchor >> 6) & 0x03;
+    let band = field_monolith_cell_band(cell_len) as u8;
+    let ordinal = ordinal_in_block as u8;
+    let cell_phase = (cell_index as u8)
+        .wrapping_add(ordinal.wrapping_mul(3))
+        .wrapping_add(band.rotate_left(1));
+    let lane_orbit = if band >= 2 {
+        intensity.wrapping_add(regime.rotate_left((ordinal_in_block % 2) as u32))
+            ^ cadence.rotate_right(((cell_index as usize + ordinal_in_block) % 2) as u32)
+            ^ (cell_index as u8).rotate_left(((ordinal_in_block + band as usize) % 3) as u32)
+    } else {
+        0
+    };
+    let mutation = FieldMonolithMutationMode::from_bits(
+        regime.wrapping_add(cell_phase)
+            ^ cadence.rotate_left((ordinal_in_block % 2) as u32)
+            ^ lane_orbit,
+    );
+    let weave = FieldMonolithWeaveMode::from_bits(
+        cadence
+            .wrapping_add(ordinal)
+            .wrapping_add((cell_index as u8).rotate_left(1))
+            .wrapping_add(band)
+            .wrapping_add(lane_orbit.rotate_left(1)),
+    );
+    let stride_limit = field_monolith_anchor_stride_limit(cell_len);
+    let stride = ((stride_seed as usize
+        + ordinal_in_block
+        + ((cell_index as usize) & 0x01)
+        + band as usize
+        + if band >= 2 {
+            intensity as usize + (((cell_index as usize) >> 1) & 0x01)
+        } else {
+            0
+        })
+        % stride_limit)
+        + 1;
+    let intensity_limit = field_monolith_anchor_intensity_limit(cell_len);
+    let pad_len = if intensity_limit <= 1 {
+        0
+    } else {
+        field_monolith_anchor_diffused_pad_len(anchor, cell_index, cell_len, ordinal_in_block)
+    };
+
+    FieldMonolithCellPlan {
+        mutation,
+        weave,
+        stride,
+        pad_len,
+    }
+}
+
+fn field_monolith_plan_for_anchor_baseline_cell(
+    anchor: u8,
+    cell_index: u32,
+    cell_len: usize,
+    ordinal_in_block: usize,
+) -> FieldMonolithCellPlan {
+    let regime = anchor & 0x03;
+    let cadence = (anchor >> 2) & 0x03;
+    let intensity = (anchor >> 4) & 0x03;
+    let stride_seed = (anchor >> 6) & 0x03;
+    let band = field_monolith_cell_band(cell_len) as u8;
+    let ordinal = ordinal_in_block as u8;
+    let cell_phase = (cell_index as u8)
+        .wrapping_add(ordinal.wrapping_mul(3))
+        .wrapping_add(band.rotate_left(1));
+    let mutation = FieldMonolithMutationMode::from_bits(
+        regime.wrapping_add(cell_phase) ^ cadence.rotate_left((ordinal_in_block % 2) as u32),
+    );
+    let weave = FieldMonolithWeaveMode::from_bits(
+        cadence
+            .wrapping_add(ordinal)
+            .wrapping_add((cell_index as u8).rotate_left(1))
+            .wrapping_add(band),
+    );
+    let stride_limit = field_monolith_anchor_stride_limit(cell_len);
+    let stride = ((stride_seed as usize
+        + ordinal_in_block
+        + ((cell_index as usize) & 0x01)
+        + band as usize)
+        % stride_limit)
+        + 1;
+    let intensity_limit = field_monolith_anchor_baseline_intensity_limit(cell_len);
+    let pad_len = (intensity as usize
+        + cadence as usize
+        + ordinal_in_block
+        + (((cell_index as usize) >> 1) & 0x01)
+        + band as usize)
+        % intensity_limit;
+
+    FieldMonolithCellPlan {
+        mutation,
+        weave,
+        stride,
+        pad_len,
+    }
+}
+
+fn field_monolith_descriptor(plan: FieldMonolithCellPlan) -> u8 {
+    (plan.mutation as u8)
+        | ((plan.weave as u8) << 2)
+        | (((plan.stride - 1) as u8) << 4)
+        | ((plan.pad_len as u8) << 6)
+}
+
+fn field_monolith_control_token_a(state: &FieldMonolithState, cell_len: usize) -> u8 {
+    state.phase.wrapping_add(state.tension).rotate_left(1) ^ (cell_len as u8)
+}
+
+fn field_monolith_control_token_b(state: &FieldMonolithState, cell_index: u32) -> u8 {
+    state.drift.wrapping_add(state.reserve).rotate_right(1) ^ (cell_index as u8)
+}
+
+fn field_monolith_surface_checksum_seed(
+    surface_len: usize,
+    state: &FieldMonolithState,
+    cell_index: u32,
+    descriptor: u8,
+) -> u8 {
+    descriptor.wrapping_add(state.phase.rotate_left(1))
+        ^ state.echo
+        ^ (cell_index as u8).wrapping_mul(17)
+        ^ surface_len as u8
+}
+
+fn field_monolith_surface_checksum_step(
+    acc: u8,
+    state: &FieldMonolithState,
+    offset: usize,
+    byte: u8,
+) -> u8 {
+    let mix = byte.wrapping_add((offset as u8).wrapping_mul(19))
+        ^ state.curvature.rotate_left((offset % 8) as u32);
+    acc.rotate_left(1) ^ mix
+}
+
+fn field_monolith_surface_checksum(
+    surface: &[u8],
+    state: &FieldMonolithState,
+    cell_index: u32,
+    descriptor: u8,
+) -> u8 {
+    let mut acc =
+        field_monolith_surface_checksum_seed(surface.len(), state, cell_index, descriptor);
+    for (offset, &byte) in surface.iter().enumerate() {
+        acc = field_monolith_surface_checksum_step(acc, state, offset, byte);
+    }
+    acc
+}
+
+#[derive(Clone, Copy)]
+struct FieldMonolithMaskLanes {
+    phase_lanes: [u8; 8],
+    curvature_lanes: [u8; 8],
+    reserve_lanes: [u8; 8],
+    drift_mix: u8,
+    echo_mix: u8,
+    tension_base: u8,
+    parity_base: u8,
+}
+
+fn field_monolith_left_rotation_lanes(byte: u8) -> [u8; 8] {
+    [
+        byte,
+        byte.rotate_left(1),
+        byte.rotate_left(2),
+        byte.rotate_left(3),
+        byte.rotate_left(4),
+        byte.rotate_left(5),
+        byte.rotate_left(6),
+        byte.rotate_left(7),
+    ]
+}
+
+fn field_monolith_right_rotation_lanes(byte: u8) -> [u8; 8] {
+    [
+        byte,
+        byte.rotate_right(1),
+        byte.rotate_right(2),
+        byte.rotate_right(3),
+        byte.rotate_right(4),
+        byte.rotate_right(5),
+        byte.rotate_right(6),
+        byte.rotate_right(7),
+    ]
+}
+
+fn field_monolith_mask_lanes(
+    state: &FieldMonolithState,
+    cell_index: u32,
+    stride: usize,
+) -> FieldMonolithMaskLanes {
+    let phase_lanes = field_monolith_left_rotation_lanes(state.phase);
+    let curvature_base = field_monolith_right_rotation_lanes(state.curvature);
+    let reserve_base = field_monolith_left_rotation_lanes(state.reserve);
+
+    let mut curvature_lanes = [0u8; 8];
+    let curvature_offset = stride & 0x07;
+    for (lane, value) in curvature_lanes.iter_mut().enumerate() {
+        *value = curvature_base[(lane + curvature_offset) & 0x07];
+    }
+
+    let mut reserve_lanes = [0u8; 8];
+    let reserve_offset = (cell_index as usize) & 0x07;
+    for (lane, value) in reserve_lanes.iter_mut().enumerate() {
+        *value = reserve_base[(lane + reserve_offset) & 0x07];
+    }
+
+    FieldMonolithMaskLanes {
+        phase_lanes,
+        curvature_lanes,
+        reserve_lanes,
+        drift_mix: state
+            .drift
+            .wrapping_add((cell_index as u8).wrapping_mul(17)),
+        echo_mix: state.echo.wrapping_add((stride as u8).wrapping_mul(11)),
+        tension_base: state.tension,
+        parity_base: state.parity,
+    }
+}
+
+fn field_monolith_xor_masked_bytes(input: &[u8], mask_lanes: &FieldMonolithMaskLanes) -> Vec<u8> {
+    let mut output = Vec::with_capacity(input.len());
+    let mut offset = 0usize;
+    let mut tension_mix = mask_lanes.tension_base;
+    let mut parity_mix = mask_lanes.parity_base;
+    while offset < input.len() {
+        output.push(
+            input[offset]
+                ^ mask_lanes.phase_lanes[offset & 0x07]
+                ^ tension_mix
+                ^ mask_lanes.curvature_lanes[offset & 0x07]
+                ^ mask_lanes.drift_mix
+                ^ mask_lanes.echo_mix
+                ^ mask_lanes.reserve_lanes[offset & 0x07]
+                ^ parity_mix,
+        );
+        tension_mix = tension_mix.wrapping_add(3);
+        parity_mix = parity_mix.wrapping_add(7);
+        offset += 1;
+    }
+    output
+}
+
+fn field_monolith_split_weave(bytes: &[u8]) -> Vec<u8> {
+    let even_count = bytes.len().div_ceil(2);
+    let odd_count = bytes.len() / 2;
+    let mut output = Vec::with_capacity(bytes.len());
+    let mut read_index = 0usize;
+    while output.len() < even_count {
+        output.push(bytes[read_index]);
+        read_index += 2;
+    }
+
+    let mut odd_index = 0usize;
+    let mut odd_read_index = 1usize;
+    while odd_index < odd_count {
+        output.push(bytes[odd_read_index]);
+        odd_index += 1;
+        odd_read_index += 2;
+    }
+
+    output
+}
+
+fn field_monolith_inverse_split_weave(bytes: &[u8]) -> Vec<u8> {
+    let even_count = bytes.len().div_ceil(2);
+    let (evens, odds) = bytes.split_at(even_count);
+    let mut output = Vec::with_capacity(bytes.len());
+
+    let mut even_index = 0usize;
+    while even_index < evens.len() || even_index < odds.len() {
+        if even_index < evens.len() {
+            output.push(evens[even_index]);
+        }
+        if even_index < odds.len() {
+            output.push(odds[even_index]);
+        }
+        even_index += 1;
+    }
+
+    output
+}
+
+fn field_monolith_apply_mutation_owned(
+    mut bytes: Vec<u8>,
+    mutation: FieldMonolithMutationMode,
+    stride: usize,
+) -> Vec<u8> {
+    match mutation {
+        FieldMonolithMutationMode::Direct => bytes,
+        FieldMonolithMutationMode::StrideSwap => {
+            if !bytes.is_empty() {
+                let shift = stride % bytes.len();
+                bytes.rotate_left(shift);
+            }
+            bytes
+        }
+        FieldMonolithMutationMode::SplitWeave => field_monolith_split_weave(&bytes),
+        FieldMonolithMutationMode::MirrorWeave => {
+            bytes.reverse();
+            bytes
+        }
+    }
+}
+
+fn field_monolith_inverse_mutation_owned(
+    mut bytes: Vec<u8>,
+    mutation: FieldMonolithMutationMode,
+    stride: usize,
+) -> Vec<u8> {
+    match mutation {
+        FieldMonolithMutationMode::Direct => bytes,
+        FieldMonolithMutationMode::StrideSwap => {
+            if !bytes.is_empty() {
+                let shift = stride % bytes.len();
+                bytes.rotate_right(shift);
+            }
+            bytes
+        }
+        FieldMonolithMutationMode::SplitWeave => field_monolith_inverse_split_weave(&bytes),
+        FieldMonolithMutationMode::MirrorWeave => {
+            bytes.reverse();
+            bytes
+        }
+    }
+}
+
+fn field_monolith_virtual_shift(
+    state: &FieldMonolithState,
+    plan: FieldMonolithCellPlan,
+    cell_index: u32,
+    len: usize,
+) -> usize {
+    if len <= 1 {
+        0
+    } else {
+        let seed = usize::from(
+            state.phase
+                ^ state.echo.rotate_left(1)
+                ^ state.reserve.rotate_right(1)
+                ^ (cell_index as u8).wrapping_mul(17),
+        );
+        1 + ((seed + plan.stride * 5 + plan.pad_len * 11) % (len - 1))
+    }
+}
+
+fn field_monolith_virtual_block_len(
+    state: &FieldMonolithState,
+    plan: FieldMonolithCellPlan,
+    cell_index: u32,
+    len: usize,
+) -> usize {
+    let max_block = len.clamp(2, 8);
+    if max_block <= 2 {
+        2
+    } else {
+        2 + ((usize::from(state.parity ^ state.curvature ^ (cell_index as u8))
+            + plan.stride
+            + plan.pad_len)
+            % (max_block - 1))
+    }
+}
+
+fn field_monolith_apply_virtual_pair_swaps(bytes: &mut [u8], step: usize, start: usize) {
+    if bytes.len() < 2 {
+        return;
+    }
+    let mut index = start.min(bytes.len() - 2);
+    let jump = step.max(2);
+    while index + 1 < bytes.len() {
+        bytes.swap(index, index + 1);
+        index += jump;
+    }
+}
+
+fn field_monolith_apply_virtual_window_reversal(bytes: &mut [u8], window_len: usize) {
+    if window_len <= 1 {
+        return;
+    }
+    for chunk in bytes.chunks_mut(window_len) {
+        chunk.reverse();
+    }
+}
+
+fn field_monolith_apply_virtual_permutation(
+    bytes: &mut [u8],
+    state: &FieldMonolithState,
+    plan: FieldMonolithCellPlan,
+    cell_index: u32,
+) {
+    if bytes.len() <= 1 {
+        return;
+    }
+    let shift = field_monolith_virtual_shift(state, plan, cell_index, bytes.len());
+    match plan.weave {
+        FieldMonolithWeaveMode::LeadPad => bytes.rotate_left(shift),
+        FieldMonolithWeaveMode::TrailPad => bytes.rotate_right(shift),
+        FieldMonolithWeaveMode::Alternating => {
+            field_monolith_apply_virtual_pair_swaps(bytes, plan.pad_len + 2, shift % 2)
+        }
+        FieldMonolithWeaveMode::Clustered => field_monolith_apply_virtual_window_reversal(
+            bytes,
+            field_monolith_virtual_block_len(state, plan, cell_index, bytes.len()),
+        ),
+    }
+}
+
+fn field_monolith_remove_virtual_permutation(
+    bytes: &mut [u8],
+    state: &FieldMonolithState,
+    plan: FieldMonolithCellPlan,
+    cell_index: u32,
+) {
+    if bytes.len() <= 1 {
+        return;
+    }
+    let shift = field_monolith_virtual_shift(state, plan, cell_index, bytes.len());
+    match plan.weave {
+        FieldMonolithWeaveMode::LeadPad => bytes.rotate_right(shift),
+        FieldMonolithWeaveMode::TrailPad => bytes.rotate_left(shift),
+        FieldMonolithWeaveMode::Alternating => {
+            field_monolith_apply_virtual_pair_swaps(bytes, plan.pad_len + 2, shift % 2)
+        }
+        FieldMonolithWeaveMode::Clustered => field_monolith_apply_virtual_window_reversal(
+            bytes,
+            field_monolith_virtual_block_len(state, plan, cell_index, bytes.len()),
+        ),
+    }
+}
+
+fn field_monolith_virtual_mix_round_limit(plan: FieldMonolithCellPlan) -> usize {
+    plan.pad_len
+}
+
+fn field_monolith_apply_virtual_mix_with_summary(
+    bytes: &mut [u8],
+    state: &FieldMonolithState,
+    plan: FieldMonolithCellPlan,
+    cell_index: u32,
+    descriptor: u8,
+) -> FieldMonolithSurfaceSummary {
+    let round_limit = field_monolith_virtual_mix_round_limit(plan);
+    let len = bytes.len();
+    let reserve_stride = state
+        .reserve
+        .wrapping_add((plan.stride as u8).wrapping_mul(13));
+    let cell_mix = (cell_index as u8).wrapping_mul(19);
+    let weave_mix = (plan.weave as u8).wrapping_add(3);
+    let pad_mix = (plan.pad_len as u8).wrapping_mul(29);
+    let echo_lanes = field_monolith_left_rotation_lanes(state.echo);
+    let parity_lanes = field_monolith_right_rotation_lanes(state.parity);
+
+    let mut round = 0usize;
+    while round < round_limit {
+        let mut round_echo_lanes = [0u8; 8];
+        for (lane, echo) in round_echo_lanes.iter_mut().enumerate() {
+            *echo = echo_lanes[(lane + round) & 7];
+        }
+        let round_mix = reserve_stride
+            ^ parity_lanes[(cell_index as usize + plan.pad_len + round) & 7]
+            ^ cell_mix
+            ^ pad_mix
+            ^ (round as u8).wrapping_mul(7);
+        let mut offset = 0usize;
+        let mut offset_mix = 0u8;
+        while offset < len {
+            bytes[offset] ^= round_echo_lanes[offset & 7] ^ offset_mix ^ round_mix;
+            offset_mix = offset_mix.wrapping_add(weave_mix);
+            offset += 1;
+        }
+        round += 1;
+    }
+
+    let mut digest =
+        field_monolith_surface_checksum_seed(bytes.len(), state, cell_index, descriptor);
+    let mut front = 0u8;
+    let mut back = 0u8;
+    let mut offset = 0usize;
+    let mut final_echo_lanes = [0u8; 8];
+    for (lane, echo) in final_echo_lanes.iter_mut().enumerate() {
+        *echo = echo_lanes[(lane + round_limit) & 7];
+    }
+    let final_mix = reserve_stride
+        ^ parity_lanes[(cell_index as usize + plan.pad_len + round_limit) & 7]
+        ^ cell_mix
+        ^ pad_mix
+        ^ (round_limit as u8).wrapping_mul(7);
+    let mut offset_mix = 0u8;
+    while offset < len {
+        bytes[offset] ^= final_echo_lanes[offset & 7] ^ offset_mix ^ final_mix;
+        let byte = bytes[offset];
+        if offset == 0 {
+            front = byte;
+        }
+        back = byte;
+        digest = field_monolith_surface_checksum_step(digest, state, offset, byte);
+        offset_mix = offset_mix.wrapping_add(weave_mix);
+        offset += 1;
+    }
+
+    FieldMonolithSurfaceSummary {
+        digest,
+        front,
+        back,
+        surface_len: bytes.len(),
+    }
+}
+
+fn field_monolith_encode_surface_with_summary(
+    plaintext: &[u8],
+    state: &FieldMonolithState,
+    plan: FieldMonolithCellPlan,
+    cell_index: u32,
+    descriptor: u8,
+) -> (Vec<u8>, FieldMonolithSurfaceSummary) {
+    let mask_lanes = field_monolith_mask_lanes(state, cell_index, plan.stride);
+    let mixed = field_monolith_xor_masked_bytes(plaintext, &mask_lanes);
+    let mut surface = field_monolith_apply_mutation_owned(mixed, plan.mutation, plan.stride);
+    field_monolith_apply_virtual_permutation(&mut surface, state, plan, cell_index);
+    let summary = field_monolith_apply_virtual_mix_with_summary(
+        &mut surface,
+        state,
+        plan,
+        cell_index,
+        descriptor,
+    );
+    (surface, summary)
+}
+
+fn field_monolith_surface_summary(
+    surface: &[u8],
+    state: &FieldMonolithState,
+    cell_index: u32,
+    descriptor: u8,
+) -> FieldMonolithSurfaceSummary {
+    FieldMonolithSurfaceSummary {
+        digest: field_monolith_surface_checksum(surface, state, cell_index, descriptor),
+        front: surface.first().copied().unwrap_or(0),
+        back: surface.last().copied().unwrap_or(0),
+        surface_len: surface.len(),
+    }
+}
+
+fn field_monolith_decode_surface_with_summary(
+    surface: &[u8],
+    state: &FieldMonolithState,
+    plan: FieldMonolithCellPlan,
+    cell_index: u32,
+    original_len: usize,
+    descriptor: u8,
+) -> Result<(Vec<u8>, FieldMonolithSurfaceSummary)> {
+    if surface.len() != original_len {
+        return Err(Error::InvalidConfiguration(
+            "field monolith native surface length did not match original bytes".to_string(),
+        ));
+    }
+
+    let summary = field_monolith_surface_summary(surface, state, cell_index, descriptor);
+    let mut mixed = surface.to_vec();
+    field_monolith_apply_virtual_mix_with_summary(&mut mixed, state, plan, cell_index, descriptor);
+    field_monolith_remove_virtual_permutation(&mut mixed, state, plan, cell_index);
+    let mixed = field_monolith_inverse_mutation_owned(mixed, plan.mutation, plan.stride);
+    let mask_lanes = field_monolith_mask_lanes(state, cell_index, plan.stride);
+    let decoded = field_monolith_xor_masked_bytes(&mixed, &mask_lanes);
+
+    Ok((decoded, summary))
+}
+
+fn field_monolith_update_state_with_summary(
+    state: &mut FieldMonolithState,
+    descriptor: u8,
+    summary: FieldMonolithSurfaceSummary,
+    cell_index: u32,
+    cell_len: usize,
+) {
+    let control_a = field_monolith_control_token_a(state, cell_len);
+    let control_b = field_monolith_control_token_b(state, cell_index);
+    let span = (summary.surface_len as u8) ^ (cell_len as u8);
+
+    state.phase = state.phase.wrapping_add(3).rotate_left(1) ^ summary.digest;
+    state.tension =
+        state.tension.wrapping_add(control_a).rotate_left(1) ^ summary.surface_len as u8;
+    state.curvature = state.curvature.wrapping_add(summary.digest.rotate_left(1)) ^ span;
+    state.drift = state.drift.wrapping_add(summary.front).rotate_right(1) ^ descriptor;
+    state.echo = state.echo.wrapping_add(summary.back) ^ summary.digest.rotate_right(1);
+    state.reserve = state.reserve.wrapping_add(control_b) ^ summary.digest.rotate_left(1);
+    state.stride = state
+        .stride
+        .wrapping_add(((descriptor >> 4) & 0x03) + 1)
+        .max(1);
+    state.parity ^= summary.digest ^ summary.front ^ summary.back ^ span;
+}
+
+fn transform_payload_v1(
     data: &[u8],
     shell_key: &Key,
     nonce: &[u8; SHELL_NONCE_SIZE],
@@ -741,16 +2051,6 @@ fn decode_segment(
     }
 
     Ok(decoded)
-}
-
-fn resolve_chunk_size(preset: FusedPreset, requested: Option<usize>) -> Result<usize> {
-    let chunk_size = requested.unwrap_or_else(|| preset.default_chunk_size());
-    if !(MIN_CHUNK_SIZE..=MAX_CHUNK_SIZE).contains(&chunk_size) {
-        return Err(Error::InvalidConfiguration(format!(
-            "shell chunk size must be between {MIN_CHUNK_SIZE} and {MAX_CHUNK_SIZE} bytes"
-        )));
-    }
-    Ok(chunk_size)
 }
 
 fn chunk_count(payload_len: usize, chunk_size: usize) -> usize {
@@ -884,6 +2184,10 @@ impl DeterministicRng {
         z ^ (z >> 31)
     }
 
+    fn next_u32(&mut self) -> u32 {
+        self.next_u64() as u32
+    }
+
     fn next_index(&mut self, upper: usize) -> usize {
         if upper <= 1 {
             0
@@ -979,6 +2283,59 @@ mod tests {
     }
 
     #[test]
+    fn fused_shell_emits_field_monolith_v2_geometry() {
+        let master = fixed_key();
+        let payload = b"field monolith current is the shipped fuse v2 body".repeat(128);
+
+        let envelope = fuse(
+            &payload,
+            &master,
+            Some(FusedShellOptions {
+                preset: FusedPreset::Balanced,
+                chunk_size: None,
+                shell_nonce: Some([3u8; SHELL_NONCE_SIZE]),
+            }),
+        )
+        .unwrap();
+
+        assert_eq!(envelope.version, FUSED_SHELL_VERSION);
+        assert!(envelope.payload.len() > payload.len());
+
+        let geometry =
+            field_monolith_infer_geometry(envelope.payload.len(), envelope.chunk_size as usize)
+                .expect("valid monolith geometry");
+        assert_eq!(geometry.original_len, payload.len());
+        assert_eq!(envelope.payload.len(), payload.len() + geometry.block_count);
+
+        let restored = unfuse(&envelope, &master).unwrap();
+        assert_eq!(restored, payload);
+    }
+
+    #[test]
+    fn fused_shell_still_decodes_v1_segment_envelopes() {
+        let master = fixed_key();
+        let payload = b"legacy fused shell payload that must remain openable".repeat(64);
+        let preset = FusedPreset::Balanced;
+        let chunk_size = DEFAULT_CHUNK_SIZE;
+        let nonce = [4u8; SHELL_NONCE_SIZE];
+        let (shell_key, tag_key) = derive_shell_keys(&master, &nonce).unwrap();
+        let shell_payload =
+            transform_payload_v1(&payload, &shell_key, &nonce, preset, chunk_size, true).unwrap();
+        let mut envelope = FusedShellEnvelope {
+            version: FUSED_SHELL_V1_VERSION,
+            preset,
+            chunk_size: chunk_size as u32,
+            nonce,
+            payload: shell_payload,
+            tag: [0u8; SHELL_TAG_SIZE],
+        };
+        envelope.tag = compute_shell_tag(&envelope.to_unsigned_bytes(), &tag_key).unwrap();
+
+        let restored = unfuse_bytes(&envelope.to_bytes(), &master).unwrap();
+        assert_eq!(restored, payload);
+    }
+
+    #[test]
     fn fused_shell_detects_tamper() {
         let master = fixed_key();
         let mut bytes = fuse_bytes(b"hello fused world", &master, None).unwrap();
@@ -1016,7 +2373,90 @@ mod tests {
             let inspected = inspect_artifact(&protected.artifact).unwrap();
             assert_eq!(inspected.preset, preset);
             assert_eq!(inspected.original_size, payload.len());
+            assert_eq!(inspected.version, PROTECTED_ARTIFACT_VERSION);
         }
+    }
+
+    #[cfg(feature = "compression")]
+    #[test]
+    fn protect_reports_v2_monolith_shell_geometry() {
+        let master = fixed_key();
+        let payload = b"protect should expose fuse v2 monolith shell geometry".repeat(512);
+
+        let protected = protect(&payload, &master, None).unwrap();
+        let inspected = inspect_artifact(&protected.artifact).unwrap();
+        let geometry = field_monolith_infer_geometry(
+            protected.info.protected_size - PROTECTED_ARTIFACT_HEADER_LEN - SHELL_TAG_SIZE,
+            protected.info.shell_chunk_size as usize,
+        )
+        .expect("valid protected monolith geometry");
+
+        assert_eq!(inspected.version, PROTECTED_ARTIFACT_VERSION);
+        assert_eq!(inspected.encrypted_size, geometry.original_len);
+        assert_eq!(inspected.shell_chunk_count, geometry.chunk_count);
+        assert_eq!(open(&protected.artifact, &master).unwrap(), payload);
+    }
+
+    #[cfg(feature = "compression")]
+    #[test]
+    fn open_still_decodes_v1_protected_artifacts() {
+        let master = fixed_key();
+        let payload = b"legacy protected artifacts must stay openable".repeat(256);
+        let opts = ProtectOptions {
+            shell_nonce: Some([5u8; SHELL_NONCE_SIZE]),
+            ..ProtectOptions::default()
+        };
+        let nonce = opts.shell_nonce.unwrap();
+        let chunk_size = DEFAULT_CHUNK_SIZE;
+        let compression_result = compression::compress(
+            &payload,
+            Some(CompressionOptions {
+                algorithm: opts.compression_algorithm,
+                min_size_threshold: opts.compression_min_size_threshold,
+                level: opts.compression_level,
+            }),
+        )
+        .unwrap();
+        let encrypted = crate::encryption::encrypt(
+            &compression_result.compressed,
+            &master,
+            Some(EncryptOptions {
+                algorithm: opts.encryption_algorithm,
+                aad: None,
+            }),
+        )
+        .unwrap();
+        let encrypted_bytes = encrypted.to_bytes();
+        let (shell_key, tag_key) = derive_shell_keys(&master, &nonce).unwrap();
+        let shell_payload = transform_payload_v1(
+            &encrypted_bytes,
+            &shell_key,
+            &nonce,
+            opts.preset,
+            chunk_size,
+            true,
+        )
+        .unwrap();
+        let mut envelope = ProtectedArtifactEnvelope {
+            version: PROTECTED_ARTIFACT_V1_VERSION,
+            preset: opts.preset,
+            compression_algorithm: compression_result.algorithm,
+            encryption_algorithm: encrypted.algorithm,
+            chunk_size: chunk_size as u32,
+            original_size: payload.len() as u64,
+            compressed_size: compression_result.compressed.len() as u64,
+            nonce,
+            payload: shell_payload,
+            tag: [0u8; SHELL_TAG_SIZE],
+        };
+        envelope.tag = compute_shell_tag(&envelope.to_unsigned_bytes(), &tag_key).unwrap();
+
+        let restored = open(&envelope.to_bytes(), &master).unwrap();
+        assert_eq!(restored, payload);
+        assert_eq!(
+            inspect_artifact(&envelope.to_bytes()).unwrap().version,
+            PROTECTED_ARTIFACT_V1_VERSION
+        );
     }
 
     #[cfg(feature = "compression")]
