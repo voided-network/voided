@@ -4,6 +4,7 @@ members = [
     "voided-core",
     "voided-node",
     "voided-wasm",
+    "voided-bench",
 ]
 
 [workspace.package]

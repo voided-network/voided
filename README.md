@@ -144,44 +144,85 @@ payload length. Legacy v1 and v2 protected artifacts remain openable.
 If you already have the bytes you want inside the shell, use shell primitives.
 If you want Voided to do the whole flow for you, use full-flow helpers.
 
-## Current Full-Flow Benchmark Snapshot
+## Raw Benchmarking
 
-This is a development benchmark snapshot, not a product guarantee. It was run
-outside this repository against the real package functions. Voided rows use the
-full `protect/open` flow with Brotli level 6, XChaCha20-Poly1305, the
-`balanced` shell preset, deterministic shell nonces for repeatability, and an
-eight-file public corpus totaling `2,276,665` bytes. The v1 package row was run
-back-to-back against the archived v1 package; the v3 row was run against this
-checkout.
+The old capped benchmark scoreboard has been replaced by `voided-bench`.
+It does not emit a fake `security = 100` score, and it does not collapse
+security, speed, size, and artifact shape into one pretend-universal number.
 
-Corpus mix: Project Gutenberg prose/play/legal text, RFC 8446, CommonMark spec
-source, Iris CSV, and Swagger Petstore OpenAPI YAML.
+Run the synthetic corpus:
 
-Benchmark column notes:
+```sh
+cargo run -p voided-bench --release --
+```
 
-- `aead/tamper` is a pass/fail score for successful roundtrip plus rejected
-  ciphertext tampering. It is not a formal cryptographic proof.
-- `artifact` is byte-statistical output quality, not decryptability.
-- `avalanche` is reported separately because low plaintext avalanche is normal
-  for secure stream-style AEADs.
-- Raw AEAD baselines serialize `nonce || ciphertext`; compression baselines use
-  the named compressor before XChaCha20-Poly1305.
+Run your own corpus:
 
-| candidate | output bytes | overhead | encode MiB/s | decode MiB/s | aead/tamper | artifact | efficiency | size | value | avalanche |
-|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| `xchacha20-poly1305-raw` | 2,276,985 | 0.171% | 156.32 | 155.77 | 100.00 | 95.99 | 64.40 | 99.34 | 90.00 | 0.000 |
-| `aes-256-gcm-raw` | 2,276,889 | 0.120% | 82.17 | 82.44 | 100.00 | 98.38 | 41.87 | 99.53 | 84.99 | 0.000 |
-| `gzip+xchacha20-poly1305` | 812,369 | -70.546% | 19.01 | 126.93 | 100.00 | 95.60 | 36.68 | 100.00 | 83.07 | 0.283 |
-| `brotli+xchacha20-poly1305` | 744,106 | -72.588% | 19.11 | 126.31 | 100.00 | 96.78 | 33.96 | 100.00 | 82.69 | 0.329 |
-| `voided-protect-v1-package` | 749,780 | -72.263% | 16.73 | 88.42 | 100.00 | 95.86 | 27.83 | 100.00 | 80.92 | 0.495 |
-| `voided-protect-v3-current` | 749,981 | -72.249% | 17.29 | 75.94 | 100.00 | 95.87 | 25.37 | 100.00 | 80.31 | 0.496 |
+```sh
+cargo run -p voided-bench --release -- --corpus /path/to/corpus
+```
 
-Read: full-flow Voided v1 and v3 both preserve the actual cryptographic gate in
-this benchmark: roundtrip succeeds and tampering is rejected. V3 is the first
-protect-level monolith implementation, but it is not a universal
-performance/value win over v1 on this corpus: it is slightly larger and slower
-to open. Its main release value is architectural correctness for the new
-monolith path while preserving the high full-flow avalanche behavior.
+Output formats:
+
+```sh
+cargo run -p voided-bench --release -- --format markdown
+cargo run -p voided-bench --release -- --format json
+cargo run -p voided-bench --release -- --format csv
+```
+
+Benchmark model:
+
+- Security gates are counts: roundtrip failures, tamper accepts, and wrong-key
+  accepts. If all AEAD-backed candidates pass, they all show `0`; the benchmark
+  does not inflate that into a differentiating score.
+- Size is exact bytes, byte delta, output/input ratio, and overhead percent.
+- Speed is median and weighted MiB/s.
+- Artifact shape is raw entropy, entropy gap, chi-square per degree of freedom,
+  serial correlation, bit bias, max byte frequency, same-input drift, and
+  input-bit-flip delta.
+- Natural bounded measurements, like input-bit delta percentage, stay
+  percentages. Everything else stays in its native unit.
+
+Fresh synthetic run from this checkout:
+
+Corpus: `synthetic` | fixtures: `11` | input bytes: `1,885,227` | samples:
+`2`
+
+### Security Gates
+
+| candidate | roundtrip failures | tamper accepts / trials | wrong-key accepts / trials |
+|---|---:|---:|---:|
+| `voided-protect-current` | 0 | 0 / 33 | 0 / 11 |
+| `voided-c1e-current` | 0 | 0 / 33 | 0 / 11 |
+| `voided-fuse-shell-current` | 0 | 0 / 33 | 0 / 11 |
+| `xchacha20-poly1305-raw` | 0 | 0 / 33 | 0 / 11 |
+| `aes-256-gcm-raw` | 0 | 0 / 33 | 0 / 11 |
+| `gzip+xchacha20-poly1305` | 0 | 0 / 33 | 0 / 11 |
+| `brotli+xchacha20-poly1305` | 0 | 0 / 33 | 0 / 11 |
+
+### Size And Speed
+
+| candidate | output bytes | byte delta | output/input | overhead % | median enc MiB/s | median dec MiB/s | weighted enc MiB/s | weighted dec MiB/s |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| `voided-protect-current` | 1,377,284 | -507,943 | 0.730567 | -26.943334 | 70.934 | 8.429 | 74.631 | 74.249 |
+| `voided-c1e-current` | 1,376,389 | -508,838 | 0.730092 | -26.990808 | 88.239 | 47.531 | 127.120 | 247.761 |
+| `voided-fuse-shell-current` | 1,886,119 | 892 | 1.000473 | 0.047315 | 128.967 | 102.998 | 131.534 | 105.785 |
+| `xchacha20-poly1305-raw` | 1,885,667 | 440 | 1.000233 | 0.023339 | 291.332 | 297.043 | 290.154 | 310.612 |
+| `aes-256-gcm-raw` | 1,885,535 | 308 | 1.000163 | 0.016338 | 130.351 | 130.826 | 132.780 | 133.093 |
+| `gzip+xchacha20-poly1305` | 1,389,776 | -495,451 | 0.737193 | -26.280708 | 73.302 | 29.012 | 52.984 | 244.030 |
+| `brotli+xchacha20-poly1305` | 1,376,238 | -508,989 | 0.730012 | -26.998818 | 161.631 | 11.289 | 136.946 | 250.949 |
+
+### Artifact Statistics
+
+| candidate | entropy bits/byte | entropy gap | chi-square/df | serial corr | mean bit bias % | max byte freq % | same-input drift % | input-bit delta % | delta minus drift % | input delta len mean |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| `voided-protect-current` | 7.999882 | 0.000118 | 0.880547 | -0.001221 | 0.043437 | 0.403403 | 41.113415 | 44.161890 | 3.048475 | 6.000 |
+| `voided-c1e-current` | 7.999883 | 0.000117 | 0.877620 | 0.000193 | 0.042003 | 0.403738 | 47.114666 | 49.397124 | 2.282458 | 6.000 |
+| `voided-fuse-shell-current` | 7.999898 | 0.000102 | 1.044534 | -0.000696 | 0.026350 | 0.404640 | 0.000000 | 22.833510 | 22.833510 | 0.182 |
+| `xchacha20-poly1305-raw` | 7.999893 | 0.000107 | 1.091969 | 0.000145 | 0.032078 | 0.405957 | 0.000000 | 2.583258 | 2.583258 | 0.091 |
+| `aes-256-gcm-raw` | 7.999892 | 0.000108 | 1.110937 | -0.000797 | 0.038464 | 0.403175 | 0.000000 | 4.282732 | 4.282732 | 0.091 |
+| `gzip+xchacha20-poly1305` | 7.999856 | 0.000144 | 1.087583 | -0.000424 | 0.044081 | 0.404022 | 0.000000 | 24.549544 | 24.549544 | 2.727 |
+| `brotli+xchacha20-poly1305` | 7.999881 | 0.000119 | 0.891447 | 0.000588 | 0.029746 | 0.403782 | 0.000000 | 31.669650 | 31.669650 | 6.273 |
 
 ## Command Map
 
