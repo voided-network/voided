@@ -139,6 +139,38 @@ encrypted payload a first-class artifact shape.
 If you already have the bytes you want inside the shell, use shell primitives.
 If you want Voided to do the whole flow for you, use full-flow helpers.
 
+## Current Fuse Benchmark Snapshot
+
+This is a development benchmark snapshot, not a product guarantee. It was run
+outside this repository against the real package functions, using the
+`balanced` preset for Voided fuse, deterministic nonces for repeatability, and
+an eight-file public corpus totaling `2,276,665` bytes.
+
+Corpus mix: Project Gutenberg prose/play/legal text, RFC 8446, CommonMark spec
+source, Iris CSV, and Swagger Petstore OpenAPI YAML.
+
+Neutral scoring notes:
+
+- `security` is based on artifact byte-randomness, tamper rejection, and
+  roundtrip correctness.
+- `avalanche` is reported separately because low plaintext avalanche is normal
+  for secure stream-style AEADs.
+- Raw AEAD baselines serialize `nonce || ciphertext`.
+
+| candidate | output bytes | overhead | encode MiB/s | decode MiB/s | security | efficiency | size | value | avalanche |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| `xchacha20-poly1305-raw` | 2,276,985 | 0.171% | 234.04 | 191.28 | 97.40 | 76.15 | 99.34 | 91.54 | 0.000 |
+| `voided-fuse-v1-package` | 2,276,969 | 0.163% | 161.95 | 158.92 | 98.24 | 64.24 | 99.37 | 88.35 | 0.000 |
+| `aes-256-gcm-raw` | 2,276,889 | 0.120% | 128.61 | 127.51 | 98.95 | 56.91 | 99.53 | 86.51 | 0.000 |
+| `gzip+xchacha20-poly1305` | 812,369 | -70.546% | 26.95 | 194.78 | 97.14 | 47.41 | 100.00 | 82.94 | 0.283 |
+| `voided-fuse-v2-current` | 2,277,531 | 0.197% | 115.89 | 94.09 | 92.99 | 48.46 | 99.23 | 81.23 | 0.247 |
+
+Read: the current v2 monolith is not a universal benchmark win. It improves
+input-diffusion/avalanche over fuse v1, but on this neutral public corpus it is
+slower, slightly larger, and weaker on artifact byte-randomness than fuse v1.
+That means the monolith should stay under review before it becomes the only
+default fuse implementation.
+
 ## Command Map
 
 The easiest way to think about the API is by asking which layer you want Voided
