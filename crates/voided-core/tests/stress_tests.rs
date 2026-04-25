@@ -641,11 +641,13 @@ mod fused_shell_stress {
                 }),
             )
             .expect("protect");
-            let info = inspect_artifact(&protected.artifact).expect("inspect");
+            let info = &protected.info;
+            let public_info = inspect_artifact(&protected.artifact).expect("inspect");
             let restored = open(&protected.artifact, &key).expect("open");
 
             assert_eq!(info.preset, preset);
             assert_eq!(info.original_size, payload.len());
+            assert_eq!(public_info.preset_label, "opaque");
             assert_eq!(restored, payload, "Preset {:?} protect/open failed", preset);
         }
     }
@@ -675,9 +677,11 @@ mod fused_shell_stress {
             )
             .expect("repack");
             let restored = open(&repacked.artifact, &key).expect("open");
-            let info = inspect_artifact(&repacked.artifact).expect("inspect");
+            let info = &repacked.info;
+            let public_info = inspect_artifact(&repacked.artifact).expect("inspect");
 
             assert_eq!(info.preset, preset);
+            assert_eq!(public_info.preset_label, "opaque");
             assert_eq!(restored, payload);
         }
     }

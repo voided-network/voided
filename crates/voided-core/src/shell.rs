@@ -1,4 +1,4 @@
-//! Fused shell primitives and fused-first protect/open flows for Voided v2.
+//! Fused shell primitives and fused-first protect/open flows for Voided.
 
 use alloc::{format, string::String, vec, vec::Vec};
 
@@ -31,7 +31,8 @@ const FUSED_SHELL_V1_VERSION: u8 = 0x01;
 pub const PROTECTED_ARTIFACT_MAGIC: [u8; 4] = *b"VOF2";
 
 /// Protected artifact version.
-pub const PROTECTED_ARTIFACT_VERSION: u8 = 0x03;
+pub const PROTECTED_ARTIFACT_VERSION: u8 = 0x04;
+const PROTECTED_ARTIFACT_V3_VERSION: u8 = 0x03;
 const PROTECTED_ARTIFACT_V2_VERSION: u8 = 0x02;
 const PROTECTED_ARTIFACT_V1_VERSION: u8 = 0x01;
 
@@ -48,6 +49,14 @@ const FIELD_MONOLITH_STATE_PURPOSE: &str = "field-monolith.state.v0";
 const FIELD_MONOLITH_PLAN_PURPOSE: &str = "field-monolith.plan.v0";
 #[cfg(feature = "compression")]
 const PROTECTED_MONOLITH_STATE_PURPOSE: &str = "protected-monolith.state.v0";
+#[cfg(feature = "compression")]
+const PROTECTED_ROUTE_BODY_PURPOSE: &str = "protected-route.body.v0";
+#[cfg(feature = "compression")]
+const PROTECTED_ROUTE_META_PURPOSE: &str = "protected-route.meta.v0";
+#[cfg(feature = "compression")]
+const PROTECTED_ROUTE_META_LEN: usize = 32;
+#[cfg(feature = "compression")]
+const PROTECTED_ROUTE_MIN_LEN: usize = SHELL_NONCE_SIZE + PROTECTED_ROUTE_META_LEN + SHELL_TAG_SIZE;
 const FIELD_MONOLITH_AUTO_CHUNK_SIZE: usize = 0;
 const FIELD_MONOLITH_ANCHOR_BLOCK_CELLS_COMPACT: usize = 4;
 const FIELD_MONOLITH_ANCHOR_BLOCK_CELLS_DENSE: usize = 8;
@@ -355,6 +364,7 @@ struct ProtectedArtifactEnvelope {
 
 #[cfg(feature = "compression")]
 impl ProtectedArtifactEnvelope {
+    #[allow(dead_code)]
     fn to_bytes(&self) -> Vec<u8> {
         let mut bytes = self.to_unsigned_bytes();
         bytes.extend_from_slice(&self.tag);
@@ -428,7 +438,7 @@ impl ProtectedArtifactEnvelope {
         let chunk_size = self.chunk_size.max(1) as usize;
         let field_monolith_geometry = if matches!(
             self.version,
-            PROTECTED_ARTIFACT_VERSION | PROTECTED_ARTIFACT_V2_VERSION
+            PROTECTED_ARTIFACT_V3_VERSION | PROTECTED_ARTIFACT_V2_VERSION
         ) {
             field_monolith_infer_geometry(self.payload.len(), chunk_size)
         } else {
@@ -584,14 +594,14 @@ pub fn inspect_fused(data: &[u8]) -> Result<FusedShellInfo> {
 }
 
 #[cfg(feature = "compression")]
-/// Run the fused-first Voided v2 full flow.
+/// Run the fused-first protected flow.
 pub fn protect(
     plaintext: &[u8],
     master_key: &Key,
     options: Option<ProtectOptions>,
 ) -> Result<ProtectResult> {
     let opts = options.unwrap_or_default();
-    let nonce = canonicalize_nonce(opts.shell_nonce.unwrap_or_else(random_nonce));
+    let nonce = canonicalize_protected_route_nonce(opts.shell_nonce.unwrap_or_else(random_nonce));
 
     let compression_result = compression::compress(
         plaintext,
@@ -612,7 +622,7 @@ pub fn protect(
     )?;
     let encrypted_bytes = encrypted.to_bytes();
 
-    let (shell_key, tag_key) = derive_shell_keys(master_key, &nonce)?;
+    let (shell_key, _) = derive_shell_keys(master_key, &nonce)?;
     let (payload, chunk_size) = protected_monolith_encode_payload(
         &encrypted_bytes,
         &shell_key,
@@ -625,28 +635,26 @@ pub fn protect(
         opts.preset,
     )?;
 
-    let mut envelope = ProtectedArtifactEnvelope {
-        version: PROTECTED_ARTIFACT_VERSION,
+    let metadata = ProtectedRouteMetadata {
         preset: opts.preset,
         compression_algorithm: compression_result.algorithm,
         encryption_algorithm: encrypted.algorithm,
         chunk_size: chunk_size as u32,
         original_size: plaintext.len() as u64,
         compressed_size: compression_result.compressed.len() as u64,
-        nonce,
-        payload,
-        tag: [0u8; SHELL_TAG_SIZE],
     };
-    envelope.tag = compute_shell_tag(&envelope.to_unsigned_bytes(), &tag_key)?;
-
-    let artifact = envelope.to_bytes();
-    let info = envelope.info();
+    let artifact = protected_route_seal_artifact(&metadata, &payload, master_key, &nonce)?;
+    let info = protected_route_info(&metadata, payload.len(), artifact.len(), nonce, chunk_size);
     Ok(ProtectResult { artifact, info })
 }
 
 #[cfg(feature = "compression")]
 /// Open a serialized fused protected artifact.
 pub fn open(artifact: &[u8], master_key: &Key) -> Result<Vec<u8>> {
+    if artifact.len() >= 4 && artifact[..4] != PROTECTED_ARTIFACT_MAGIC {
+        return open_protected_route_artifact(artifact, master_key);
+    }
+
     let envelope = ProtectedArtifactEnvelope::from_bytes(artifact)?;
     let (shell_key, tag_key) = derive_shell_keys(master_key, &envelope.nonce)?;
     if !verify_shell_tag(&envelope.to_unsigned_bytes(), &envelope.tag, &tag_key)? {
@@ -654,7 +662,7 @@ pub fn open(artifact: &[u8], master_key: &Key) -> Result<Vec<u8>> {
     }
 
     let encrypted_bytes = match envelope.version {
-        PROTECTED_ARTIFACT_VERSION => protected_monolith_decode_payload(
+        PROTECTED_ARTIFACT_V3_VERSION => protected_monolith_decode_payload(
             &envelope.payload,
             &shell_key,
             &envelope.nonce,
@@ -708,6 +716,10 @@ pub fn open(artifact: &[u8], master_key: &Key) -> Result<Vec<u8>> {
 #[cfg(feature = "compression")]
 /// Inspect a protected artifact without decrypting it.
 pub fn inspect_artifact(artifact: &[u8]) -> Result<ProtectedArtifactInfo> {
+    if artifact.len() >= 4 && artifact[..4] != PROTECTED_ARTIFACT_MAGIC {
+        return inspect_protected_route_artifact(artifact);
+    }
+
     Ok(ProtectedArtifactEnvelope::from_bytes(artifact)?.info())
 }
 
@@ -736,7 +748,9 @@ fn is_supported_fused_shell_version(version: u8) -> bool {
 fn is_supported_protected_artifact_version(version: u8) -> bool {
     matches!(
         version,
-        PROTECTED_ARTIFACT_V1_VERSION | PROTECTED_ARTIFACT_V2_VERSION | PROTECTED_ARTIFACT_VERSION
+        PROTECTED_ARTIFACT_V1_VERSION
+            | PROTECTED_ARTIFACT_V2_VERSION
+            | PROTECTED_ARTIFACT_V3_VERSION
     )
 }
 
@@ -1119,6 +1133,297 @@ fn protected_monolith_initial_state(
     state.parity ^= seed[7] ^ mix[29];
 
     Ok(state)
+}
+
+#[cfg(feature = "compression")]
+#[derive(Debug, Clone, Copy)]
+struct ProtectedRouteMetadata {
+    preset: FusedPreset,
+    compression_algorithm: CompressionAlgorithm,
+    encryption_algorithm: EncryptionAlgorithm,
+    chunk_size: u32,
+    original_size: u64,
+    compressed_size: u64,
+}
+
+#[cfg(feature = "compression")]
+impl ProtectedRouteMetadata {
+    fn to_bytes(self) -> [u8; PROTECTED_ROUTE_META_LEN] {
+        let mut bytes = [0u8; PROTECTED_ROUTE_META_LEN];
+        bytes[0] = PROTECTED_ARTIFACT_VERSION;
+        bytes[1] = self.preset as u8;
+        bytes[2] = self.compression_algorithm as u8;
+        bytes[3] = self.encryption_algorithm as u8;
+        bytes[4..8].copy_from_slice(&self.chunk_size.to_be_bytes());
+        bytes[8..16].copy_from_slice(&self.original_size.to_be_bytes());
+        bytes[16..24].copy_from_slice(&self.compressed_size.to_be_bytes());
+        bytes[24..32].copy_from_slice(b"VOIDRT00");
+        bytes
+    }
+
+    fn from_bytes(bytes: &[u8; PROTECTED_ROUTE_META_LEN]) -> Result<Self> {
+        if bytes[0] != PROTECTED_ARTIFACT_VERSION || &bytes[24..32] != b"VOIDRT00" {
+            return Err(Error::InvalidFormat);
+        }
+
+        Ok(Self {
+            preset: FusedPreset::from_byte(bytes[1])?,
+            compression_algorithm: CompressionAlgorithm::from_byte(bytes[2])?,
+            encryption_algorithm: EncryptionAlgorithm::from_byte(bytes[3])?,
+            chunk_size: u32::from_be_bytes([bytes[4], bytes[5], bytes[6], bytes[7]]),
+            original_size: u64::from_be_bytes([
+                bytes[8], bytes[9], bytes[10], bytes[11], bytes[12], bytes[13], bytes[14],
+                bytes[15],
+            ]),
+            compressed_size: u64::from_be_bytes([
+                bytes[16], bytes[17], bytes[18], bytes[19], bytes[20], bytes[21], bytes[22],
+                bytes[23],
+            ]),
+        })
+    }
+}
+
+#[cfg(feature = "compression")]
+fn protected_route_seal_artifact(
+    metadata: &ProtectedRouteMetadata,
+    payload: &[u8],
+    master_key: &Key,
+    nonce: &[u8; SHELL_NONCE_SIZE],
+) -> Result<Vec<u8>> {
+    let (route_key, tag_key) = derive_protected_route_keys(master_key, nonce)?;
+    let sealed_meta = protected_route_seal_metadata(*metadata, &route_key, nonce)?;
+    let tag = compute_protected_route_tag(nonce, &sealed_meta, payload, &tag_key)?;
+
+    let mut body = Vec::with_capacity(PROTECTED_ROUTE_META_LEN + payload.len() + SHELL_TAG_SIZE);
+    body.extend_from_slice(&sealed_meta);
+    body.extend_from_slice(payload);
+    body.extend_from_slice(&tag);
+
+    let routed_body = protected_route_transform_body(&body, &route_key, nonce, true)?;
+    let mut artifact = Vec::with_capacity(SHELL_NONCE_SIZE + routed_body.len());
+    artifact.extend_from_slice(nonce);
+    artifact.extend_from_slice(&routed_body);
+    Ok(artifact)
+}
+
+#[cfg(feature = "compression")]
+fn open_protected_route_artifact(artifact: &[u8], master_key: &Key) -> Result<Vec<u8>> {
+    if artifact.len() < PROTECTED_ROUTE_MIN_LEN {
+        return Err(Error::TruncatedPayload {
+            expected: PROTECTED_ROUTE_MIN_LEN,
+            actual: artifact.len(),
+        });
+    }
+
+    let mut nonce = [0u8; SHELL_NONCE_SIZE];
+    nonce.copy_from_slice(&artifact[..SHELL_NONCE_SIZE]);
+    let (route_key, route_tag_key) = derive_protected_route_keys(master_key, &nonce)?;
+    let body =
+        protected_route_transform_body(&artifact[SHELL_NONCE_SIZE..], &route_key, &nonce, false)?;
+    if body.len() < PROTECTED_ROUTE_META_LEN + SHELL_TAG_SIZE {
+        return Err(Error::TruncatedPayload {
+            expected: PROTECTED_ROUTE_META_LEN + SHELL_TAG_SIZE,
+            actual: body.len(),
+        });
+    }
+
+    let sealed_meta = &body[..PROTECTED_ROUTE_META_LEN];
+    let payload_end = body.len() - SHELL_TAG_SIZE;
+    let payload = &body[PROTECTED_ROUTE_META_LEN..payload_end];
+    let tag = &body[payload_end..];
+    let expected_tag = compute_protected_route_tag(&nonce, sealed_meta, payload, &route_tag_key)?;
+    if !compare_hashes(&expected_tag, tag) {
+        return Err(Error::AuthenticationFailed);
+    }
+
+    let metadata = protected_route_open_metadata(sealed_meta, &route_key, &nonce)?;
+    let (shell_key, _) = derive_shell_keys(master_key, &nonce)?;
+    let encrypted_bytes = protected_monolith_decode_payload(
+        payload,
+        &shell_key,
+        &nonce,
+        metadata.chunk_size.max(1) as usize,
+        metadata.original_size as usize,
+        metadata.compressed_size as usize,
+        metadata.compression_algorithm,
+        metadata.encryption_algorithm,
+        metadata.preset,
+    )?;
+    let encrypted = EncryptionResult::from_bytes(&encrypted_bytes)?;
+    if encrypted.algorithm != metadata.encryption_algorithm {
+        return Err(Error::InvalidFormat);
+    }
+
+    let compressed = crate::encryption::decrypt(&encrypted, master_key)?;
+    if compressed.len() != metadata.compressed_size as usize {
+        return Err(Error::SizeMismatch {
+            expected: metadata.compressed_size as usize,
+            actual: compressed.len(),
+        });
+    }
+
+    let plaintext = compression::decompress(&compressed, metadata.compression_algorithm)?;
+    if plaintext.len() != metadata.original_size as usize {
+        return Err(Error::SizeMismatch {
+            expected: metadata.original_size as usize,
+            actual: plaintext.len(),
+        });
+    }
+
+    Ok(plaintext)
+}
+
+#[cfg(feature = "compression")]
+fn inspect_protected_route_artifact(artifact: &[u8]) -> Result<ProtectedArtifactInfo> {
+    if artifact.len() < PROTECTED_ROUTE_MIN_LEN {
+        return Err(Error::TruncatedPayload {
+            expected: PROTECTED_ROUTE_MIN_LEN,
+            actual: artifact.len(),
+        });
+    }
+
+    let mut nonce = [0u8; SHELL_NONCE_SIZE];
+    nonce.copy_from_slice(&artifact[..SHELL_NONCE_SIZE]);
+    Ok(ProtectedArtifactInfo {
+        version: PROTECTED_ARTIFACT_VERSION,
+        preset: FusedPreset::Balanced,
+        preset_label: "opaque".to_string(),
+        compression_algorithm: CompressionAlgorithm::None,
+        encryption_algorithm: EncryptionAlgorithm::XChaCha20Poly1305,
+        original_size: 0,
+        compressed_size: 0,
+        encrypted_size: 0,
+        protected_size: artifact.len(),
+        shell_chunk_size: 0,
+        shell_chunk_count: 0,
+        shell_nonce: nonce,
+    })
+}
+
+#[cfg(feature = "compression")]
+fn protected_route_info(
+    metadata: &ProtectedRouteMetadata,
+    payload_len: usize,
+    artifact_len: usize,
+    nonce: [u8; SHELL_NONCE_SIZE],
+    chunk_size: usize,
+) -> ProtectedArtifactInfo {
+    let geometry = field_monolith_infer_geometry(payload_len, chunk_size.max(1));
+    ProtectedArtifactInfo {
+        version: PROTECTED_ARTIFACT_VERSION,
+        preset: metadata.preset,
+        preset_label: metadata.preset.name().to_string(),
+        compression_algorithm: metadata.compression_algorithm,
+        encryption_algorithm: metadata.encryption_algorithm,
+        original_size: metadata.original_size as usize,
+        compressed_size: metadata.compressed_size as usize,
+        encrypted_size: geometry.map(|geometry| geometry.original_len).unwrap_or(0),
+        protected_size: artifact_len,
+        shell_chunk_size: metadata.chunk_size,
+        shell_chunk_count: geometry.map(|geometry| geometry.chunk_count).unwrap_or(0),
+        shell_nonce: nonce,
+    }
+}
+
+#[cfg(feature = "compression")]
+fn derive_protected_route_keys(
+    master_key: &Key,
+    nonce: &[u8; SHELL_NONCE_SIZE],
+) -> Result<(Key, Key)> {
+    let route_key = derive_domain_key(master_key, Some(nonce), "protected-route")?;
+    let tag_key = derive_domain_key(master_key, Some(nonce), "protected-route-tag")?;
+    Ok((route_key, tag_key))
+}
+
+#[cfg(feature = "compression")]
+fn protected_route_seal_metadata(
+    metadata: ProtectedRouteMetadata,
+    route_key: &Key,
+    nonce: &[u8; SHELL_NONCE_SIZE],
+) -> Result<[u8; PROTECTED_ROUTE_META_LEN]> {
+    let plain = metadata.to_bytes();
+    let mask = derive_chunk_seed(
+        route_key,
+        nonce,
+        0,
+        PROTECTED_ROUTE_META_PURPOSE,
+        PROTECTED_ROUTE_META_LEN,
+    )?;
+    let mut sealed = [0u8; PROTECTED_ROUTE_META_LEN];
+    for index in 0..PROTECTED_ROUTE_META_LEN {
+        sealed[index] = plain[index] ^ mask[index];
+    }
+    Ok(sealed)
+}
+
+#[cfg(feature = "compression")]
+fn protected_route_open_metadata(
+    sealed: &[u8],
+    route_key: &Key,
+    nonce: &[u8; SHELL_NONCE_SIZE],
+) -> Result<ProtectedRouteMetadata> {
+    if sealed.len() != PROTECTED_ROUTE_META_LEN {
+        return Err(Error::InvalidFormat);
+    }
+    let mask = derive_chunk_seed(
+        route_key,
+        nonce,
+        0,
+        PROTECTED_ROUTE_META_PURPOSE,
+        PROTECTED_ROUTE_META_LEN,
+    )?;
+    let mut plain = [0u8; PROTECTED_ROUTE_META_LEN];
+    for index in 0..PROTECTED_ROUTE_META_LEN {
+        plain[index] = sealed[index] ^ mask[index];
+    }
+    ProtectedRouteMetadata::from_bytes(&plain)
+}
+
+#[cfg(feature = "compression")]
+fn compute_protected_route_tag(
+    nonce: &[u8; SHELL_NONCE_SIZE],
+    sealed_meta: &[u8],
+    payload: &[u8],
+    tag_key: &Key,
+) -> Result<[u8; SHELL_TAG_SIZE]> {
+    let mut unsigned = Vec::with_capacity(nonce.len() + sealed_meta.len() + payload.len());
+    unsigned.extend_from_slice(nonce);
+    unsigned.extend_from_slice(sealed_meta);
+    unsigned.extend_from_slice(payload);
+    compute_shell_tag(&unsigned, tag_key)
+}
+
+#[cfg(feature = "compression")]
+fn protected_route_transform_body(
+    body: &[u8],
+    route_key: &Key,
+    nonce: &[u8; SHELL_NONCE_SIZE],
+    encode: bool,
+) -> Result<Vec<u8>> {
+    if body.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    let seed = derive_chunk_seed(route_key, nonce, 0, PROTECTED_ROUTE_BODY_PURPOSE, 32)?;
+    let mut rng = DeterministicRng::from_seed(&seed);
+    let rotation = rng.next_index(body.len());
+    let mut mask = vec![0u8; body.len()];
+    rng.fill_bytes(&mut mask);
+    let mut output = body.to_vec();
+
+    if encode {
+        for (byte, mask) in output.iter_mut().zip(mask.iter()) {
+            *byte ^= *mask;
+        }
+        output.rotate_left(rotation);
+    } else {
+        output.rotate_right(rotation);
+        for (byte, mask) in output.iter_mut().zip(mask.iter()) {
+            *byte ^= *mask;
+        }
+    }
+
+    Ok(output)
 }
 
 fn resolve_field_monolith_current_cell_size(
@@ -2341,6 +2646,22 @@ fn canonicalize_nonce(nonce: [u8; SHELL_NONCE_SIZE]) -> [u8; SHELL_NONCE_SIZE] {
     nonce
 }
 
+#[cfg(feature = "compression")]
+fn canonicalize_protected_route_nonce(mut nonce: [u8; SHELL_NONCE_SIZE]) -> [u8; SHELL_NONCE_SIZE] {
+    if protected_route_nonce_has_known_magic(&nonce) {
+        nonce[0] ^= 0x80;
+    }
+    nonce
+}
+
+#[cfg(feature = "compression")]
+fn protected_route_nonce_has_known_magic(nonce: &[u8; SHELL_NONCE_SIZE]) -> bool {
+    let prefix = &nonce[..4];
+    prefix == PROTECTED_ARTIFACT_MAGIC
+        || prefix == FUSED_SHELL_MAGIC
+        || prefix == &crate::MAGIC_ENCRYPTED[..]
+}
+
 fn build_permutation(len: usize, rng: &mut DeterministicRng) -> Vec<usize> {
     let mut permutation: Vec<usize> = (0..len).collect();
     if len <= 1 {
@@ -2565,38 +2886,48 @@ mod tests {
             assert_eq!(restored, payload);
 
             let inspected = inspect_artifact(&protected.artifact).unwrap();
-            assert_eq!(inspected.preset, preset);
-            assert_eq!(inspected.original_size, payload.len());
+            assert_eq!(protected.info.preset, preset);
+            assert_eq!(protected.info.original_size, payload.len());
+            assert_eq!(protected.info.version, PROTECTED_ARTIFACT_VERSION);
             assert_eq!(inspected.version, PROTECTED_ARTIFACT_VERSION);
+            assert_eq!(inspected.preset_label, "opaque");
+            assert_eq!(inspected.original_size, 0);
+            assert_ne!(protected.artifact[..4], PROTECTED_ARTIFACT_MAGIC);
         }
     }
 
     #[cfg(feature = "compression")]
     #[test]
-    fn protect_reports_v3_full_flow_monolith_geometry() {
+    fn protect_reports_v4_implicit_route_geometry() {
         let master = fixed_key();
-        let payload = b"protect should expose full-flow monolith geometry".repeat(512);
+        let payload = b"protect should expose v4 route geometry to the caller only".repeat(512);
 
         let protected = protect(&payload, &master, None).unwrap();
         let inspected = inspect_artifact(&protected.artifact).unwrap();
+        let routed_payload_len =
+            protected.artifact.len() - SHELL_NONCE_SIZE - PROTECTED_ROUTE_META_LEN - SHELL_TAG_SIZE;
         let geometry = field_monolith_infer_geometry(
-            protected.info.protected_size - PROTECTED_ARTIFACT_HEADER_LEN - SHELL_TAG_SIZE,
+            routed_payload_len,
             protected.info.shell_chunk_size as usize,
         )
         .expect("valid protected monolith geometry");
 
+        assert_eq!(protected.info.version, PROTECTED_ARTIFACT_VERSION);
+        assert_eq!(protected.info.encrypted_size, geometry.original_len);
+        assert_eq!(protected.info.shell_chunk_count, geometry.chunk_count);
+        assert_eq!(protected.info.original_size, payload.len());
         assert_eq!(inspected.version, PROTECTED_ARTIFACT_VERSION);
-        assert_eq!(inspected.encrypted_size, geometry.original_len);
-        assert_eq!(inspected.shell_chunk_count, geometry.chunk_count);
+        assert_eq!(inspected.encrypted_size, 0);
+        assert_eq!(inspected.shell_chunk_count, 0);
         assert_eq!(open(&protected.artifact, &master).unwrap(), payload);
     }
 
     #[cfg(feature = "compression")]
     #[test]
-    fn protected_v3_shell_state_is_bound_to_full_flow_metadata() {
+    fn protected_v4_route_hides_header_and_rejects_wrong_paths() {
         let master = fixed_key();
-        let payload =
-            b"v3 must not be only the v2 shell wrapped around encrypted bytes".repeat(256);
+        let wrong_master = Key::from_bytes(&[0x24; 32]).unwrap();
+        let payload = b"v4 should not announce what it is before the key routes it".repeat(256);
         let protected = protect(
             &payload,
             &master,
@@ -2606,45 +2937,119 @@ mod tests {
             }),
         )
         .unwrap();
-        let envelope = ProtectedArtifactEnvelope::from_bytes(&protected.artifact).unwrap();
-        let (shell_key, _) = derive_shell_keys(&master, &envelope.nonce).unwrap();
 
-        let decoded_v3 = protected_monolith_decode_payload(
-            &envelope.payload,
-            &shell_key,
-            &envelope.nonce,
-            envelope.chunk_size as usize,
-            envelope.original_size as usize,
-            envelope.compressed_size as usize,
-            envelope.compression_algorithm,
-            envelope.encryption_algorithm,
-            envelope.preset,
-        )
-        .unwrap();
-        let decoded_with_v2_shell = field_monolith_decode_payload(
-            &envelope.payload,
-            &shell_key,
-            &envelope.nonce,
-            envelope.chunk_size as usize,
-        )
-        .unwrap();
-        let decoded_with_wrong_metadata = protected_monolith_decode_payload(
-            &envelope.payload,
-            &shell_key,
-            &envelope.nonce,
-            envelope.chunk_size as usize,
-            envelope.original_size as usize,
-            envelope.compressed_size as usize + 1,
-            envelope.compression_algorithm,
-            envelope.encryption_algorithm,
-            envelope.preset,
-        )
-        .unwrap();
-
-        assert_eq!(envelope.version, PROTECTED_ARTIFACT_VERSION);
-        assert_ne!(decoded_v3, decoded_with_v2_shell);
-        assert_ne!(decoded_v3, decoded_with_wrong_metadata);
+        assert_ne!(protected.artifact[..4], PROTECTED_ARTIFACT_MAGIC);
+        assert_eq!(
+            ProtectedArtifactEnvelope::from_bytes(&protected.artifact).unwrap_err(),
+            Error::InvalidFormat
+        );
         assert_eq!(open(&protected.artifact, &master).unwrap(), payload);
+        assert!(open(&protected.artifact, &wrong_master).is_err());
+
+        let mut tampered = protected.artifact.clone();
+        let index = tampered.len() / 2;
+        tampered[index] ^= 0x80;
+        assert_eq!(
+            open(&tampered, &master).unwrap_err(),
+            Error::AuthenticationFailed
+        );
+    }
+
+    #[cfg(feature = "compression")]
+    #[test]
+    fn protected_v4_canonicalizes_nonce_that_collides_with_known_magic() {
+        let master = fixed_key();
+        let payload =
+            b"route nonces should never make v4 look like a known Voided format".repeat(64);
+
+        for magic in [
+            PROTECTED_ARTIFACT_MAGIC,
+            FUSED_SHELL_MAGIC,
+            *crate::MAGIC_ENCRYPTED,
+        ] {
+            let mut nonce = [0u8; SHELL_NONCE_SIZE];
+            nonce[..4].copy_from_slice(&magic);
+
+            let protected = protect(
+                &payload,
+                &master,
+                Some(ProtectOptions {
+                    shell_nonce: Some(nonce),
+                    ..ProtectOptions::default()
+                }),
+            )
+            .unwrap();
+
+            assert!(!protected_route_nonce_has_known_magic(
+                &protected.info.shell_nonce
+            ));
+            assert_eq!(protected.info.shell_nonce[0], nonce[0] ^ 0x80);
+            assert_eq!(open(&protected.artifact, &master).unwrap(), payload);
+        }
+    }
+
+    #[cfg(feature = "compression")]
+    #[test]
+    fn open_still_decodes_v3_full_flow_monolith_protected_artifacts() {
+        let master = fixed_key();
+        let payload = b"v3 full-flow monolith artifacts must stay openable".repeat(256);
+        let opts = ProtectOptions {
+            shell_nonce: Some([7u8; SHELL_NONCE_SIZE]),
+            ..ProtectOptions::default()
+        };
+        let nonce = opts.shell_nonce.unwrap();
+        let compression_result = compression::compress(
+            &payload,
+            Some(CompressionOptions {
+                algorithm: opts.compression_algorithm,
+                min_size_threshold: opts.compression_min_size_threshold,
+                level: opts.compression_level,
+            }),
+        )
+        .unwrap();
+        let encrypted = crate::encryption::encrypt(
+            &compression_result.compressed,
+            &master,
+            Some(EncryptOptions {
+                algorithm: opts.encryption_algorithm,
+                aad: None,
+            }),
+        )
+        .unwrap();
+        let encrypted_bytes = encrypted.to_bytes();
+        let (shell_key, tag_key) = derive_shell_keys(&master, &nonce).unwrap();
+        let (shell_payload, chunk_size) = protected_monolith_encode_payload(
+            &encrypted_bytes,
+            &shell_key,
+            &nonce,
+            None,
+            payload.len(),
+            compression_result.compressed.len(),
+            compression_result.algorithm,
+            encrypted.algorithm,
+            opts.preset,
+        )
+        .unwrap();
+        let mut envelope = ProtectedArtifactEnvelope {
+            version: PROTECTED_ARTIFACT_V3_VERSION,
+            preset: opts.preset,
+            compression_algorithm: compression_result.algorithm,
+            encryption_algorithm: encrypted.algorithm,
+            chunk_size: chunk_size as u32,
+            original_size: payload.len() as u64,
+            compressed_size: compression_result.compressed.len() as u64,
+            nonce,
+            payload: shell_payload,
+            tag: [0u8; SHELL_TAG_SIZE],
+        };
+        envelope.tag = compute_shell_tag(&envelope.to_unsigned_bytes(), &tag_key).unwrap();
+
+        let restored = open(&envelope.to_bytes(), &master).unwrap();
+        assert_eq!(restored, payload);
+        assert_eq!(
+            inspect_artifact(&envelope.to_bytes()).unwrap().version,
+            PROTECTED_ARTIFACT_V3_VERSION
+        );
     }
 
     #[cfg(feature = "compression")]
