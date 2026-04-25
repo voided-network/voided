@@ -19,6 +19,7 @@ use voided_core::{
     compression::{self, CompressionAlgorithm, CompressionOptions},
     encryption::{self, Algorithm as EncryptionAlgorithm, EncryptOptions, EncryptionResult, Key},
     shell::{self, FusedPreset, FusedShellOptions, ProtectOptions},
+    MAGIC_ENCRYPTED,
 };
 
 const KEY: [u8; 32] = [0x42; 32];
@@ -607,6 +608,8 @@ struct AggregateReport {
     tamper_trials: usize,
     wrong_key_accepts: usize,
     wrong_key_trials: usize,
+    known_magic_prefix_hits: usize,
+    known_magic_prefix_trials: usize,
     entropy_bits_per_byte: f64,
     entropy_gap_bits_per_byte: f64,
     chi_square_per_df: f64,
@@ -633,6 +636,7 @@ struct FixtureReport {
     tamper_accepts: usize,
     tamper_trials: usize,
     wrong_key_accepts: usize,
+    known_magic_prefix: bool,
     entropy_bits_per_byte: f64,
     chi_square_per_df: f64,
     serial_correlation: f64,
@@ -663,6 +667,8 @@ fn run_candidate(
     let mut tamper_trials = 0usize;
     let mut wrong_key_accepts = 0usize;
     let mut wrong_key_trials = 0usize;
+    let mut known_magic_prefix_hits = 0usize;
+    let mut known_magic_prefix_trials = 0usize;
     let mut same_input_drift_sum = 0.0;
     let mut input_bit_flip_delta_sum = 0.0;
     let mut input_delta_len_delta_sum = 0isize;
@@ -683,6 +689,8 @@ fn run_candidate(
         tamper_trials += report.tamper_trials;
         wrong_key_accepts += report.wrong_key_accepts;
         wrong_key_trials += 1;
+        known_magic_prefix_hits += usize::from(report.known_magic_prefix);
+        known_magic_prefix_trials += 1;
         same_input_drift_sum += report.same_input_drift_pct;
         input_bit_flip_delta_sum += report.input_bit_flip_delta_pct;
         input_delta_len_delta_sum += report.input_delta_len_delta_bytes;
@@ -708,6 +716,8 @@ fn run_candidate(
         tamper_trials,
         wrong_key_accepts,
         wrong_key_trials,
+        known_magic_prefix_hits,
+        known_magic_prefix_trials,
         entropy_bits_per_byte: stats.entropy_bits_per_byte,
         entropy_gap_bits_per_byte: 8.0 - stats.entropy_bits_per_byte,
         chi_square_per_df: stats.chi_square_per_df,
@@ -765,6 +775,7 @@ fn run_fixture(
         tamper_accepts,
         tamper_trials,
         wrong_key_accepts,
+        known_magic_prefix: has_known_magic_prefix(&output),
         entropy_bits_per_byte: stats.entropy_bits_per_byte,
         chi_square_per_df: stats.chi_square_per_df,
         serial_correlation: stats.serial_correlation,
@@ -998,6 +1009,12 @@ fn normalized_hamming(left: &[u8], right: &[u8]) -> f64 {
     (common_bits + extra_bits) as f64 / (max_len * 8) as f64
 }
 
+fn has_known_magic_prefix(bytes: &[u8]) -> bool {
+    bytes.starts_with(&shell::PROTECTED_ARTIFACT_MAGIC)
+        || bytes.starts_with(&shell::FUSED_SHELL_MAGIC)
+        || bytes.starts_with(MAGIC_ENCRYPTED)
+}
+
 fn ratio(numerator: usize, denominator: usize) -> f64 {
     if denominator == 0 {
         if numerator == 0 {
@@ -1082,6 +1099,19 @@ fn print_markdown(report: &Report) {
     }
     println!();
 
+    println!("## Misdirection Surface");
+    println!();
+    println!("| candidate | known Voided magic prefix hits / trials |");
+    println!("|---|---:|");
+    for candidate in &report.candidates {
+        let a = &candidate.aggregate;
+        println!(
+            "| `{}` | {} / {} |",
+            candidate.candidate, a.known_magic_prefix_hits, a.known_magic_prefix_trials
+        );
+    }
+    println!();
+
     println!("## Size And Speed");
     println!();
     println!("| candidate | output bytes | byte delta | output/input | overhead % | median enc MiB/s | median dec MiB/s | weighted enc MiB/s | weighted dec MiB/s |");
@@ -1131,15 +1161,16 @@ fn print_markdown(report: &Report) {
         for candidate in &report.candidates {
             println!();
             println!("### {}", candidate.candidate);
-            println!("| fixture | input bytes | output bytes | overhead % | enc MiB/s | dec MiB/s | entropy | chi-square/df | same-input drift % | input-bit delta % |");
-            println!("|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|");
+            println!("| fixture | input bytes | output bytes | overhead % | magic prefix | enc MiB/s | dec MiB/s | entropy | chi-square/df | same-input drift % | input-bit delta % |");
+            println!("|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|");
             for detail in &candidate.details {
                 println!(
-                    "| `{}` | {} | {} | {} | {:.3} | {:.3} | {:.6} | {:.6} | {:.6} | {:.6} |",
+                    "| `{}` | {} | {} | {} | {} | {:.3} | {:.3} | {:.6} | {:.6} | {:.6} | {:.6} |",
                     detail.fixture,
                     detail.input_bytes,
                     detail.output_bytes,
                     fmt_float(detail.overhead_pct),
+                    detail.known_magic_prefix,
                     detail.encode_mib_s,
                     detail.decode_mib_s,
                     detail.entropy_bits_per_byte,
@@ -1161,11 +1192,11 @@ fn print_json(report: &Report) -> Result<(), String> {
 }
 
 fn print_csv(report: &Report) {
-    println!("candidate,fixture_count,input_bytes,output_bytes,byte_delta,output_to_input_ratio,overhead_pct,median_encode_mib_s,median_decode_mib_s,weighted_encode_mib_s,weighted_decode_mib_s,roundtrip_failures,tamper_accepts,tamper_trials,wrong_key_accepts,wrong_key_trials,entropy_bits_per_byte,entropy_gap_bits_per_byte,chi_square_per_df,serial_correlation,mean_abs_bit_bias_pct,max_byte_frequency_pct,same_input_drift_pct,input_bit_flip_delta_pct,input_delta_minus_drift_pct,input_delta_len_delta_mean_bytes");
+    println!("candidate,fixture_count,input_bytes,output_bytes,byte_delta,output_to_input_ratio,overhead_pct,median_encode_mib_s,median_decode_mib_s,weighted_encode_mib_s,weighted_decode_mib_s,roundtrip_failures,tamper_accepts,tamper_trials,wrong_key_accepts,wrong_key_trials,known_magic_prefix_hits,known_magic_prefix_trials,entropy_bits_per_byte,entropy_gap_bits_per_byte,chi_square_per_df,serial_correlation,mean_abs_bit_bias_pct,max_byte_frequency_pct,same_input_drift_pct,input_bit_flip_delta_pct,input_delta_minus_drift_pct,input_delta_len_delta_mean_bytes");
     for candidate in &report.candidates {
         let a = &candidate.aggregate;
         println!(
-            "{},{},{},{},{},{:.9},{},{:.9},{:.9},{:.9},{:.9},{},{},{},{},{},{:.9},{:.9},{:.9},{:.9},{:.9},{:.9},{:.9},{:.9},{:.9},{:.9}",
+            "{},{},{},{},{},{:.9},{},{:.9},{:.9},{:.9},{:.9},{},{},{},{},{},{},{},{:.9},{:.9},{:.9},{:.9},{:.9},{:.9},{:.9},{:.9},{:.9},{:.9}",
             candidate.candidate,
             a.fixture_count,
             a.input_bytes,
@@ -1182,6 +1213,8 @@ fn print_csv(report: &Report) {
             a.tamper_trials,
             a.wrong_key_accepts,
             a.wrong_key_trials,
+            a.known_magic_prefix_hits,
+            a.known_magic_prefix_trials,
             a.entropy_bits_per_byte,
             a.entropy_gap_bits_per_byte,
             a.chi_square_per_df,

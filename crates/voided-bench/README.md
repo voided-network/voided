@@ -6,6 +6,10 @@ This benchmark intentionally does not emit a capped "security score." Security
 gates are reported as counts, artifact statistics are reported as raw measured
 values, and performance/size are reported directly.
 
+It also reports a small misdirection-surface check: known Voided magic-prefix
+hits. This is not a full security score, but it makes visible whether an
+artifact immediately announces itself as `VOF2`, `VFS2`, or `VOI1`.
+
 Run the synthetic corpus:
 
 ```sh
