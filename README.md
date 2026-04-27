@@ -92,7 +92,7 @@ Use fused shell primitives when:
 
 ### Full-Flow Fused Artifact
 
-The full-flow helpers are the normal Voided v2 product surface:
+The full-flow helpers are the normal Voided v3 product surface:
 
 - `protect`
 - `open`
@@ -139,7 +139,8 @@ encrypted payload a first-class artifact shape.
 Current protected artifacts use the v3 protect-level monolith path: compression,
 encryption, and shelling still run in the safe order above, but the shell state
 is now derived from the full-flow artifact plan rather than only from encrypted
-payload length. Legacy v1 and v2 protected artifacts remain openable.
+payload length. Normal `open` is current-v3-only; legacy v1 and v2 protected
+artifacts are handled through the explicit rotation helpers.
 
 If you already have the bytes you want inside the shell, use shell primitives.
 If you want Voided to do the whole flow for you, use full-flow helpers.
@@ -183,6 +184,12 @@ Benchmark model:
 - Natural bounded measurements, like input-bit delta percentage, stay
   percentages. Everything else stays in its native unit.
 
+Important comparison note: `voided-fuse-shell-current` is the raw shell
+primitive only. It is useful for measuring shell overhead, but it is not the old
+full `protect` path. The old product baseline is the former full-flow fused
+protect path: compress, encrypt, then wrap the encrypted payload in the fused
+protected envelope.
+
 Fresh synthetic run from this checkout:
 
 Corpus: `synthetic` | fixtures: `11` | input bytes: `1,885,227` | samples:
@@ -200,29 +207,53 @@ Corpus: `synthetic` | fixtures: `11` | input bytes: `1,885,227` | samples:
 | `gzip+xchacha20-poly1305` | 0 | 0 / 33 | 0 / 11 |
 | `brotli+xchacha20-poly1305` | 0 | 0 / 33 | 0 / 11 |
 
+### Misdirection Surface
+
+| candidate | known Voided magic prefix hits / trials |
+|---|---:|
+| `voided-protect-current` | 0 / 11 |
+| `voided-c1e-current` | 11 / 11 |
+| `voided-fuse-shell-current` | 11 / 11 |
+| `xchacha20-poly1305-raw` | 0 / 11 |
+| `aes-256-gcm-raw` | 0 / 11 |
+| `gzip+xchacha20-poly1305` | 0 / 11 |
+| `brotli+xchacha20-poly1305` | 0 / 11 |
+
 ### Size And Speed
 
 | candidate | output bytes | byte delta | output/input | overhead % | median enc MiB/s | median dec MiB/s | weighted enc MiB/s | weighted dec MiB/s |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|
-| `voided-protect-current` | 1,377,284 | -507,943 | 0.730567 | -26.943334 | 70.934 | 8.429 | 74.631 | 74.249 |
-| `voided-c1e-current` | 1,376,389 | -508,838 | 0.730092 | -26.990808 | 88.239 | 47.531 | 127.120 | 247.761 |
-| `voided-fuse-shell-current` | 1,886,119 | 892 | 1.000473 | 0.047315 | 128.967 | 102.998 | 131.534 | 105.785 |
-| `xchacha20-poly1305-raw` | 1,885,667 | 440 | 1.000233 | 0.023339 | 291.332 | 297.043 | 290.154 | 310.612 |
-| `aes-256-gcm-raw` | 1,885,535 | 308 | 1.000163 | 0.016338 | 130.351 | 130.826 | 132.780 | 133.093 |
-| `gzip+xchacha20-poly1305` | 1,389,776 | -495,451 | 0.737193 | -26.280708 | 73.302 | 29.012 | 52.984 | 244.030 |
-| `brotli+xchacha20-poly1305` | 1,376,238 | -508,989 | 0.730012 | -26.998818 | 161.631 | 11.289 | 136.946 | 250.949 |
+| `voided-protect-current` | 1,378,732 | -506,495 | 0.731335 | -26.866526 | 6.150 | 1.758 | 6.723 | 12.678 |
+| `voided-c1e-current` | 1,376,389 | -508,838 | 0.730092 | -26.990808 | 11.445 | 5.005 | 13.132 | 38.149 |
+| `voided-fuse-shell-current` | 1,886,119 | 892 | 1.000473 | 0.047315 | 14.729 | 15.188 | 17.435 | 13.424 |
+| `xchacha20-poly1305-raw` | 1,885,667 | 440 | 1.000233 | 0.023339 | 34.105 | 48.127 | 50.164 | 54.633 |
+| `aes-256-gcm-raw` | 1,885,535 | 308 | 1.000163 | 0.016338 | 21.366 | 19.635 | 11.621 | 17.040 |
+| `gzip+xchacha20-poly1305` | 1,389,776 | -495,451 | 0.737193 | -26.280708 | 7.266 | 4.986 | 6.464 | 47.782 |
+| `brotli+xchacha20-poly1305` | 1,376,238 | -508,989 | 0.730012 | -26.998818 | 13.759 | 3.399 | 19.048 | 64.572 |
 
 ### Artifact Statistics
 
 | candidate | entropy bits/byte | entropy gap | chi-square/df | serial corr | mean bit bias % | max byte freq % | same-input drift % | input-bit delta % | delta minus drift % | input delta len mean |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| `voided-protect-current` | 7.999882 | 0.000118 | 0.880547 | -0.001221 | 0.043437 | 0.403403 | 41.113415 | 44.161890 | 3.048475 | 6.000 |
-| `voided-c1e-current` | 7.999883 | 0.000117 | 0.877620 | 0.000193 | 0.042003 | 0.403738 | 47.114666 | 49.397124 | 2.282458 | 6.000 |
+| `voided-protect-current` | 7.999876 | 0.000124 | 0.930009 | 0.000222 | 0.048614 | 0.405735 | 0.000000 | 35.486943 | 35.486943 | 11.273 |
+| `voided-c1e-current` | 7.999884 | 0.000116 | 0.864551 | 0.001731 | 0.033666 | 0.408024 | 47.577299 | 49.887021 | 2.309722 | 6.000 |
 | `voided-fuse-shell-current` | 7.999898 | 0.000102 | 1.044534 | -0.000696 | 0.026350 | 0.404640 | 0.000000 | 22.833510 | 22.833510 | 0.182 |
 | `xchacha20-poly1305-raw` | 7.999893 | 0.000107 | 1.091969 | 0.000145 | 0.032078 | 0.405957 | 0.000000 | 2.583258 | 2.583258 | 0.091 |
 | `aes-256-gcm-raw` | 7.999892 | 0.000108 | 1.110937 | -0.000797 | 0.038464 | 0.403175 | 0.000000 | 4.282732 | 4.282732 | 0.091 |
 | `gzip+xchacha20-poly1305` | 7.999856 | 0.000144 | 1.087583 | -0.000424 | 0.044081 | 0.404022 | 0.000000 | 24.549544 | 24.549544 | 2.727 |
 | `brotli+xchacha20-poly1305` | 7.999881 | 0.000119 | 0.891447 | 0.000588 | 0.029746 | 0.403782 | 0.000000 | 31.669650 | 31.669650 | 6.273 |
+
+### V3 Versus Old Full Protect
+
+The old full-protect baseline below was measured with the same benchmark harness
+against the former fused-protect implementation from commit `d8dcebb`. This is
+the apples-to-apples product comparison; it is separate from the shell-only row
+above.
+
+| candidate | known prefix hits | output bytes | byte delta | overhead % | median enc MiB/s | median dec MiB/s | weighted enc MiB/s | weighted dec MiB/s | entropy gap | chi-square/df | same-input drift % | input-bit delta % |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| `current-v3-protect-monolith` | 0 / 11 | 1,378,732 | -506,495 | -26.866526 | 6.150 | 1.758 | 6.723 | 12.678 | 0.000124 | 0.930009 | 0.000000 | 35.486943 |
+| `old-v2-full-protect-fused` | 11 / 11 | 1,377,284 | -507,943 | -26.943334 | 10.551 | 3.254 | 13.084 | 13.616 | 0.000142 | 1.060872 | 41.231236 | 44.670603 |
 
 ## Command Map
 
