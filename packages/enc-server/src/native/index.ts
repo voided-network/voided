@@ -93,7 +93,9 @@ export interface NativeModule {
     shellChunkSize?: number,
   ): ProtectResult;
   open(artifact: Buffer, key: Buffer): Buffer;
+  openRotationArtifact(artifact: Buffer, key: Buffer): Buffer;
   inspectArtifact(artifact: Buffer): ProtectedArtifactInfo;
+  inspectRotationArtifact(artifact: Buffer): ProtectedArtifactInfo;
   repackArtifact(
     artifact: Buffer,
     key: Buffer,

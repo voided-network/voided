@@ -1,4 +1,4 @@
-//! Fused shell primitives and fused-first protect/open flows for Voided v2.
+//! Fused shell primitives and whole-monolith protect/open flows for Voided v3.
 
 use alloc::{format, string::String, vec, vec::Vec};
 
@@ -36,8 +36,7 @@ const FUSED_SHELL_V1_VERSION: u8 = 0x01;
 pub const PROTECTED_ARTIFACT_MAGIC: [u8; 4] = *b"VOF2";
 
 /// Protected artifact version.
-pub const PROTECTED_ARTIFACT_VERSION: u8 = 0x04;
-const PROTECTED_ARTIFACT_V3_VERSION: u8 = 0x03;
+pub const PROTECTED_ARTIFACT_VERSION: u8 = 0x03;
 const PROTECTED_ARTIFACT_V2_VERSION: u8 = 0x02;
 const PROTECTED_ARTIFACT_V1_VERSION: u8 = 0x01;
 
@@ -103,7 +102,7 @@ fn domain_info(domain_label: &str) -> String {
     format!("voided:shell:{domain_label}")
 }
 
-/// Stable fused preset ids for Voided v2.
+/// Stable fused preset ids.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[repr(u8)]
 pub enum FusedPreset {
@@ -462,7 +461,7 @@ impl ProtectedArtifactEnvelope {
         let chunk_size = self.chunk_size.max(1) as usize;
         let field_monolith_geometry = if matches!(
             self.version,
-            PROTECTED_ARTIFACT_V3_VERSION | PROTECTED_ARTIFACT_V2_VERSION
+            PROTECTED_ARTIFACT_VERSION | PROTECTED_ARTIFACT_V2_VERSION
         ) {
             field_monolith_infer_geometry(self.payload.len(), chunk_size)
         } else {
@@ -618,7 +617,7 @@ pub fn inspect_fused(data: &[u8]) -> Result<FusedShellInfo> {
 }
 
 #[cfg(feature = "compression")]
-/// Run the fused-first Voided v2 full flow.
+/// Run the Voided v3 whole-monolith full flow.
 pub fn protect(
     plaintext: &[u8],
     master_key: &Key,
@@ -629,12 +628,23 @@ pub fn protect(
 }
 
 #[cfg(feature = "compression")]
-/// Open a serialized fused protected artifact.
+/// Open a serialized Voided v3 whole-monolith artifact.
 pub fn open(artifact: &[u8], master_key: &Key) -> Result<Vec<u8>> {
-    if !artifact_starts_with_protected_magic(artifact) {
-        return whole_monolith_v0_open(artifact, master_key);
-    }
+    whole_monolith_v0_open(artifact, master_key)
+}
 
+#[cfg(feature = "compression")]
+/// Open either the current v3 artifact or an explicit legacy VOF2 rotation artifact.
+pub fn open_rotation_artifact(artifact: &[u8], master_key: &Key) -> Result<Vec<u8>> {
+    if artifact_starts_with_protected_magic(artifact) {
+        open_legacy_protected_artifact(artifact, master_key)
+    } else {
+        open(artifact, master_key)
+    }
+}
+
+#[cfg(feature = "compression")]
+fn open_legacy_protected_artifact(artifact: &[u8], master_key: &Key) -> Result<Vec<u8>> {
     let envelope = ProtectedArtifactEnvelope::from_bytes(artifact)?;
     let (shell_key, tag_key) = derive_shell_keys(master_key, &envelope.nonce)?;
     if !verify_shell_tag(&envelope.to_unsigned_bytes(), &envelope.tag, &tag_key)? {
@@ -642,7 +652,7 @@ pub fn open(artifact: &[u8], master_key: &Key) -> Result<Vec<u8>> {
     }
 
     let encrypted_bytes = match envelope.version {
-        PROTECTED_ARTIFACT_V3_VERSION => protected_monolith_decode_payload(
+        PROTECTED_ARTIFACT_VERSION => protected_monolith_decode_payload(
             &envelope.payload,
             &shell_key,
             &envelope.nonce,
@@ -694,12 +704,18 @@ pub fn open(artifact: &[u8], master_key: &Key) -> Result<Vec<u8>> {
 }
 
 #[cfg(feature = "compression")]
-/// Inspect a protected artifact without decrypting it.
+/// Inspect a current Voided v3 artifact without decrypting it.
 pub fn inspect_artifact(artifact: &[u8]) -> Result<ProtectedArtifactInfo> {
+    whole_monolith_v0_inspect_artifact(artifact)
+}
+
+#[cfg(feature = "compression")]
+/// Inspect either the current v3 artifact or an explicit legacy VOF2 rotation artifact.
+pub fn inspect_rotation_artifact(artifact: &[u8]) -> Result<ProtectedArtifactInfo> {
     if artifact_starts_with_protected_magic(artifact) {
         Ok(ProtectedArtifactEnvelope::from_bytes(artifact)?.info())
     } else {
-        whole_monolith_v0_inspect_artifact(artifact)
+        inspect_artifact(artifact)
     }
 }
 
@@ -728,10 +744,7 @@ fn is_supported_fused_shell_version(version: u8) -> bool {
 fn is_supported_protected_artifact_version(version: u8) -> bool {
     matches!(
         version,
-        PROTECTED_ARTIFACT_V1_VERSION
-            | PROTECTED_ARTIFACT_V2_VERSION
-            | PROTECTED_ARTIFACT_V3_VERSION
-            | PROTECTED_ARTIFACT_VERSION
+        PROTECTED_ARTIFACT_V1_VERSION | PROTECTED_ARTIFACT_V2_VERSION | PROTECTED_ARTIFACT_VERSION
     )
 }
 
@@ -3352,7 +3365,7 @@ mod tests {
 
     #[cfg(feature = "compression")]
     #[test]
-    fn protect_reports_v4_whole_monolith_metadata() {
+    fn protect_reports_v3_whole_monolith_metadata() {
         let master = fixed_key();
         let payload = b"protect should expose full-flow monolith geometry".repeat(512);
 
@@ -3371,10 +3384,10 @@ mod tests {
 
     #[cfg(feature = "compression")]
     #[test]
-    fn protected_v4_whole_monolith_rejects_legacy_parser_wrong_key_and_tamper() {
+    fn protected_v3_whole_monolith_rejects_legacy_parser_wrong_key_and_tamper() {
         let master = fixed_key();
         let wrong = Key::from_bytes(&[0x24; 32]).unwrap();
-        let payload = b"v4 should be a masked whole monolith artifact".repeat(256);
+        let payload = b"v3 should be a masked whole monolith artifact".repeat(256);
         let protected = protect(
             &payload,
             &master,
@@ -3398,7 +3411,7 @@ mod tests {
 
     #[cfg(feature = "compression")]
     #[test]
-    fn open_still_decodes_v2_shell_monolith_protected_artifacts() {
+    fn rotation_helper_decodes_v2_shell_monolith_protected_artifacts() {
         let master = fixed_key();
         let payload = b"v2 shell-monolith protected artifacts must stay openable".repeat(256);
         let opts = ProtectOptions {
@@ -3442,17 +3455,88 @@ mod tests {
         };
         envelope.tag = compute_shell_tag(&envelope.to_unsigned_bytes(), &tag_key).unwrap();
 
-        let restored = open(&envelope.to_bytes(), &master).unwrap();
+        assert!(open(&envelope.to_bytes(), &master).is_err());
+        let restored = open_rotation_artifact(&envelope.to_bytes(), &master).unwrap();
         assert_eq!(restored, payload);
         assert_eq!(
-            inspect_artifact(&envelope.to_bytes()).unwrap().version,
+            inspect_rotation_artifact(&envelope.to_bytes())
+                .unwrap()
+                .version,
             PROTECTED_ARTIFACT_V2_VERSION
         );
     }
 
     #[cfg(feature = "compression")]
     #[test]
-    fn open_still_decodes_v1_protected_artifacts() {
+    fn rotation_helper_decodes_legacy_v3_protected_monolith_artifacts() {
+        let master = fixed_key();
+        let payload =
+            b"legacy v3 protected-monolith artifacts stay explicit rotation only".repeat(256);
+        let opts = ProtectOptions {
+            shell_nonce: Some([7u8; SHELL_NONCE_SIZE]),
+            ..ProtectOptions::default()
+        };
+        let nonce = opts.shell_nonce.unwrap();
+        let compression_result = compression::compress(
+            &payload,
+            Some(CompressionOptions {
+                algorithm: opts.compression_algorithm,
+                min_size_threshold: opts.compression_min_size_threshold,
+                level: opts.compression_level,
+            }),
+        )
+        .unwrap();
+        let encrypted = crate::encryption::encrypt(
+            &compression_result.compressed,
+            &master,
+            Some(EncryptOptions {
+                algorithm: opts.encryption_algorithm,
+                aad: None,
+            }),
+        )
+        .unwrap();
+        let encrypted_bytes = encrypted.to_bytes();
+        let (shell_key, tag_key) = derive_shell_keys(&master, &nonce).unwrap();
+        let (shell_payload, chunk_size) = protected_monolith_encode_payload(
+            &encrypted_bytes,
+            &shell_key,
+            &nonce,
+            None,
+            payload.len(),
+            compression_result.compressed.len(),
+            compression_result.algorithm,
+            encrypted.algorithm,
+            opts.preset,
+        )
+        .unwrap();
+        let mut envelope = ProtectedArtifactEnvelope {
+            version: PROTECTED_ARTIFACT_VERSION,
+            preset: opts.preset,
+            compression_algorithm: compression_result.algorithm,
+            encryption_algorithm: encrypted.algorithm,
+            chunk_size: chunk_size as u32,
+            original_size: payload.len() as u64,
+            compressed_size: compression_result.compressed.len() as u64,
+            nonce,
+            payload: shell_payload,
+            tag: [0u8; SHELL_TAG_SIZE],
+        };
+        envelope.tag = compute_shell_tag(&envelope.to_unsigned_bytes(), &tag_key).unwrap();
+
+        assert!(open(&envelope.to_bytes(), &master).is_err());
+        let restored = open_rotation_artifact(&envelope.to_bytes(), &master).unwrap();
+        assert_eq!(restored, payload);
+        assert_eq!(
+            inspect_rotation_artifact(&envelope.to_bytes())
+                .unwrap()
+                .version,
+            PROTECTED_ARTIFACT_VERSION
+        );
+    }
+
+    #[cfg(feature = "compression")]
+    #[test]
+    fn rotation_helper_decodes_v1_protected_artifacts() {
         let master = fixed_key();
         let payload = b"legacy protected artifacts must stay openable".repeat(256);
         let opts = ProtectOptions {
@@ -3504,10 +3588,13 @@ mod tests {
         };
         envelope.tag = compute_shell_tag(&envelope.to_unsigned_bytes(), &tag_key).unwrap();
 
-        let restored = open(&envelope.to_bytes(), &master).unwrap();
+        assert!(open(&envelope.to_bytes(), &master).is_err());
+        let restored = open_rotation_artifact(&envelope.to_bytes(), &master).unwrap();
         assert_eq!(restored, payload);
         assert_eq!(
-            inspect_artifact(&envelope.to_bytes()).unwrap().version,
+            inspect_rotation_artifact(&envelope.to_bytes())
+                .unwrap()
+                .version,
             PROTECTED_ARTIFACT_V1_VERSION
         );
     }

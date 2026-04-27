@@ -539,7 +539,7 @@ pub fn inspect_fused(data: &[u8]) -> Result<JsValue, JsValue> {
         .map_err(|e| JsValue::from_str(&e.to_string()))
 }
 
-/// Protect bytes with the fused-first Voided v2 full flow.
+/// Protect bytes with the Voided v3 whole-monolith full flow.
 #[wasm_bindgen]
 pub fn protect(
     data: &[u8],
@@ -571,17 +571,34 @@ pub fn protect(
         .map_err(|e| JsValue::from_str(&e.to_string()))
 }
 
-/// Open a fused protected artifact.
+/// Open a Voided v3 whole-monolith artifact.
 #[wasm_bindgen(js_name = open)]
 pub fn open_artifact(artifact: &[u8], key: &[u8]) -> Result<Vec<u8>, JsValue> {
     let key = parse_key(key)?;
     voided_core::shell::open(artifact, &key).map_err(|e| JsValue::from_str(&e.to_string()))
 }
 
-/// Inspect a fused protected artifact without a key.
+/// Open either a current v3 artifact or an explicit legacy VOF2 rotation artifact.
+#[wasm_bindgen(js_name = openRotationArtifact)]
+pub fn open_rotation_artifact(artifact: &[u8], key: &[u8]) -> Result<Vec<u8>, JsValue> {
+    let key = parse_key(key)?;
+    voided_core::shell::open_rotation_artifact(artifact, &key)
+        .map_err(|e| JsValue::from_str(&e.to_string()))
+}
+
+/// Inspect a Voided v3 whole-monolith artifact without a key.
 #[wasm_bindgen(js_name = inspectArtifact)]
 pub fn inspect_artifact(artifact: &[u8]) -> Result<JsValue, JsValue> {
     let info = voided_core::shell::inspect_artifact(artifact)
+        .map_err(|e| JsValue::from_str(&e.to_string()))?;
+    serde_wasm_bindgen::to_value(&artifact_info_from_core(info))
+        .map_err(|e| JsValue::from_str(&e.to_string()))
+}
+
+/// Inspect either a current v3 artifact or an explicit legacy VOF2 rotation artifact.
+#[wasm_bindgen(js_name = inspectRotationArtifact)]
+pub fn inspect_rotation_artifact(artifact: &[u8]) -> Result<JsValue, JsValue> {
+    let info = voided_core::shell::inspect_rotation_artifact(artifact)
         .map_err(|e| JsValue::from_str(&e.to_string()))?;
     serde_wasm_bindgen::to_value(&artifact_info_from_core(info))
         .map_err(|e| JsValue::from_str(&e.to_string()))

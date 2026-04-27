@@ -241,8 +241,16 @@ export function open(artifact: Buffer, key: Buffer): Buffer {
   return native().open(artifact, key);
 }
 
+export function openRotationArtifact(artifact: Buffer, key: Buffer): Buffer {
+  return native().openRotationArtifact(artifact, key);
+}
+
 export function inspectArtifact(artifact: Buffer): ProtectedArtifactInfo {
   return native().inspectArtifact(artifact);
+}
+
+export function inspectRotationArtifact(artifact: Buffer): ProtectedArtifactInfo {
+  return native().inspectRotationArtifact(artifact);
 }
 
 export function repackArtifact(

@@ -551,7 +551,7 @@ pub fn inspect_fused(data: Buffer) -> Result<FusedShellInfo> {
     Ok(shell_info_from_core(info))
 }
 
-/// Protect bytes with the fused-first Voided v2 full flow.
+/// Protect bytes with the Voided v3 whole-monolith full flow.
 #[napi]
 pub fn protect(
     data: Buffer,
@@ -582,7 +582,7 @@ pub fn protect(
     Ok(protect_result_from_core(result))
 }
 
-/// Open a fused protected artifact.
+/// Open a Voided v3 whole-monolith artifact.
 #[napi(js_name = "open")]
 pub fn open_artifact(artifact: Buffer, key: Buffer) -> Result<Buffer> {
     let key = parse_key(key)?;
@@ -591,10 +591,27 @@ pub fn open_artifact(artifact: Buffer, key: Buffer) -> Result<Buffer> {
     Ok(Buffer::from(bytes))
 }
 
-/// Inspect a fused protected artifact without a key.
+/// Open either a current v3 artifact or an explicit legacy VOF2 rotation artifact.
+#[napi(js_name = "openRotationArtifact")]
+pub fn open_rotation_artifact(artifact: Buffer, key: Buffer) -> Result<Buffer> {
+    let key = parse_key(key)?;
+    let bytes = voided_core::shell::open_rotation_artifact(artifact.as_ref(), &key)
+        .map_err(|e| Error::from_reason(e.to_string()))?;
+    Ok(Buffer::from(bytes))
+}
+
+/// Inspect a Voided v3 whole-monolith artifact without a key.
 #[napi]
 pub fn inspect_artifact(artifact: Buffer) -> Result<ProtectedArtifactInfo> {
     let info = voided_core::shell::inspect_artifact(artifact.as_ref())
+        .map_err(|e| Error::from_reason(e.to_string()))?;
+    Ok(artifact_info_from_core(info))
+}
+
+/// Inspect either a current v3 artifact or an explicit legacy VOF2 rotation artifact.
+#[napi(js_name = "inspectRotationArtifact")]
+pub fn inspect_rotation_artifact(artifact: Buffer) -> Result<ProtectedArtifactInfo> {
+    let info = voided_core::shell::inspect_rotation_artifact(artifact.as_ref())
         .map_err(|e| Error::from_reason(e.to_string()))?;
     Ok(artifact_info_from_core(info))
 }
