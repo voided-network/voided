@@ -9,7 +9,7 @@ The current library surface is organized around three layers:
 2. fused shell primitives
 3. full-flow fused artifacts
 
-The default full flow in Voided v2 is:
+The default full flow in Voided v3 is:
 
 1. compression
 2. encryption
@@ -193,7 +193,7 @@ protected envelope.
 Fresh synthetic run from this checkout:
 
 Corpus: `synthetic` | fixtures: `11` | input bytes: `1,885,227` | samples:
-`2`
+`7`
 
 ### Security Gates
 
@@ -223,20 +223,20 @@ Corpus: `synthetic` | fixtures: `11` | input bytes: `1,885,227` | samples:
 
 | candidate | output bytes | byte delta | output/input | overhead % | median enc MiB/s | median dec MiB/s | weighted enc MiB/s | weighted dec MiB/s |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|
-| `voided-protect-current` | 1,377,438 | -507,789 | 0.730648 | -26.935165 | 66.400 | 12.254 | 73.471 | 74.654 |
-| `voided-c1e-current` | 1,376,389 | -508,838 | 0.730092 | -26.990808 | 91.605 | 49.068 | 132.367 | 250.621 |
-| `voided-fuse-shell-current` | 1,886,119 | 892 | 1.000473 | 0.047315 | 123.599 | 103.303 | 129.070 | 103.374 |
-| `xchacha20-poly1305-raw` | 1,885,667 | 440 | 1.000233 | 0.023339 | 311.081 | 309.409 | 312.729 | 311.162 |
-| `aes-256-gcm-raw` | 1,885,535 | 308 | 1.000163 | 0.016338 | 134.351 | 132.923 | 136.649 | 135.782 |
-| `gzip+xchacha20-poly1305` | 1,389,776 | -495,451 | 0.737193 | -26.280708 | 74.978 | 25.635 | 54.142 | 260.577 |
-| `brotli+xchacha20-poly1305` | 1,376,238 | -508,989 | 0.730012 | -26.998818 | 164.338 | 12.501 | 140.869 | 254.019 |
+| `voided-protect-current` | 1,377,230 | -507,997 | 0.730538 | -26.946198 | 17.964 | 2.597 | 27.834 | 41.063 |
+| `voided-c1e-current` | 1,376,389 | -508,838 | 0.730092 | -26.990808 | 44.919 | 30.716 | 77.698 | 147.603 |
+| `voided-fuse-shell-current` | 1,886,119 | 892 | 1.000473 | 0.047315 | 71.064 | 65.338 | 81.816 | 64.329 |
+| `xchacha20-poly1305-raw` | 1,885,667 | 440 | 1.000233 | 0.023339 | 195.610 | 198.019 | 195.806 | 199.262 |
+| `aes-256-gcm-raw` | 1,885,535 | 308 | 1.000163 | 0.016338 | 84.677 | 84.733 | 85.154 | 85.196 |
+| `gzip+xchacha20-poly1305` | 1,389,776 | -495,451 | 0.737193 | -26.280708 | 48.980 | 19.103 | 33.817 | 160.011 |
+| `brotli+xchacha20-poly1305` | 1,376,238 | -508,989 | 0.730012 | -26.998818 | 50.892 | 5.216 | 80.975 | 151.964 |
 
 ### Artifact Statistics
 
 | candidate | entropy bits/byte | entropy gap | chi-square/df | serial corr | mean bit bias % | max byte freq % | same-input drift % | input-bit delta % | delta minus drift % | input delta len mean |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| `voided-protect-current` | 7.999860 | 0.000140 | 1.049041 | -0.000032 | 0.026589 | 0.404301 | 39.473712 | 42.822175 | 3.348463 | 6.000 |
-| `voided-c1e-current` | 7.999861 | 0.000139 | 1.042415 | -0.000613 | 0.042266 | 0.406426 | 47.329074 | 49.666151 | 2.337077 | 6.000 |
+| `voided-protect-current` | 7.999856 | 0.000144 | 1.079627 | 0.000769 | 0.028381 | 0.406032 | 41.825863 | 44.723255 | 2.897392 | 6.000 |
+| `voided-c1e-current` | 7.999866 | 0.000134 | 1.005873 | 0.001865 | 0.031695 | 0.405191 | 47.963410 | 48.895452 | 0.932042 | 6.000 |
 | `voided-fuse-shell-current` | 7.999898 | 0.000102 | 1.044534 | -0.000696 | 0.026350 | 0.404640 | 0.000000 | 22.833510 | 22.833510 | 0.182 |
 | `xchacha20-poly1305-raw` | 7.999893 | 0.000107 | 1.091969 | 0.000145 | 0.032078 | 0.405957 | 0.000000 | 2.583258 | 2.583258 | 0.091 |
 | `aes-256-gcm-raw` | 7.999892 | 0.000108 | 1.110937 | -0.000797 | 0.038464 | 0.403175 | 0.000000 | 4.282732 | 4.282732 | 0.091 |
@@ -252,8 +252,8 @@ above.
 
 | candidate | known prefix hits | output bytes | byte delta | overhead % | median enc MiB/s | median dec MiB/s | weighted enc MiB/s | weighted dec MiB/s | entropy gap | chi-square/df | same-input drift % | input-bit delta % |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| `current-v3-protect-monolith` | 0 / 11 | 1,377,438 | -507,789 | -26.935165 | 66.400 | 12.254 | 73.471 | 74.654 | 0.000140 | 1.049041 | 39.473712 | 42.822175 |
-| `old-v2-full-protect-fused` | 11 / 11 | 1,377,284 | -507,943 | -26.943334 | 10.551 | 3.254 | 13.084 | 13.616 | 0.000142 | 1.060872 | 41.231236 | 44.670603 |
+| `current-v3-protect-monolith` | 0 / 11 | 1,377,230 | -507,997 | -26.946198 | 17.964 | 2.597 | 27.834 | 41.063 | 0.000144 | 1.079627 | 41.825863 | 44.723255 |
+| `old-v2-full-protect-fused` | 11 / 11 | 1,377,284 | -507,943 | -26.943334 | 15.519 | 3.812 | 16.230 | 20.756 | 0.000143 | 1.073400 | 41.015094 | 44.304145 |
 
 ## Command Map
 

@@ -10,7 +10,7 @@ use crate::{
         derive_key_hkdf, derive_key_hkdf_raw, Algorithm as EncryptionAlgorithm, EncryptionResult,
         Key,
     },
-    hash::{compare_hashes, generate_hmac, HashAlgorithm},
+    hash::{compare_hashes, generate_hmac, generate_hmac_parts, HashAlgorithm},
     Error, Result,
 };
 
@@ -68,7 +68,7 @@ const FIELD_MONOLITH_AUTO_MID_MAX: usize = 16 * 1024;
 #[cfg(feature = "compression")]
 const WHOLE_MONOLITH_V0_PUBLIC_SEED_BYTES: usize = 2;
 #[cfg(feature = "compression")]
-const WHOLE_MONOLITH_V0_PUBLIC_HEADER_LEN: usize = 52;
+const WHOLE_MONOLITH_V0_PUBLIC_HEADER_LEN: usize = 34;
 #[cfg(feature = "compression")]
 const WHOLE_MONOLITH_V0_MIN_ARTIFACT_LEN: usize =
     WHOLE_MONOLITH_V0_PUBLIC_SEED_BYTES + WHOLE_MONOLITH_V0_PUBLIC_HEADER_LEN + SHELL_TAG_SIZE;
@@ -512,6 +512,13 @@ pub fn derive_chunk_seed(
 /// Compute a truncated outer tag for shell payloads.
 pub fn compute_shell_tag(data: &[u8], tag_key: &Key) -> Result<[u8; SHELL_TAG_SIZE]> {
     let mac = generate_hmac(data, tag_key.as_bytes(), HashAlgorithm::Sha256)?;
+    let mut tag = [0u8; SHELL_TAG_SIZE];
+    tag.copy_from_slice(&mac[..SHELL_TAG_SIZE]);
+    Ok(tag)
+}
+
+fn compute_shell_tag_parts(parts: &[&[u8]], tag_key: &Key) -> Result<[u8; SHELL_TAG_SIZE]> {
+    let mac = generate_hmac_parts(parts, tag_key.as_bytes(), HashAlgorithm::Sha256)?;
     let mut tag = [0u8; SHELL_TAG_SIZE];
     tag.copy_from_slice(&mac[..SHELL_TAG_SIZE]);
     Ok(tag)
@@ -1061,7 +1068,14 @@ fn protected_monolith_decode_payload(
         target_cell_size,
     };
     let state = protected_monolith_initial_state(shell_key, nonce, plan)?;
-    field_monolith_decode_payload_with_state(payload, target_cell_size, state)
+    let decoded = field_monolith_decode_payload_with_state(payload, target_cell_size, state)?;
+    if decoded.len() != geometry.original_len {
+        return Err(Error::SizeMismatch {
+            expected: geometry.original_len,
+            actual: decoded.len(),
+        });
+    }
+    Ok(decoded)
 }
 
 #[cfg(feature = "compression")]
@@ -1073,7 +1087,23 @@ fn resolve_protected_monolith_cell_size(
     encrypted_len: usize,
     _preset: FusedPreset,
 ) -> Result<usize> {
-    resolve_field_monolith_current_cell_size(requested, encrypted_len)
+    if requested.is_some() {
+        return resolve_field_monolith_current_cell_size(requested, encrypted_len);
+    }
+
+    let target = if encrypted_len <= FIELD_MONOLITH_CURRENT_AUTO_TINY_MAX {
+        FIELD_MONOLITH_AUTO_TINY_CELL_BYTES
+    } else if encrypted_len <= FIELD_MONOLITH_CURRENT_AUTO_DIFFUSED_SMALL_MAX {
+        FIELD_MONOLITH_CURRENT_AUTO_DIFFUSED_SMALL_CELL_BYTES
+    } else {
+        FIELD_MONOLITH_MAX_CELL_BYTES
+    };
+
+    Ok(if encrypted_len == 0 {
+        target
+    } else {
+        target.min(encrypted_len)
+    })
 }
 
 #[cfg(feature = "compression")]
@@ -1123,12 +1153,9 @@ struct WholeMonolithV0Header {
     preset: FusedPreset,
     compression_algorithm: CompressionAlgorithm,
     encryption_algorithm: EncryptionAlgorithm,
-    shell_cell_size_policy: usize,
+    shell_cell_size: usize,
     original_size: usize,
     compressed_size: usize,
-    encrypted_size: usize,
-    shell_chunk_count: usize,
-    max_plain_chunk_size: usize,
     shell_nonce: [u8; SHELL_NONCE_SIZE],
 }
 
@@ -1140,13 +1167,10 @@ impl WholeMonolithV0Header {
         bytes[1] = self.preset as u8;
         bytes[2] = self.compression_algorithm as u8;
         bytes[3] = self.encryption_algorithm as u8;
-        bytes[4..8].copy_from_slice(&(self.shell_cell_size_policy as u32).to_be_bytes());
-        bytes[8..16].copy_from_slice(&(self.original_size as u64).to_be_bytes());
-        bytes[16..24].copy_from_slice(&(self.compressed_size as u64).to_be_bytes());
-        bytes[24..32].copy_from_slice(&(self.encrypted_size as u64).to_be_bytes());
-        bytes[32..36].copy_from_slice(&(self.shell_chunk_count as u32).to_be_bytes());
-        bytes[36..40].copy_from_slice(&(self.max_plain_chunk_size as u32).to_be_bytes());
-        bytes[40..52].copy_from_slice(&self.shell_nonce);
+        bytes[4..6].copy_from_slice(&(self.shell_cell_size as u16).to_be_bytes());
+        bytes[6..14].copy_from_slice(&(self.original_size as u64).to_be_bytes());
+        bytes[14..22].copy_from_slice(&(self.compressed_size as u64).to_be_bytes());
+        bytes[22..34].copy_from_slice(&self.shell_nonce);
         bytes
     }
 
@@ -1166,34 +1190,33 @@ impl WholeMonolithV0Header {
         let preset = FusedPreset::from_byte(bytes[1])?;
         let compression_algorithm = CompressionAlgorithm::from_byte(bytes[2])?;
         let encryption_algorithm = EncryptionAlgorithm::from_byte(bytes[3])?;
-        let shell_cell_size_policy =
-            u32::from_be_bytes([bytes[4], bytes[5], bytes[6], bytes[7]]) as usize;
-        let original_size = whole_monolith_v0_read_u64_usize(&bytes[8..16], "original size")?;
-        let compressed_size = whole_monolith_v0_read_u64_usize(&bytes[16..24], "compressed size")?;
-        let encrypted_size = whole_monolith_v0_read_u64_usize(&bytes[24..32], "encrypted size")?;
-        let shell_chunk_count =
-            u32::from_be_bytes([bytes[32], bytes[33], bytes[34], bytes[35]]) as usize;
-        let max_plain_chunk_size =
-            u32::from_be_bytes([bytes[36], bytes[37], bytes[38], bytes[39]]) as usize;
+        let shell_cell_size = u16::from_be_bytes([bytes[4], bytes[5]]) as usize;
+        let original_size = whole_monolith_v0_read_u64_usize(&bytes[6..14], "original size")?;
+        let compressed_size = whole_monolith_v0_read_u64_usize(&bytes[14..22], "compressed size")?;
         let mut shell_nonce = [0u8; SHELL_NONCE_SIZE];
-        shell_nonce.copy_from_slice(&bytes[40..52]);
+        shell_nonce.copy_from_slice(&bytes[22..34]);
 
         Ok(Self {
             version,
             preset,
             compression_algorithm,
             encryption_algorithm,
-            shell_cell_size_policy,
+            shell_cell_size,
             original_size,
             compressed_size,
-            encrypted_size,
-            shell_chunk_count,
-            max_plain_chunk_size,
             shell_nonce,
         })
     }
 
     fn info(self, protected_size: usize) -> ProtectedArtifactInfo {
+        let payload_len = protected_size
+            .saturating_sub(WHOLE_MONOLITH_V0_PUBLIC_SEED_BYTES)
+            .saturating_sub(WHOLE_MONOLITH_V0_PUBLIC_HEADER_LEN)
+            .saturating_sub(SHELL_TAG_SIZE);
+        let geometry = field_monolith_infer_geometry(payload_len, self.shell_cell_size);
+        let encrypted_size = geometry.map(|geometry| geometry.original_len).unwrap_or(0);
+        let shell_chunk_count = geometry.map(|geometry| geometry.chunk_count).unwrap_or(0);
+
         ProtectedArtifactInfo {
             version: self.version,
             preset: self.preset,
@@ -1202,19 +1225,11 @@ impl WholeMonolithV0Header {
             encryption_algorithm: self.encryption_algorithm,
             original_size: self.original_size,
             compressed_size: self.compressed_size,
-            encrypted_size: self.encrypted_size,
+            encrypted_size,
             protected_size,
-            shell_chunk_size: self.max_plain_chunk_size as u32,
-            shell_chunk_count: self.shell_chunk_count,
+            shell_chunk_size: self.shell_cell_size as u32,
+            shell_chunk_count,
             shell_nonce: self.shell_nonce,
-        }
-    }
-
-    fn requested_shell_cell_size(self) -> Option<usize> {
-        if self.shell_cell_size_policy == 0 {
-            None
-        } else {
-            Some(self.shell_cell_size_policy)
         }
     }
 }
@@ -1238,8 +1253,7 @@ fn whole_monolith_v0_protect(
     let encryption_algorithm = opts
         .encryption_algorithm
         .unwrap_or(EncryptionAlgorithm::XChaCha20Poly1305);
-    let shell_cell_size_policy = opts.shell_chunk_size.unwrap_or(0);
-    if shell_cell_size_policy > MAX_CHUNK_SIZE {
+    if opts.shell_chunk_size.unwrap_or(0) > MAX_CHUNK_SIZE {
         return Err(Error::InvalidConfiguration(format!(
             "shell chunk size must be at most {MAX_CHUNK_SIZE} bytes"
         )));
@@ -1273,7 +1287,7 @@ fn whole_monolith_v0_protect(
         encrypted.algorithm,
         opts.preset,
     )?;
-    let shell_geometry =
+    let _shell_geometry =
         field_monolith_infer_geometry(body.len(), shell_cell_size).ok_or_else(|| {
             Error::InvalidConfiguration("whole monolith shell geometry was invalid".to_string())
         })?;
@@ -1283,19 +1297,13 @@ fn whole_monolith_v0_protect(
         preset: opts.preset,
         compression_algorithm: compressed.algorithm,
         encryption_algorithm: encrypted.algorithm,
-        shell_cell_size_policy,
+        shell_cell_size,
         original_size: plaintext.len(),
         compressed_size: compressed.compressed.len(),
-        encrypted_size: encrypted_bytes.len(),
-        shell_chunk_count: shell_geometry.chunk_count,
-        max_plain_chunk_size: shell_cell_size,
         shell_nonce,
     };
     let header_bytes = header.to_bytes();
-    let mut tag_input = Vec::with_capacity(header_bytes.len() + body.len());
-    tag_input.extend_from_slice(&header_bytes);
-    tag_input.extend_from_slice(&body);
-    let tag = compute_shell_tag(&tag_input, &tag_key)?;
+    let tag = compute_shell_tag_parts(&[&header_bytes[..], body.as_slice()], &tag_key)?;
 
     body.extend_from_slice(&tag);
     whole_monolith_v0_apply_cloak(&mut body, &initial_material.cloak);
@@ -1329,10 +1337,8 @@ fn whole_monolith_v0_open(artifact: &[u8], master_key: &Key) -> Result<Vec<u8>> 
     }
     let tag_start = uncloaked.len() - SHELL_TAG_SIZE;
     let (body, tag) = uncloaked.split_at(tag_start);
-    let mut tag_input = Vec::with_capacity(header_bytes.len() + body.len());
-    tag_input.extend_from_slice(&header_bytes);
-    tag_input.extend_from_slice(body);
-    if !verify_shell_tag(&tag_input, tag, &tag_key)? {
+    let expected_tag = compute_shell_tag_parts(&[&header_bytes[..], body], &tag_key)?;
+    if !compare_hashes(&expected_tag, tag) {
         return Err(Error::AuthenticationFailed);
     }
 
@@ -1340,21 +1346,13 @@ fn whole_monolith_v0_open(artifact: &[u8], master_key: &Key) -> Result<Vec<u8>> 
         body,
         &shell_key,
         &header.shell_nonce,
-        header
-            .requested_shell_cell_size()
-            .unwrap_or(header.max_plain_chunk_size.max(1)),
+        header.shell_cell_size.max(1),
         header.original_size,
         header.compressed_size,
         header.compression_algorithm,
         header.encryption_algorithm,
         header.preset,
     )?;
-    if encrypted_bytes.len() != header.encrypted_size {
-        return Err(Error::SizeMismatch {
-            expected: header.encrypted_size,
-            actual: encrypted_bytes.len(),
-        });
-    }
     let encrypted = EncryptionResult::from_bytes(&encrypted_bytes)?;
     if encrypted.algorithm != header.encryption_algorithm {
         return Err(Error::InvalidFormat);

@@ -81,6 +81,32 @@ pub fn generate_hmac(data: &[u8], key: &[u8], algorithm: HashAlgorithm) -> Resul
     }
 }
 
+/// Generate HMAC over multiple contiguous logical parts without copying them first.
+pub fn generate_hmac_parts(
+    parts: &[&[u8]],
+    key: &[u8],
+    algorithm: HashAlgorithm,
+) -> Result<Vec<u8>> {
+    match algorithm {
+        HashAlgorithm::Sha256 => {
+            let mut mac = Hmac::<Sha256>::new_from_slice(key)
+                .map_err(|e| Error::HashFailed(e.to_string()))?;
+            for part in parts {
+                mac.update(*part);
+            }
+            Ok(mac.finalize().into_bytes().to_vec())
+        }
+        HashAlgorithm::Sha512 => {
+            let mut mac = Hmac::<Sha512>::new_from_slice(key)
+                .map_err(|e| Error::HashFailed(e.to_string()))?;
+            for part in parts {
+                mac.update(*part);
+            }
+            Ok(mac.finalize().into_bytes().to_vec())
+        }
+    }
+}
+
 /// Generate HMAC and return as hex string
 pub fn generate_hmac_hex(data: &[u8], key: &[u8], algorithm: HashAlgorithm) -> Result<String> {
     Ok(hex::encode(generate_hmac(data, key, algorithm)?))
