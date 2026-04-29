@@ -804,7 +804,6 @@ struct FieldMonolithGeometry {
     original_len: usize,
     chunk_count: usize,
     block_cells: usize,
-    block_count: usize,
 }
 
 fn field_monolith_encode_payload(
@@ -916,6 +915,7 @@ fn field_monolith_decode_payload_with_state_and_geometry(
     mut state: FieldMonolithState,
     geometry: FieldMonolithGeometry,
 ) -> Result<Vec<u8>> {
+    let target_cell_size = target_cell_size.max(1);
     let mut output = Vec::with_capacity(geometry.original_len);
     let mut cursor = 0usize;
     let mut cell_index = 0usize;
@@ -935,13 +935,25 @@ fn field_monolith_decode_payload_with_state_and_geometry(
             if cell_index >= geometry.chunk_count {
                 break;
             }
-            let original_len = field_monolith_current_surface_len(
-                payload,
-                cursor,
-                cell_index,
-                geometry.chunk_count,
-                target_cell_size,
-            )?;
+            let original_len = if cell_index + 1 < geometry.chunk_count {
+                target_cell_size
+            } else {
+                let consumed_before_last = target_cell_size
+                    .checked_mul(geometry.chunk_count.saturating_sub(1))
+                    .ok_or_else(|| {
+                        Error::InvalidConfiguration(
+                            "field monolith current consumed length overflowed".to_string(),
+                        )
+                    })?;
+                geometry
+                    .original_len
+                    .checked_sub(consumed_before_last)
+                    .ok_or_else(|| {
+                        Error::InvalidConfiguration(
+                            "field monolith current last cell underflowed".to_string(),
+                        )
+                    })?
+            };
             let next_cursor = cursor.checked_add(original_len).ok_or_else(|| {
                 Error::InvalidConfiguration("field monolith current cursor overflowed".to_string())
             })?;
@@ -964,11 +976,10 @@ fn field_monolith_decode_payload_with_state_and_geometry(
                 &state,
                 plan,
                 cell_index as u32,
-                original_len,
                 descriptor,
                 &mut output,
                 &mut mutation_scratch,
-            )?;
+            );
             field_monolith_update_state_with_summary(
                 &mut state,
                 descriptor,
@@ -1545,7 +1556,6 @@ fn field_monolith_infer_geometry(
             original_len: 0,
             chunk_count: 0,
             block_cells: field_monolith_current_anchor_block_cells(target_cell_size, 0),
-            block_count: 0,
         });
     }
 
@@ -1574,7 +1584,6 @@ fn field_monolith_infer_geometry(
                 original_len,
                 chunk_count,
                 block_cells,
-                block_count,
             });
         }
     }
@@ -1606,66 +1615,6 @@ fn field_monolith_current_anchor_block_cells(target_cell_size: usize, chunk_coun
     } else {
         field_monolith_anchor_block_cells(target_cell_size)
     }
-}
-
-fn field_monolith_current_surface_len(
-    payload: &[u8],
-    cursor: usize,
-    cell_index: usize,
-    chunk_count: usize,
-    chunk_size: usize,
-) -> Result<usize> {
-    if cell_index >= chunk_count {
-        return Err(Error::InvalidConfiguration(
-            "field monolith current cell index exceeded chunk count".to_string(),
-        ));
-    }
-    if cell_index + 1 < chunk_count {
-        let next_cursor = cursor.checked_add(chunk_size).ok_or_else(|| {
-            Error::InvalidConfiguration(
-                "field monolith current non-final cursor overflowed".to_string(),
-            )
-        })?;
-        if next_cursor > payload.len() {
-            return Err(Error::TruncatedPayload {
-                expected: next_cursor,
-                actual: payload.len(),
-            });
-        }
-        return Ok(chunk_size);
-    }
-
-    let anchor_bytes = field_monolith_block_count_for_cells(
-        chunk_count,
-        field_monolith_current_anchor_block_cells(chunk_size, chunk_count),
-    );
-    let total_original_len = payload.len().checked_sub(anchor_bytes).ok_or_else(|| {
-        Error::InvalidConfiguration(
-            "field monolith current payload underflowed anchor bytes".to_string(),
-        )
-    })?;
-    let consumed_before_last = chunk_size
-        .checked_mul(chunk_count.saturating_sub(1))
-        .ok_or_else(|| {
-            Error::InvalidConfiguration(
-                "field monolith current consumed length overflowed".to_string(),
-            )
-        })?;
-    let original_len = total_original_len
-        .checked_sub(consumed_before_last)
-        .ok_or_else(|| {
-            Error::InvalidConfiguration("field monolith current last cell underflowed".to_string())
-        })?;
-    let next_cursor = cursor.checked_add(original_len).ok_or_else(|| {
-        Error::InvalidConfiguration("field monolith current last cursor overflowed".to_string())
-    })?;
-    if next_cursor > payload.len() {
-        return Err(Error::TruncatedPayload {
-            expected: next_cursor,
-            actual: payload.len(),
-        });
-    }
-    Ok(original_len)
 }
 
 fn field_monolith_initial_state(
@@ -2335,17 +2284,10 @@ fn field_monolith_decode_surface_with_summary_append(
     state: &FieldMonolithState,
     plan: FieldMonolithCellPlan,
     cell_index: u32,
-    original_len: usize,
     descriptor: u8,
     output: &mut Vec<u8>,
     mutation_scratch: &mut Vec<u8>,
-) -> Result<FieldMonolithSurfaceSummary> {
-    if surface.len() != original_len {
-        return Err(Error::InvalidConfiguration(
-            "field monolith native surface length did not match original bytes".to_string(),
-        ));
-    }
-
+) -> FieldMonolithSurfaceSummary {
     let mut digest =
         field_monolith_surface_checksum_seed(surface.len(), state, cell_index, descriptor);
     let mut front = 0u8;
@@ -2371,7 +2313,7 @@ fn field_monolith_decode_surface_with_summary_append(
     let mask_lanes = field_monolith_mask_lanes(state, cell_index, plan.stride);
     field_monolith_xor_masked_bytes_in_place(decoded, &mask_lanes);
 
-    Ok(summary)
+    summary
 }
 
 fn field_monolith_update_state_with_summary(
@@ -2728,7 +2670,9 @@ mod tests {
             field_monolith_infer_geometry(envelope.payload.len(), envelope.chunk_size as usize)
                 .expect("valid monolith geometry");
         assert_eq!(geometry.original_len, payload.len());
-        assert_eq!(envelope.payload.len(), payload.len() + geometry.block_count);
+        let block_count =
+            field_monolith_block_count_for_cells(geometry.chunk_count, geometry.block_cells);
+        assert_eq!(envelope.payload.len(), payload.len() + block_count);
 
         let restored = unfuse(&envelope, &master).unwrap();
         assert_eq!(restored, payload);
