@@ -911,7 +911,6 @@ fn field_monolith_decode_payload_with_state_and_geometry(
     let mut output = Vec::with_capacity(geometry.original_len);
     let mut cursor = 0usize;
     let mut cell_index = 0usize;
-    let mut decoded = Vec::with_capacity(target_cell_size);
     let mut mutation_scratch = Vec::with_capacity(target_cell_size);
 
     while cell_index < geometry.chunk_count {
@@ -952,17 +951,16 @@ fn field_monolith_decode_payload_with_state_and_geometry(
                 ordinal_in_block,
             );
             let descriptor = field_monolith_descriptor(plan);
-            let summary = field_monolith_decode_surface_with_summary_into(
+            let summary = field_monolith_decode_surface_with_summary_append(
                 surface,
                 &state,
                 plan,
                 cell_index as u32,
                 original_len,
                 descriptor,
-                &mut decoded,
+                &mut output,
                 &mut mutation_scratch,
             )?;
-            output.extend_from_slice(&decoded);
             field_monolith_update_state_with_summary(
                 &mut state,
                 descriptor,
@@ -2268,8 +2266,8 @@ fn field_monolith_apply_mutation_in_place(
     }
 }
 
-fn field_monolith_inverse_mutation_in_place(
-    bytes: &mut Vec<u8>,
+fn field_monolith_inverse_mutation_slice(
+    bytes: &mut [u8],
     mutation: FieldMonolithMutationMode,
     stride: usize,
     scratch: &mut Vec<u8>,
@@ -2299,7 +2297,7 @@ fn field_monolith_inverse_mutation_in_place(
                 even_index += 1;
             }
 
-            core::mem::swap(bytes, scratch);
+            bytes.copy_from_slice(&scratch[..bytes.len()]);
         }
         FieldMonolithMutationMode::MirrorWeave => {
             bytes.reverse();
@@ -2544,15 +2542,14 @@ fn field_monolith_encode_surface_with_summary_into(
     field_monolith_apply_virtual_mix_with_summary(surface, state, plan, cell_index, descriptor)
 }
 
-fn field_monolith_copy_surface_with_summary_into(
+fn field_monolith_append_surface_with_summary(
     surface: &[u8],
     state: &FieldMonolithState,
     cell_index: u32,
     descriptor: u8,
-    decoded: &mut Vec<u8>,
+    output: &mut Vec<u8>,
 ) -> FieldMonolithSurfaceSummary {
-    decoded.clear();
-    decoded.reserve(surface.len());
+    output.reserve(surface.len());
 
     let mut digest =
         field_monolith_surface_checksum_seed(surface.len(), state, cell_index, descriptor);
@@ -2564,7 +2561,7 @@ fn field_monolith_copy_surface_with_summary_into(
         }
         back = byte;
         digest = field_monolith_surface_checksum_step(digest, state, offset, byte);
-        decoded.push(byte);
+        output.push(byte);
     }
 
     FieldMonolithSurfaceSummary {
@@ -2575,14 +2572,14 @@ fn field_monolith_copy_surface_with_summary_into(
     }
 }
 
-fn field_monolith_decode_surface_with_summary_into(
+fn field_monolith_decode_surface_with_summary_append(
     surface: &[u8],
     state: &FieldMonolithState,
     plan: FieldMonolithCellPlan,
     cell_index: u32,
     original_len: usize,
     descriptor: u8,
-    decoded: &mut Vec<u8>,
+    output: &mut Vec<u8>,
     mutation_scratch: &mut Vec<u8>,
 ) -> Result<FieldMonolithSurfaceSummary> {
     if surface.len() != original_len {
@@ -2591,12 +2588,13 @@ fn field_monolith_decode_surface_with_summary_into(
         ));
     }
 
-    let summary = field_monolith_copy_surface_with_summary_into(
-        surface, state, cell_index, descriptor, decoded,
-    );
+    let output_start = output.len();
+    let summary =
+        field_monolith_append_surface_with_summary(surface, state, cell_index, descriptor, output);
+    let decoded = &mut output[output_start..];
     field_monolith_apply_virtual_mix(decoded, state, plan, cell_index);
     field_monolith_remove_virtual_permutation(decoded, state, plan, cell_index);
-    field_monolith_inverse_mutation_in_place(decoded, plan.mutation, plan.stride, mutation_scratch);
+    field_monolith_inverse_mutation_slice(decoded, plan.mutation, plan.stride, mutation_scratch);
     let mask_lanes = field_monolith_mask_lanes(state, cell_index, plan.stride);
     field_monolith_xor_masked_bytes_in_place(decoded, &mask_lanes);
 
