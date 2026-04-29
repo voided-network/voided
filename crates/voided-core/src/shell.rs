@@ -2186,25 +2186,8 @@ fn field_monolith_xor_masked_bytes_into(
     output: &mut Vec<u8>,
 ) {
     output.clear();
-    output.reserve(input.len());
-    let mut offset = 0usize;
-    let mut tension_mix = mask_lanes.tension_base;
-    let mut parity_mix = mask_lanes.parity_base;
-    while offset < input.len() {
-        output.push(
-            input[offset]
-                ^ mask_lanes.phase_lanes[offset & 0x07]
-                ^ tension_mix
-                ^ mask_lanes.curvature_lanes[offset & 0x07]
-                ^ mask_lanes.drift_mix
-                ^ mask_lanes.echo_mix
-                ^ mask_lanes.reserve_lanes[offset & 0x07]
-                ^ parity_mix,
-        );
-        tension_mix = tension_mix.wrapping_add(3);
-        parity_mix = parity_mix.wrapping_add(7);
-        offset += 1;
-    }
+    output.extend_from_slice(input);
+    field_monolith_xor_masked_bytes_in_place(output, mask_lanes);
 }
 
 fn field_monolith_xor_masked_bytes_in_place(bytes: &mut [u8], mask_lanes: &FieldMonolithMaskLanes) {
@@ -2549,8 +2532,6 @@ fn field_monolith_append_surface_with_summary(
     descriptor: u8,
     output: &mut Vec<u8>,
 ) -> FieldMonolithSurfaceSummary {
-    output.reserve(surface.len());
-
     let mut digest =
         field_monolith_surface_checksum_seed(surface.len(), state, cell_index, descriptor);
     let mut front = 0u8;
@@ -2561,8 +2542,8 @@ fn field_monolith_append_surface_with_summary(
         }
         back = byte;
         digest = field_monolith_surface_checksum_step(digest, state, offset, byte);
-        output.push(byte);
     }
+    output.extend_from_slice(surface);
 
     FieldMonolithSurfaceSummary {
         digest,
