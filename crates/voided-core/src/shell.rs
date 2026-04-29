@@ -2166,6 +2166,63 @@ fn field_monolith_remove_virtual_permutation(
     }
 }
 
+#[derive(Clone, Copy)]
+struct FieldMonolithVirtualMixContext {
+    cell_mix: u8,
+    weave_mix: u8,
+    pad_mix: u8,
+    echo_lanes: [u8; 8],
+    parity_lanes: [u8; 8],
+    reserve_stride: u8,
+}
+
+impl FieldMonolithVirtualMixContext {
+    fn new(state: &FieldMonolithState, plan: FieldMonolithCellPlan, cell_index: u32) -> Self {
+        Self {
+            cell_mix: (cell_index as u8).wrapping_mul(19),
+            weave_mix: (plan.weave as u8).wrapping_add(3),
+            pad_mix: (plan.pad_len as u8).wrapping_mul(29),
+            echo_lanes: field_monolith_left_rotation_lanes(state.echo),
+            parity_lanes: field_monolith_right_rotation_lanes(state.parity),
+            reserve_stride: state
+                .reserve
+                .wrapping_add((plan.stride as u8).wrapping_mul(13)),
+        }
+    }
+
+    fn round_mix(self, cell_index: u32, plan: FieldMonolithCellPlan, round: usize) -> u8 {
+        self.reserve_stride
+            ^ self.parity_lanes[(cell_index as usize + plan.pad_len + round) & 7]
+            ^ self.cell_mix
+            ^ self.pad_mix
+            ^ (round as u8).wrapping_mul(7)
+    }
+
+    fn byte_mask(self, offset: usize, round: usize, round_mix: u8, offset_mix: u8) -> u8 {
+        self.echo_lanes[((offset & 7) + round) & 7] ^ offset_mix ^ round_mix
+    }
+}
+
+fn field_monolith_apply_virtual_mix_rounds(
+    bytes: &mut [u8],
+    plan: FieldMonolithCellPlan,
+    cell_index: u32,
+    mix: FieldMonolithVirtualMixContext,
+) {
+    let mut round = 0usize;
+    while round < plan.pad_len {
+        let round_mix = mix.round_mix(cell_index, plan, round);
+        let mut offset = 0usize;
+        let mut offset_mix = 0u8;
+        while offset < bytes.len() {
+            bytes[offset] ^= mix.byte_mask(offset, round, round_mix, offset_mix);
+            offset_mix = offset_mix.wrapping_add(mix.weave_mix);
+            offset += 1;
+        }
+        round += 1;
+    }
+}
+
 fn field_monolith_apply_virtual_mix_with_summary(
     bytes: &mut [u8],
     state: &FieldMonolithState,
@@ -2173,54 +2230,26 @@ fn field_monolith_apply_virtual_mix_with_summary(
     cell_index: u32,
     descriptor: u8,
 ) -> FieldMonolithSurfaceSummary {
-    let round_limit = plan.pad_len;
+    let mix = FieldMonolithVirtualMixContext::new(state, plan, cell_index);
     let len = bytes.len();
-    let reserve_stride = state
-        .reserve
-        .wrapping_add((plan.stride as u8).wrapping_mul(13));
-    let cell_mix = (cell_index as u8).wrapping_mul(19);
-    let weave_mix = (plan.weave as u8).wrapping_add(3);
-    let pad_mix = (plan.pad_len as u8).wrapping_mul(29);
-    let echo_lanes = field_monolith_left_rotation_lanes(state.echo);
-    let parity_lanes = field_monolith_right_rotation_lanes(state.parity);
-
-    let mut round = 0usize;
-    while round < round_limit {
-        let round_mix = reserve_stride
-            ^ parity_lanes[(cell_index as usize + plan.pad_len + round) & 7]
-            ^ cell_mix
-            ^ pad_mix
-            ^ (round as u8).wrapping_mul(7);
-        let mut offset = 0usize;
-        let mut offset_mix = 0u8;
-        while offset < len {
-            bytes[offset] ^= echo_lanes[((offset & 7) + round) & 7] ^ offset_mix ^ round_mix;
-            offset_mix = offset_mix.wrapping_add(weave_mix);
-            offset += 1;
-        }
-        round += 1;
-    }
+    field_monolith_apply_virtual_mix_rounds(bytes, plan, cell_index, mix);
 
     let mut digest =
         field_monolith_surface_checksum_seed(bytes.len(), state, cell_index, descriptor);
     let mut front = 0u8;
     let mut back = 0u8;
     let mut offset = 0usize;
-    let final_mix = reserve_stride
-        ^ parity_lanes[(cell_index as usize + plan.pad_len + round_limit) & 7]
-        ^ cell_mix
-        ^ pad_mix
-        ^ (round_limit as u8).wrapping_mul(7);
+    let final_mix = mix.round_mix(cell_index, plan, plan.pad_len);
     let mut offset_mix = 0u8;
     while offset < len {
-        bytes[offset] ^= echo_lanes[((offset & 7) + round_limit) & 7] ^ offset_mix ^ final_mix;
+        bytes[offset] ^= mix.byte_mask(offset, plan.pad_len, final_mix, offset_mix);
         let byte = bytes[offset];
         if offset == 0 {
             front = byte;
         }
         back = byte;
         digest = field_monolith_surface_checksum_step(digest, state, offset, byte);
-        offset_mix = offset_mix.wrapping_add(weave_mix);
+        offset_mix = offset_mix.wrapping_add(mix.weave_mix);
         offset += 1;
     }
 
@@ -2228,54 +2257,6 @@ fn field_monolith_apply_virtual_mix_with_summary(
         digest,
         front,
         back,
-    }
-}
-
-fn field_monolith_apply_virtual_mix(
-    bytes: &mut [u8],
-    state: &FieldMonolithState,
-    plan: FieldMonolithCellPlan,
-    cell_index: u32,
-) {
-    let round_limit = plan.pad_len;
-    let len = bytes.len();
-    let reserve_stride = state
-        .reserve
-        .wrapping_add((plan.stride as u8).wrapping_mul(13));
-    let cell_mix = (cell_index as u8).wrapping_mul(19);
-    let weave_mix = (plan.weave as u8).wrapping_add(3);
-    let pad_mix = (plan.pad_len as u8).wrapping_mul(29);
-    let echo_lanes = field_monolith_left_rotation_lanes(state.echo);
-    let parity_lanes = field_monolith_right_rotation_lanes(state.parity);
-
-    let mut round = 0usize;
-    while round < round_limit {
-        let round_mix = reserve_stride
-            ^ parity_lanes[(cell_index as usize + plan.pad_len + round) & 7]
-            ^ cell_mix
-            ^ pad_mix
-            ^ (round as u8).wrapping_mul(7);
-        let mut offset = 0usize;
-        let mut offset_mix = 0u8;
-        while offset < len {
-            bytes[offset] ^= echo_lanes[((offset & 7) + round) & 7] ^ offset_mix ^ round_mix;
-            offset_mix = offset_mix.wrapping_add(weave_mix);
-            offset += 1;
-        }
-        round += 1;
-    }
-
-    let final_mix = reserve_stride
-        ^ parity_lanes[(cell_index as usize + plan.pad_len + round_limit) & 7]
-        ^ cell_mix
-        ^ pad_mix
-        ^ (round_limit as u8).wrapping_mul(7);
-    let mut offset = 0usize;
-    let mut offset_mix = 0u8;
-    while offset < len {
-        bytes[offset] ^= echo_lanes[((offset & 7) + round_limit) & 7] ^ offset_mix ^ final_mix;
-        offset_mix = offset_mix.wrapping_add(weave_mix);
-        offset += 1;
     }
 }
 
@@ -2288,26 +2269,31 @@ fn field_monolith_decode_surface_with_summary_append(
     output: &mut Vec<u8>,
     mutation_scratch: &mut Vec<u8>,
 ) -> FieldMonolithSurfaceSummary {
+    let mix = FieldMonolithVirtualMixContext::new(state, plan, cell_index);
+    let final_mix = mix.round_mix(cell_index, plan, plan.pad_len);
     let mut digest =
         field_monolith_surface_checksum_seed(surface.len(), state, cell_index, descriptor);
     let mut front = 0u8;
     let mut back = 0u8;
+    let mut offset_mix = 0u8;
+    output.reserve(surface.len());
+    let output_start = output.len();
     for (offset, &byte) in surface.iter().enumerate() {
         if offset == 0 {
             front = byte;
         }
         back = byte;
         digest = field_monolith_surface_checksum_step(digest, state, offset, byte);
+        output.push(byte ^ mix.byte_mask(offset, plan.pad_len, final_mix, offset_mix));
+        offset_mix = offset_mix.wrapping_add(mix.weave_mix);
     }
     let summary = FieldMonolithSurfaceSummary {
         digest,
         front,
         back,
     };
-    let output_start = output.len();
-    output.extend_from_slice(surface);
     let decoded = &mut output[output_start..];
-    field_monolith_apply_virtual_mix(decoded, state, plan, cell_index);
+    field_monolith_apply_virtual_mix_rounds(decoded, plan, cell_index, mix);
     field_monolith_remove_virtual_permutation(decoded, state, plan, cell_index);
     field_monolith_inverse_mutation_slice(decoded, plan.mutation, plan.stride, mutation_scratch);
     let mask_lanes = field_monolith_mask_lanes(state, cell_index, plan.stride);
