@@ -835,6 +835,8 @@ fn field_monolith_encode_payload_with_state(
     let mut cursor = 0usize;
     let mut cell_index = 0u32;
     let mut block_index = 0u32;
+    let mut surface = Vec::with_capacity(target_cell_size);
+    let mut mutation_scratch = Vec::with_capacity(target_cell_size);
 
     while cursor < data.len() {
         let anchor = field_monolith_current_anchor_for_block_with_chunk_count(
@@ -857,8 +859,14 @@ fn field_monolith_encode_payload_with_state(
             let plan =
                 field_monolith_plan_for_anchor_cell(anchor, cell_index, cell_len, ordinal_in_block);
             let descriptor = field_monolith_descriptor(plan);
-            let (surface, summary) = field_monolith_encode_surface_with_summary(
-                plaintext, &state, plan, cell_index, descriptor,
+            let summary = field_monolith_encode_surface_with_summary_into(
+                plaintext,
+                &state,
+                plan,
+                cell_index,
+                descriptor,
+                &mut surface,
+                &mut mutation_scratch,
             );
 
             payload.extend_from_slice(&surface);
@@ -886,21 +894,25 @@ fn field_monolith_decode_payload(
             Error::InvalidConfiguration("field monolith payload geometry was invalid".to_string())
         })?;
     let state = field_monolith_initial_state(shell_key, nonce, geometry.original_len)?;
-    field_monolith_decode_payload_with_state(payload, target_cell_size, state)
+    field_monolith_decode_payload_with_state_and_geometry(
+        payload,
+        target_cell_size,
+        state,
+        geometry,
+    )
 }
 
-fn field_monolith_decode_payload_with_state(
+fn field_monolith_decode_payload_with_state_and_geometry(
     payload: &[u8],
     target_cell_size: usize,
     mut state: FieldMonolithState,
+    geometry: FieldMonolithGeometry,
 ) -> Result<Vec<u8>> {
-    let geometry =
-        field_monolith_infer_geometry(payload.len(), target_cell_size).ok_or_else(|| {
-            Error::InvalidConfiguration("field monolith payload geometry was invalid".to_string())
-        })?;
     let mut output = Vec::with_capacity(geometry.original_len);
     let mut cursor = 0usize;
     let mut cell_index = 0usize;
+    let mut decoded = Vec::with_capacity(target_cell_size);
+    let mut mutation_scratch = Vec::with_capacity(target_cell_size);
 
     while cell_index < geometry.chunk_count {
         if cursor + 1 > payload.len() {
@@ -940,13 +952,15 @@ fn field_monolith_decode_payload_with_state(
                 ordinal_in_block,
             );
             let descriptor = field_monolith_descriptor(plan);
-            let (decoded, summary) = field_monolith_decode_surface_with_summary(
+            let summary = field_monolith_decode_surface_with_summary_into(
                 surface,
                 &state,
                 plan,
                 cell_index as u32,
                 original_len,
                 descriptor,
+                &mut decoded,
+                &mut mutation_scratch,
             )?;
             output.extend_from_slice(&decoded);
             field_monolith_update_state_with_summary(
@@ -1068,7 +1082,12 @@ fn protected_monolith_decode_payload(
         target_cell_size,
     };
     let state = protected_monolith_initial_state(shell_key, nonce, plan)?;
-    let decoded = field_monolith_decode_payload_with_state(payload, target_cell_size, state)?;
+    let decoded = field_monolith_decode_payload_with_state_and_geometry(
+        payload,
+        target_cell_size,
+        state,
+        geometry,
+    )?;
     if decoded.len() != geometry.original_len {
         return Err(Error::SizeMismatch {
             expected: geometry.original_len,
@@ -2177,8 +2196,13 @@ fn field_monolith_mask_lanes(
     }
 }
 
-fn field_monolith_xor_masked_bytes(input: &[u8], mask_lanes: &FieldMonolithMaskLanes) -> Vec<u8> {
-    let mut output = Vec::with_capacity(input.len());
+fn field_monolith_xor_masked_bytes_into(
+    input: &[u8],
+    mask_lanes: &FieldMonolithMaskLanes,
+    output: &mut Vec<u8>,
+) {
+    output.clear();
+    output.reserve(input.len());
     let mut offset = 0usize;
     let mut tension_mix = mask_lanes.tension_base;
     let mut parity_mix = mask_lanes.parity_base;
@@ -2197,89 +2221,102 @@ fn field_monolith_xor_masked_bytes(input: &[u8], mask_lanes: &FieldMonolithMaskL
         parity_mix = parity_mix.wrapping_add(7);
         offset += 1;
     }
-    output
 }
 
-fn field_monolith_split_weave(bytes: &[u8]) -> Vec<u8> {
-    let even_count = bytes.len().div_ceil(2);
-    let odd_count = bytes.len() / 2;
-    let mut output = Vec::with_capacity(bytes.len());
-    let mut read_index = 0usize;
-    while output.len() < even_count {
-        output.push(bytes[read_index]);
-        read_index += 2;
+fn field_monolith_xor_masked_bytes_in_place(bytes: &mut [u8], mask_lanes: &FieldMonolithMaskLanes) {
+    let mut offset = 0usize;
+    let mut tension_mix = mask_lanes.tension_base;
+    let mut parity_mix = mask_lanes.parity_base;
+    while offset < bytes.len() {
+        bytes[offset] ^= mask_lanes.phase_lanes[offset & 0x07]
+            ^ tension_mix
+            ^ mask_lanes.curvature_lanes[offset & 0x07]
+            ^ mask_lanes.drift_mix
+            ^ mask_lanes.echo_mix
+            ^ mask_lanes.reserve_lanes[offset & 0x07]
+            ^ parity_mix;
+        tension_mix = tension_mix.wrapping_add(3);
+        parity_mix = parity_mix.wrapping_add(7);
+        offset += 1;
     }
-
-    let mut odd_index = 0usize;
-    let mut odd_read_index = 1usize;
-    while odd_index < odd_count {
-        output.push(bytes[odd_read_index]);
-        odd_index += 1;
-        odd_read_index += 2;
-    }
-
-    output
 }
 
-fn field_monolith_inverse_split_weave(bytes: &[u8]) -> Vec<u8> {
-    let even_count = bytes.len().div_ceil(2);
-    let (evens, odds) = bytes.split_at(even_count);
-    let mut output = Vec::with_capacity(bytes.len());
-
-    let mut even_index = 0usize;
-    while even_index < evens.len() || even_index < odds.len() {
-        if even_index < evens.len() {
-            output.push(evens[even_index]);
-        }
-        if even_index < odds.len() {
-            output.push(odds[even_index]);
-        }
-        even_index += 1;
-    }
-
-    output
-}
-
-fn field_monolith_apply_mutation_owned(
-    mut bytes: Vec<u8>,
+fn field_monolith_apply_mutation_in_place(
+    bytes: &mut Vec<u8>,
     mutation: FieldMonolithMutationMode,
     stride: usize,
-) -> Vec<u8> {
+    scratch: &mut Vec<u8>,
+) {
     match mutation {
-        FieldMonolithMutationMode::Direct => bytes,
+        FieldMonolithMutationMode::Direct => {}
         FieldMonolithMutationMode::StrideSwap => {
             if !bytes.is_empty() {
                 let shift = stride % bytes.len();
                 bytes.rotate_left(shift);
             }
-            bytes
         }
-        FieldMonolithMutationMode::SplitWeave => field_monolith_split_weave(&bytes),
+        FieldMonolithMutationMode::SplitWeave => {
+            scratch.clear();
+            scratch.reserve(bytes.len());
+            let even_count = bytes.len().div_ceil(2);
+            let odd_count = bytes.len() / 2;
+            let mut read_index = 0usize;
+            while scratch.len() < even_count {
+                scratch.push(bytes[read_index]);
+                read_index += 2;
+            }
+
+            let mut odd_index = 0usize;
+            let mut odd_read_index = 1usize;
+            while odd_index < odd_count {
+                scratch.push(bytes[odd_read_index]);
+                odd_index += 1;
+                odd_read_index += 2;
+            }
+
+            core::mem::swap(bytes, scratch);
+        }
         FieldMonolithMutationMode::MirrorWeave => {
             bytes.reverse();
-            bytes
         }
     }
 }
 
-fn field_monolith_inverse_mutation_owned(
-    mut bytes: Vec<u8>,
+fn field_monolith_inverse_mutation_in_place(
+    bytes: &mut Vec<u8>,
     mutation: FieldMonolithMutationMode,
     stride: usize,
-) -> Vec<u8> {
+    scratch: &mut Vec<u8>,
+) {
     match mutation {
-        FieldMonolithMutationMode::Direct => bytes,
+        FieldMonolithMutationMode::Direct => {}
         FieldMonolithMutationMode::StrideSwap => {
             if !bytes.is_empty() {
                 let shift = stride % bytes.len();
                 bytes.rotate_right(shift);
             }
-            bytes
         }
-        FieldMonolithMutationMode::SplitWeave => field_monolith_inverse_split_weave(&bytes),
+        FieldMonolithMutationMode::SplitWeave => {
+            scratch.clear();
+            scratch.reserve(bytes.len());
+            let even_count = bytes.len().div_ceil(2);
+            let (evens, odds) = bytes.split_at(even_count);
+
+            let mut even_index = 0usize;
+            while even_index < evens.len() || even_index < odds.len() {
+                if even_index < evens.len() {
+                    scratch.push(evens[even_index]);
+                }
+                if even_index < odds.len() {
+                    scratch.push(odds[even_index]);
+                }
+                even_index += 1;
+            }
+
+            core::mem::swap(bytes, scratch);
+        }
         FieldMonolithMutationMode::MirrorWeave => {
             bytes.reverse();
-            bytes
         }
     }
 }
@@ -2465,25 +2502,20 @@ fn field_monolith_apply_virtual_mix_with_summary(
     }
 }
 
-fn field_monolith_encode_surface_with_summary(
+fn field_monolith_encode_surface_with_summary_into(
     plaintext: &[u8],
     state: &FieldMonolithState,
     plan: FieldMonolithCellPlan,
     cell_index: u32,
     descriptor: u8,
-) -> (Vec<u8>, FieldMonolithSurfaceSummary) {
+    surface: &mut Vec<u8>,
+    mutation_scratch: &mut Vec<u8>,
+) -> FieldMonolithSurfaceSummary {
     let mask_lanes = field_monolith_mask_lanes(state, cell_index, plan.stride);
-    let mixed = field_monolith_xor_masked_bytes(plaintext, &mask_lanes);
-    let mut surface = field_monolith_apply_mutation_owned(mixed, plan.mutation, plan.stride);
-    field_monolith_apply_virtual_permutation(&mut surface, state, plan, cell_index);
-    let summary = field_monolith_apply_virtual_mix_with_summary(
-        &mut surface,
-        state,
-        plan,
-        cell_index,
-        descriptor,
-    );
-    (surface, summary)
+    field_monolith_xor_masked_bytes_into(plaintext, &mask_lanes, surface);
+    field_monolith_apply_mutation_in_place(surface, plan.mutation, plan.stride, mutation_scratch);
+    field_monolith_apply_virtual_permutation(surface, state, plan, cell_index);
+    field_monolith_apply_virtual_mix_with_summary(surface, state, plan, cell_index, descriptor)
 }
 
 fn field_monolith_surface_summary(
@@ -2500,14 +2532,16 @@ fn field_monolith_surface_summary(
     }
 }
 
-fn field_monolith_decode_surface_with_summary(
+fn field_monolith_decode_surface_with_summary_into(
     surface: &[u8],
     state: &FieldMonolithState,
     plan: FieldMonolithCellPlan,
     cell_index: u32,
     original_len: usize,
     descriptor: u8,
-) -> Result<(Vec<u8>, FieldMonolithSurfaceSummary)> {
+    decoded: &mut Vec<u8>,
+    mutation_scratch: &mut Vec<u8>,
+) -> Result<FieldMonolithSurfaceSummary> {
     if surface.len() != original_len {
         return Err(Error::InvalidConfiguration(
             "field monolith native surface length did not match original bytes".to_string(),
@@ -2515,14 +2549,16 @@ fn field_monolith_decode_surface_with_summary(
     }
 
     let summary = field_monolith_surface_summary(surface, state, cell_index, descriptor);
-    let mut mixed = surface.to_vec();
-    field_monolith_apply_virtual_mix_with_summary(&mut mixed, state, plan, cell_index, descriptor);
-    field_monolith_remove_virtual_permutation(&mut mixed, state, plan, cell_index);
-    let mixed = field_monolith_inverse_mutation_owned(mixed, plan.mutation, plan.stride);
+    decoded.clear();
+    decoded.reserve(surface.len());
+    decoded.extend_from_slice(surface);
+    field_monolith_apply_virtual_mix_with_summary(decoded, state, plan, cell_index, descriptor);
+    field_monolith_remove_virtual_permutation(decoded, state, plan, cell_index);
+    field_monolith_inverse_mutation_in_place(decoded, plan.mutation, plan.stride, mutation_scratch);
     let mask_lanes = field_monolith_mask_lanes(state, cell_index, plan.stride);
-    let decoded = field_monolith_xor_masked_bytes(&mixed, &mask_lanes);
+    field_monolith_xor_masked_bytes_in_place(decoded, &mask_lanes);
 
-    Ok((decoded, summary))
+    Ok(summary)
 }
 
 fn field_monolith_update_state_with_summary(
