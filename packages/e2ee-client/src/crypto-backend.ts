@@ -146,6 +146,25 @@ export interface ProtectResult extends ProtectedArtifactInfo {
   artifact: Uint8Array;
 }
 
+export type ProtectCompressionAlgorithm =
+  | 'gzip'
+  | 'brotli'
+  | 'none'
+  | 'auto'
+  | 'iliad'
+  | 'iliad-foundation-v2'
+  | 'iliad.foundation.v2';
+
+function isIliadCompressionAlgorithm(
+  algorithm: string | undefined
+): algorithm is 'iliad' | 'iliad-foundation-v2' | 'iliad.foundation.v2' {
+  return (
+    algorithm === 'iliad' ||
+    algorithm === 'iliad-foundation-v2' ||
+    algorithm === 'iliad.foundation.v2'
+  );
+}
+
 /**
  * Generate a new encryption key.
  */
@@ -357,19 +376,23 @@ export async function generateSafetyNumbers(
  */
 export async function compress(
   data: Uint8Array,
-  algorithm: 'gzip' | 'brotli' = 'gzip'
+  algorithm: 'gzip' | 'brotli' | 'iliad' | 'iliad-foundation-v2' | 'iliad.foundation.v2' = 'gzip'
 ): Promise<tsCompression.CompressionResult> {
   if (await useWasmBackend()) {
     const result = _wasm!.compress(data, algorithm);
     return {
       compressed: new Uint8Array(result.compressed),
-      algorithm: result.algorithm as 'gzip' | 'brotli' | 'none',
+      algorithm: result.algorithm as tsCompression.CompressionResult['algorithm'],
       originalSize: result.originalSize,
       compressedSize: result.compressedSize,
       compressionRatio: result.compressionRatio,
     };
   }
   
+  if (isIliadCompressionAlgorithm(algorithm)) {
+    throw new Error('Iliad Foundation v2 compression requires the Rust WASM backend');
+  }
+
   return tsCompression.compress(data, { algorithm });
 }
 
@@ -378,13 +401,17 @@ export async function compress(
  */
 export async function decompress(
   data: Uint8Array,
-  algorithm: 'gzip' | 'brotli'
+  algorithm: 'gzip' | 'brotli' | 'iliad' | 'iliad-foundation-v2' | 'iliad.foundation.v2'
 ): Promise<Uint8Array> {
   if (await useWasmBackend()) {
     return _wasm!.decompress(data, algorithm);
   }
-  
-  return tsCompression.decompress(data, algorithm);
+
+  if (isIliadCompressionAlgorithm(algorithm)) {
+    throw new Error('Iliad Foundation v2 decompression requires the Rust WASM backend');
+  }
+
+  return tsCompression.decompress(data, algorithm as 'gzip' | 'brotli');
 }
 
 // ============================================================================
@@ -431,7 +458,7 @@ export async function protect(
   key: Uint8Array,
   options: {
     preset?: 'compact' | 'balanced' | 'concealed';
-    compressionAlgorithm?: 'gzip' | 'brotli' | 'none';
+    compressionAlgorithm?: ProtectCompressionAlgorithm;
     compressionLevel?: number;
     encryptionAlgorithm?: 'xchacha20-poly1305' | 'aes-256-gcm';
     shellChunkSize?: number;
@@ -473,7 +500,7 @@ export async function repackArtifact(
   key: Uint8Array,
   options: {
     preset?: 'compact' | 'balanced' | 'concealed';
-    compressionAlgorithm?: 'gzip' | 'brotli' | 'none';
+    compressionAlgorithm?: ProtectCompressionAlgorithm;
     compressionLevel?: number;
     encryptionAlgorithm?: 'xchacha20-poly1305' | 'aes-256-gcm';
     shellChunkSize?: number;

@@ -389,6 +389,9 @@ pub fn compress(
     let algo = match algorithm.as_deref() {
         Some("gzip") => voided_core::compression::CompressionAlgorithm::Gzip,
         Some("none") => voided_core::compression::CompressionAlgorithm::None,
+        Some("iliad") | Some("iliad-foundation-v2") | Some("iliad.foundation.v2") => {
+            voided_core::compression::CompressionAlgorithm::IliadFoundationV2
+        }
         _ => voided_core::compression::CompressionAlgorithm::Brotli,
     };
 
@@ -416,6 +419,9 @@ pub fn decompress(data: Buffer, algorithm: String) -> Result<Buffer> {
     let algo = match algorithm.as_str() {
         "gzip" => voided_core::compression::CompressionAlgorithm::Gzip,
         "brotli" => voided_core::compression::CompressionAlgorithm::Brotli,
+        "iliad" | "iliad-foundation-v2" | "iliad.foundation.v2" => {
+            voided_core::compression::CompressionAlgorithm::IliadFoundationV2
+        }
         _ => voided_core::compression::CompressionAlgorithm::None,
     };
 
@@ -454,11 +460,21 @@ fn parse_encryption_algorithm(
 
 fn parse_compression_algorithm(
     algorithm: Option<String>,
-) -> voided_core::compression::CompressionAlgorithm {
+) -> Result<voided_core::compression::CompressionAlgorithm> {
     match algorithm.as_deref() {
-        Some("gzip") => voided_core::compression::CompressionAlgorithm::Gzip,
-        Some("none") => voided_core::compression::CompressionAlgorithm::None,
-        _ => voided_core::compression::CompressionAlgorithm::Brotli,
+        None
+        | Some("auto")
+        | Some("iliad")
+        | Some("iliad-foundation-v2")
+        | Some("iliad.foundation.v2") => {
+            Ok(voided_core::compression::CompressionAlgorithm::IliadFoundationV2)
+        }
+        Some("gzip") => Ok(voided_core::compression::CompressionAlgorithm::Gzip),
+        Some("brotli") => Ok(voided_core::compression::CompressionAlgorithm::Brotli),
+        Some("none") => Ok(voided_core::compression::CompressionAlgorithm::None),
+        Some(other) => Err(Error::from_reason(format!(
+            "unsupported compression algorithm: {other}"
+        ))),
     }
 }
 
@@ -569,7 +585,7 @@ pub fn protect(
         &key,
         Some(voided_core::shell::ProtectOptions {
             preset,
-            compression_algorithm: parse_compression_algorithm(compression_algorithm),
+            compression_algorithm: parse_compression_algorithm(compression_algorithm)?,
             compression_level: compression_level.unwrap_or(6),
             compression_min_size_threshold: 100,
             encryption_algorithm: parse_encryption_algorithm(encryption_algorithm),
@@ -634,7 +650,7 @@ pub fn repack_artifact(
         &key,
         Some(voided_core::shell::ProtectOptions {
             preset,
-            compression_algorithm: parse_compression_algorithm(compression_algorithm),
+            compression_algorithm: parse_compression_algorithm(compression_algorithm)?,
             compression_level: compression_level.unwrap_or(6),
             compression_min_size_threshold: 100,
             encryption_algorithm: parse_encryption_algorithm(encryption_algorithm),

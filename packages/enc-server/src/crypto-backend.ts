@@ -140,7 +140,7 @@ export function safetyNumbers(data: Buffer, groupSize: number = 5): string {
 
 export interface CompressionResult {
   compressed: Buffer;
-  algorithm: 'gzip' | 'brotli' | 'none';
+  algorithm: 'gzip' | 'brotli' | 'none' | 'iliad.foundation.v2';
   originalSize: number;
   compressedSize: number;
   compressionRatio: number;
@@ -175,22 +175,34 @@ export interface ProtectResult extends ProtectedArtifactInfo {
   artifact: Buffer;
 }
 
+export type ProtectCompressionAlgorithm =
+  | 'gzip'
+  | 'brotli'
+  | 'none'
+  | 'auto'
+  | 'iliad'
+  | 'iliad-foundation-v2'
+  | 'iliad.foundation.v2';
+
 export function compress(
   data: Buffer,
-  algorithm: 'gzip' | 'brotli' = 'brotli',
+  algorithm: 'gzip' | 'brotli' | 'iliad' | 'iliad-foundation-v2' | 'iliad.foundation.v2' = 'brotli',
   level: number = 6
 ): CompressionResult {
   const result = native().compress(data, algorithm, level);
   return {
     compressed: result.compressed,
-    algorithm: result.algorithm as 'gzip' | 'brotli' | 'none',
+    algorithm: result.algorithm as CompressionResult['algorithm'],
     originalSize: result.originalSize,
     compressedSize: result.compressedSize,
     compressionRatio: result.compressionRatio,
   };
 }
 
-export function decompress(data: Buffer, algorithm: 'gzip' | 'brotli'): Buffer {
+export function decompress(
+  data: Buffer,
+  algorithm: 'gzip' | 'brotli' | 'iliad' | 'iliad-foundation-v2' | 'iliad.foundation.v2'
+): Buffer {
   return native().decompress(data, algorithm);
 }
 
@@ -220,7 +232,7 @@ export function protect(
   key: Buffer,
   options: {
     preset?: 'compact' | 'balanced' | 'concealed';
-    compressionAlgorithm?: 'gzip' | 'brotli' | 'none';
+    compressionAlgorithm?: ProtectCompressionAlgorithm;
     compressionLevel?: number;
     encryptionAlgorithm?: 'xchacha20-poly1305' | 'aes-256-gcm';
     shellChunkSize?: number;
@@ -258,7 +270,7 @@ export function repackArtifact(
   key: Buffer,
   options: {
     preset?: 'compact' | 'balanced' | 'concealed';
-    compressionAlgorithm?: 'gzip' | 'brotli' | 'none';
+    compressionAlgorithm?: ProtectCompressionAlgorithm;
     compressionLevel?: number;
     encryptionAlgorithm?: 'xchacha20-poly1305' | 'aes-256-gcm';
     shellChunkSize?: number;

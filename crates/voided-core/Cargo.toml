@@ -19,7 +19,7 @@ default = ["backend"]
 backend = ["compression", "signing", "std"]
 
 # Browser-compatible subset for WASM
-browser = ["compression", "wasm"]
+browser = ["compression", "wasm", "std"]
 
 # Individual feature flags
 compression = ["brotli", "flate2"]

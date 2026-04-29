@@ -9,7 +9,7 @@
 //!
 //! - `backend` - Full feature set for Node.js backend (default)
 //! - `browser` - Browser-compatible subset for WASM
-//! - `compression` - Brotli and Gzip compression
+//! - `compression` - Brotli, Gzip, and Iliad Foundation compression
 //! - `signing` - Digital signatures (Ed25519, ECDSA, RSA-PSS)
 //!
 //! ## Example

@@ -381,6 +381,9 @@ pub fn compress(
     let algo = match algorithm.as_deref() {
         Some("gzip") => voided_core::compression::CompressionAlgorithm::Gzip,
         Some("none") => voided_core::compression::CompressionAlgorithm::None,
+        Some("iliad") | Some("iliad-foundation-v2") | Some("iliad.foundation.v2") => {
+            voided_core::compression::CompressionAlgorithm::IliadFoundationV2
+        }
         _ => voided_core::compression::CompressionAlgorithm::Brotli,
     };
 
@@ -410,6 +413,9 @@ pub fn decompress(data: &[u8], algorithm: &str) -> Result<Vec<u8>, JsValue> {
     let algo = match algorithm {
         "gzip" => voided_core::compression::CompressionAlgorithm::Gzip,
         "brotli" => voided_core::compression::CompressionAlgorithm::Brotli,
+        "iliad" | "iliad-foundation-v2" | "iliad.foundation.v2" => {
+            voided_core::compression::CompressionAlgorithm::IliadFoundationV2
+        }
         _ => voided_core::compression::CompressionAlgorithm::None,
     };
 
@@ -444,11 +450,21 @@ fn parse_encryption_algorithm(
 
 fn parse_compression_algorithm(
     algorithm: Option<String>,
-) -> voided_core::compression::CompressionAlgorithm {
+) -> Result<voided_core::compression::CompressionAlgorithm, JsValue> {
     match algorithm.as_deref() {
-        Some("gzip") => voided_core::compression::CompressionAlgorithm::Gzip,
-        Some("none") => voided_core::compression::CompressionAlgorithm::None,
-        _ => voided_core::compression::CompressionAlgorithm::Brotli,
+        None
+        | Some("auto")
+        | Some("iliad")
+        | Some("iliad-foundation-v2")
+        | Some("iliad.foundation.v2") => {
+            Ok(voided_core::compression::CompressionAlgorithm::IliadFoundationV2)
+        }
+        Some("gzip") => Ok(voided_core::compression::CompressionAlgorithm::Gzip),
+        Some("brotli") => Ok(voided_core::compression::CompressionAlgorithm::Brotli),
+        Some("none") => Ok(voided_core::compression::CompressionAlgorithm::None),
+        Some(other) => Err(JsValue::from_str(&format!(
+            "unsupported compression algorithm: {other}"
+        ))),
     }
 }
 
@@ -557,7 +573,7 @@ pub fn protect(
         &key,
         Some(voided_core::shell::ProtectOptions {
             preset,
-            compression_algorithm: parse_compression_algorithm(compression_algorithm),
+            compression_algorithm: parse_compression_algorithm(compression_algorithm)?,
             compression_level: compression_level.unwrap_or(6),
             compression_min_size_threshold: 100,
             encryption_algorithm: parse_encryption_algorithm(encryption_algorithm),
@@ -622,7 +638,7 @@ pub fn repack_artifact(
         &key,
         Some(voided_core::shell::ProtectOptions {
             preset,
-            compression_algorithm: parse_compression_algorithm(compression_algorithm),
+            compression_algorithm: parse_compression_algorithm(compression_algorithm)?,
             compression_level: compression_level.unwrap_or(6),
             compression_min_size_threshold: 100,
             encryption_algorithm: parse_encryption_algorithm(encryption_algorithm),
