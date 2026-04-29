@@ -540,7 +540,7 @@ pub fn fuse(
     options: Option<FusedShellOptions>,
 ) -> Result<FusedShellEnvelope> {
     let opts = options.unwrap_or_default();
-    let nonce = canonicalize_nonce(opts.shell_nonce.unwrap_or_else(random_nonce));
+    let nonce = opts.shell_nonce.unwrap_or_else(random_nonce);
     let (shell_key, tag_key) = derive_shell_keys(master_key, &nonce)?;
     let (payload, chunk_size) =
         field_monolith_encode_payload(data, &shell_key, &nonce, opts.chunk_size)?;
@@ -803,7 +803,6 @@ struct FieldMonolithSurfaceSummary {
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 struct FieldMonolithGeometry {
     original_len: usize,
-    target_cell_size: usize,
     chunk_count: usize,
     block_cells: usize,
     block_count: usize,
@@ -839,12 +838,11 @@ fn field_monolith_encode_payload_with_state(
     let mut mutation_scratch = Vec::with_capacity(target_cell_size);
 
     while cursor < data.len() {
-        let anchor = field_monolith_current_anchor_for_block_with_chunk_count(
+        let anchor = field_monolith_current_anchor_for_block(
             &state,
             block_index,
             &mut rng,
             target_cell_size,
-            geometry.chunk_count,
         );
         payload.push(anchor);
 
@@ -853,7 +851,7 @@ fn field_monolith_encode_payload_with_state(
                 break;
             }
             let remaining = data.len() - cursor;
-            let cell_len = field_monolith_next_cell_len(remaining, target_cell_size);
+            let cell_len = remaining.min(target_cell_size.max(1));
             let next_cursor = cursor + cell_len;
             let plaintext = &data[cursor..next_cursor];
             let plan =
@@ -1016,7 +1014,6 @@ impl ProtectedMonolithPlan {
 }
 
 #[cfg(feature = "compression")]
-#[allow(dead_code)]
 fn protected_monolith_encode_payload(
     encrypted_bytes: &[u8],
     shell_key: &Key,
@@ -1028,13 +1025,8 @@ fn protected_monolith_encode_payload(
     encryption_algorithm: EncryptionAlgorithm,
     preset: FusedPreset,
 ) -> Result<(Vec<u8>, usize)> {
-    let target_cell_size = resolve_protected_monolith_cell_size(
-        requested_chunk_size,
-        original_len,
-        compressed_len,
-        encrypted_bytes.len(),
-        preset,
-    )?;
+    let target_cell_size =
+        resolve_protected_monolith_cell_size(requested_chunk_size, encrypted_bytes.len())?;
     let plan = ProtectedMonolithPlan {
         preset,
         compression_algorithm,
@@ -1096,13 +1088,9 @@ fn protected_monolith_decode_payload(
 }
 
 #[cfg(feature = "compression")]
-#[allow(dead_code)]
 fn resolve_protected_monolith_cell_size(
     requested: Option<usize>,
-    _original_len: usize,
-    _compressed_len: usize,
     encrypted_len: usize,
-    _preset: FusedPreset,
 ) -> Result<usize> {
     if requested.is_some() {
         return resolve_field_monolith_current_cell_size(requested, encrypted_len);
@@ -1159,14 +1147,7 @@ fn protected_monolith_initial_state(
 
 #[cfg(feature = "compression")]
 #[derive(Debug, Clone, Copy)]
-struct WholeMonolithV0InitialMaterial {
-    cloak: [u8; 32],
-}
-
-#[cfg(feature = "compression")]
-#[derive(Debug, Clone, Copy)]
 struct WholeMonolithV0Header {
-    version: u8,
     preset: FusedPreset,
     compression_algorithm: CompressionAlgorithm,
     encryption_algorithm: EncryptionAlgorithm,
@@ -1180,7 +1161,7 @@ struct WholeMonolithV0Header {
 impl WholeMonolithV0Header {
     fn to_bytes(self) -> [u8; WHOLE_MONOLITH_V0_PUBLIC_HEADER_LEN] {
         let mut bytes = [0u8; WHOLE_MONOLITH_V0_PUBLIC_HEADER_LEN];
-        bytes[0] = self.version;
+        bytes[0] = PROTECTED_ARTIFACT_VERSION;
         bytes[1] = self.preset as u8;
         bytes[2] = self.compression_algorithm as u8;
         bytes[3] = self.encryption_algorithm as u8;
@@ -1199,9 +1180,8 @@ impl WholeMonolithV0Header {
             });
         }
 
-        let version = bytes[0];
-        if version != PROTECTED_ARTIFACT_VERSION {
-            return Err(Error::UnsupportedVersion(version));
+        if bytes[0] != PROTECTED_ARTIFACT_VERSION {
+            return Err(Error::UnsupportedVersion(bytes[0]));
         }
 
         let preset = FusedPreset::from_byte(bytes[1])?;
@@ -1214,7 +1194,6 @@ impl WholeMonolithV0Header {
         shell_nonce.copy_from_slice(&bytes[22..34]);
 
         Ok(Self {
-            version,
             preset,
             compression_algorithm,
             encryption_algorithm,
@@ -1235,7 +1214,7 @@ impl WholeMonolithV0Header {
         let shell_chunk_count = geometry.map(|geometry| geometry.chunk_count).unwrap_or(0);
 
         ProtectedArtifactInfo {
-            version: self.version,
+            version: PROTECTED_ARTIFACT_VERSION,
             preset: self.preset,
             preset_label: self.preset.name().to_string(),
             compression_algorithm: self.compression_algorithm,
@@ -1263,10 +1242,10 @@ fn whole_monolith_v0_protect(
     master_key: &Key,
     opts: ProtectOptions,
 ) -> Result<ProtectResult> {
-    let shell_nonce = canonicalize_nonce(opts.shell_nonce.unwrap_or_else(random_nonce));
+    let shell_nonce = opts.shell_nonce.unwrap_or_else(random_nonce);
     let public_seed = [shell_nonce[0], shell_nonce[1]];
     let (shell_key, tag_key) = derive_shell_keys(master_key, &shell_nonce)?;
-    let initial_material = whole_monolith_v0_initial_material(master_key, &shell_nonce)?;
+    let cloak = whole_monolith_v0_initial_material(master_key, &shell_nonce)?;
     let encryption_algorithm = opts
         .encryption_algorithm
         .unwrap_or(EncryptionAlgorithm::XChaCha20Poly1305);
@@ -1306,7 +1285,6 @@ fn whole_monolith_v0_protect(
     )?;
 
     let header = WholeMonolithV0Header {
-        version: PROTECTED_ARTIFACT_VERSION,
         preset: opts.preset,
         compression_algorithm: compressed.algorithm,
         encryption_algorithm: encrypted.algorithm,
@@ -1319,7 +1297,7 @@ fn whole_monolith_v0_protect(
     let tag = compute_shell_tag_parts(&[&header_bytes[..], body.as_slice()], &tag_key)?;
 
     body.extend_from_slice(&tag);
-    whole_monolith_v0_apply_cloak(&mut body, &initial_material.cloak);
+    whole_monolith_v0_apply_cloak(&mut body, &cloak);
 
     let mut masked_header = header_bytes;
     whole_monolith_v0_mask_public_header(&public_seed, &mut masked_header);
@@ -1338,9 +1316,9 @@ fn whole_monolith_v0_protect(
 fn whole_monolith_v0_open(artifact: &[u8], master_key: &Key) -> Result<Vec<u8>> {
     let (header, header_bytes, body_and_tag) = whole_monolith_v0_split_artifact(artifact)?;
     let (shell_key, tag_key) = derive_shell_keys(master_key, &header.shell_nonce)?;
-    let initial_material = whole_monolith_v0_initial_material(master_key, &header.shell_nonce)?;
+    let cloak = whole_monolith_v0_initial_material(master_key, &header.shell_nonce)?;
     let mut uncloaked = body_and_tag.to_vec();
-    whole_monolith_v0_apply_cloak(&mut uncloaked, &initial_material.cloak);
+    whole_monolith_v0_apply_cloak(&mut uncloaked, &cloak);
 
     if uncloaked.len() < SHELL_TAG_SIZE {
         return Err(Error::TruncatedPayload {
@@ -1464,7 +1442,7 @@ fn whole_monolith_v0_public_mask_byte(
 fn whole_monolith_v0_initial_material(
     master_key: &Key,
     artifact_nonce: &[u8; SHELL_NONCE_SIZE],
-) -> Result<WholeMonolithV0InitialMaterial> {
+) -> Result<[u8; 32]> {
     let bytes = derive_domain_bytes(
         master_key,
         Some(artifact_nonce),
@@ -1473,7 +1451,7 @@ fn whole_monolith_v0_initial_material(
     )?;
     let mut cloak = [0u8; 32];
     cloak.copy_from_slice(&bytes[32..]);
-    Ok(WholeMonolithV0InitialMaterial { cloak })
+    Ok(cloak)
 }
 
 #[cfg(feature = "compression")]
@@ -1572,7 +1550,6 @@ fn field_monolith_current_geometry_profile(
     let block_count = field_monolith_block_count_for_cells(chunk_count, block_cells);
     FieldMonolithGeometry {
         original_len: payload_len,
-        target_cell_size,
         chunk_count,
         block_cells,
         block_count,
@@ -1587,7 +1564,6 @@ fn field_monolith_infer_geometry(
     if payload_len == 0 {
         return Some(FieldMonolithGeometry {
             original_len: 0,
-            target_cell_size,
             chunk_count: 0,
             block_cells: field_monolith_current_anchor_block_cells(target_cell_size, 0),
             block_count: 0,
@@ -1617,7 +1593,6 @@ fn field_monolith_infer_geometry(
         if (min_original_len..=max_original_len).contains(&original_len) {
             return Some(FieldMonolithGeometry {
                 original_len,
-                target_cell_size,
                 chunk_count,
                 block_cells,
                 block_count,
@@ -1756,10 +1731,6 @@ fn field_monolith_plan_rng(
         seed_bytes[24 + index] ^= *byte;
     }
     Ok(DeterministicRng::from_seed(&seed_bytes))
-}
-
-fn field_monolith_next_cell_len(remaining: usize, target_cell_size: usize) -> usize {
-    remaining.min(target_cell_size.max(1))
 }
 
 fn field_monolith_cell_band(cell_len: usize) -> usize {
@@ -1936,12 +1907,11 @@ fn field_monolith_anchor_baseline_for_block(
     regime | (cadence << 2) | (intensity << 4) | (stride_seed << 6)
 }
 
-fn field_monolith_current_anchor_for_block_with_chunk_count(
+fn field_monolith_current_anchor_for_block(
     state: &FieldMonolithState,
     block_index: u32,
     rng: &mut DeterministicRng,
     base_cell_size: usize,
-    _chunk_count: usize,
 ) -> u8 {
     if base_cell_size >= FIELD_MONOLITH_AUTO_MID_CELL_BYTES {
         field_monolith_anchor_baseline_for_block(state, block_index, rng, base_cell_size)
@@ -2387,10 +2357,6 @@ fn field_monolith_remove_virtual_permutation(
     }
 }
 
-fn field_monolith_virtual_mix_round_limit(plan: FieldMonolithCellPlan) -> usize {
-    plan.pad_len
-}
-
 fn field_monolith_apply_virtual_mix_with_summary(
     bytes: &mut [u8],
     state: &FieldMonolithState,
@@ -2398,7 +2364,7 @@ fn field_monolith_apply_virtual_mix_with_summary(
     cell_index: u32,
     descriptor: u8,
 ) -> FieldMonolithSurfaceSummary {
-    let round_limit = field_monolith_virtual_mix_round_limit(plan);
+    let round_limit = plan.pad_len;
     let len = bytes.len();
     let reserve_stride = state
         .reserve
@@ -2463,7 +2429,7 @@ fn field_monolith_apply_virtual_mix(
     plan: FieldMonolithCellPlan,
     cell_index: u32,
 ) {
-    let round_limit = field_monolith_virtual_mix_round_limit(plan);
+    let round_limit = plan.pad_len;
     let len = bytes.len();
     let reserve_stride = state
         .reserve
@@ -2772,10 +2738,6 @@ fn segment_purpose(preset: FusedPreset, segment_index: usize) -> String {
 fn random_nonce() -> [u8; SHELL_NONCE_SIZE] {
     let mut nonce = [0u8; SHELL_NONCE_SIZE];
     rand::thread_rng().fill_bytes(&mut nonce);
-    nonce
-}
-
-fn canonicalize_nonce(nonce: [u8; SHELL_NONCE_SIZE]) -> [u8; SHELL_NONCE_SIZE] {
     nonce
 }
 
