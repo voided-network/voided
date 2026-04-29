@@ -1304,10 +1304,6 @@ fn whole_monolith_v0_protect(
         encrypted.algorithm,
         opts.preset,
     )?;
-    let _shell_geometry =
-        field_monolith_infer_geometry(body.len(), shell_cell_size).ok_or_else(|| {
-            Error::InvalidConfiguration("whole monolith shell geometry was invalid".to_string())
-        })?;
 
     let header = WholeMonolithV0Header {
         version: PROTECTED_ARTIFACT_VERSION,
@@ -1584,6 +1580,91 @@ fn field_monolith_current_geometry_profile(
 }
 
 fn field_monolith_infer_geometry(
+    payload_len: usize,
+    target_cell_size: usize,
+) -> Option<FieldMonolithGeometry> {
+    let target_cell_size = target_cell_size.max(1);
+    if payload_len == 0 {
+        return Some(FieldMonolithGeometry {
+            original_len: 0,
+            target_cell_size,
+            chunk_count: 0,
+            block_cells: field_monolith_current_anchor_block_cells(target_cell_size, 0),
+            block_count: 0,
+        });
+    }
+
+    let mut low = 1usize;
+    let mut high = payload_len
+        .min(
+            payload_len
+                .div_ceil(target_cell_size)
+                .saturating_add(payload_len / FIELD_MONOLITH_ANCHOR_BLOCK_CELLS_COMPACT)
+                .saturating_add(8),
+        )
+        .max(1);
+
+    while low <= high {
+        let chunk_count = low + (high - low) / 2;
+        let block_cells = field_monolith_current_anchor_block_cells(target_cell_size, chunk_count);
+        let block_count = field_monolith_block_count_for_cells(chunk_count, block_cells);
+        if block_count > payload_len {
+            high = chunk_count.saturating_sub(1);
+            continue;
+        }
+        let original_len = payload_len - block_count;
+        let min_original_len = (chunk_count - 1)
+            .saturating_mul(target_cell_size)
+            .saturating_add(1);
+        let max_original_len = chunk_count.saturating_mul(target_cell_size);
+
+        if original_len < min_original_len {
+            high = chunk_count.saturating_sub(1);
+            continue;
+        }
+        if original_len > max_original_len {
+            low = chunk_count.saturating_add(1);
+            continue;
+        }
+
+        return Some(FieldMonolithGeometry {
+            original_len,
+            target_cell_size,
+            chunk_count,
+            block_cells,
+            block_count,
+        });
+    }
+
+    for &chunk_count in &[low, high] {
+        if chunk_count == 0 {
+            continue;
+        }
+        let block_cells = field_monolith_current_anchor_block_cells(target_cell_size, chunk_count);
+        let block_count = field_monolith_block_count_for_cells(chunk_count, block_cells);
+        if block_count <= payload_len {
+            let original_len = payload_len - block_count;
+            let min_original_len = (chunk_count - 1)
+                .saturating_mul(target_cell_size)
+                .saturating_add(1);
+            let max_original_len = chunk_count.saturating_mul(target_cell_size);
+            if (min_original_len..=max_original_len).contains(&original_len) {
+                return Some(FieldMonolithGeometry {
+                    original_len,
+                    target_cell_size,
+                    chunk_count,
+                    block_cells,
+                    block_count,
+                });
+            }
+        }
+    }
+
+    None
+}
+
+#[cfg(test)]
+fn field_monolith_infer_geometry_linear(
     payload_len: usize,
     target_cell_size: usize,
 ) -> Option<FieldMonolithGeometry> {
@@ -2946,6 +3027,24 @@ mod tests {
 
         let restored = unfuse(&envelope, &master).unwrap();
         assert_eq!(restored, payload);
+    }
+
+    #[test]
+    fn field_monolith_fast_geometry_matches_linear_oracle() {
+        let cell_sizes = [8usize, 24, 64, 96, 128, 256, 512];
+        let payload_lengths = (0usize..4096).chain([
+            4096, 4097, 8191, 8192, 8193, 16_383, 16_384, 16_385, 65_535, 65_536, 65_537, 1_377_230,
+        ]);
+
+        for cell_size in cell_sizes {
+            for payload_len in payload_lengths.clone() {
+                assert_eq!(
+                    field_monolith_infer_geometry(payload_len, cell_size),
+                    field_monolith_infer_geometry_linear(payload_len, cell_size),
+                    "payload_len={payload_len} cell_size={cell_size}"
+                );
+            }
+        }
     }
 
     #[test]

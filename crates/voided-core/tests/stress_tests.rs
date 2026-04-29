@@ -10,13 +10,12 @@
 //! - Fuzz-like random input testing
 
 use voided_core::encryption::{
-    decrypt, decrypt_with_aad, derive_key_hkdf, derive_key_pbkdf2, encrypt, generate_key,
-    Algorithm, EncryptOptions, EncryptionResult, Key,
+    decrypt, decrypt_with_aad, derive_key_hkdf, encrypt, generate_key, Algorithm, EncryptOptions,
+    Key,
 };
 use voided_core::formats::{base64_decode, base64_encode, hex_decode, hex_encode};
 use voided_core::hash::{
-    compare_hashes, generate_fingerprint, generate_hmac, generate_safety_numbers, hash, hash_hex,
-    hash_with_pbkdf2, hash_with_salt, verify_hmac, verify_pbkdf2, HashAlgorithm,
+    compare_hashes, generate_hmac, hash, hash_with_pbkdf2, verify_hmac, HashAlgorithm,
 };
 use voided_core::util::{constant_time_compare, random_bytes, secure_wipe};
 
