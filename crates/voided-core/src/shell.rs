@@ -2209,12 +2209,13 @@ fn field_monolith_apply_virtual_mix_rounds(
     cell_index: u32,
     mix: FieldMonolithVirtualMixContext,
 ) {
+    let len = bytes.len();
     let mut round = 0usize;
     while round < plan.pad_len {
         let round_mix = mix.round_mix(cell_index, plan, round);
         let mut offset = 0usize;
         let mut offset_mix = 0u8;
-        while offset < bytes.len() {
+        while offset < len {
             bytes[offset] ^= mix.byte_mask(offset, round, round_mix, offset_mix);
             offset_mix = offset_mix.wrapping_add(mix.weave_mix);
             offset += 1;
@@ -2276,7 +2277,6 @@ fn field_monolith_decode_surface_with_summary_append(
     let mut front = 0u8;
     let mut back = 0u8;
     let mut offset_mix = 0u8;
-    output.reserve(surface.len());
     let output_start = output.len();
     for (offset, &byte) in surface.iter().enumerate() {
         if offset == 0 {
