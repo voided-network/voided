@@ -366,7 +366,7 @@ struct ProtectedArtifactEnvelope {
 
 #[cfg(feature = "compression")]
 impl ProtectedArtifactEnvelope {
-    #[allow(dead_code)]
+    #[cfg(test)]
     fn to_bytes(&self) -> Vec<u8> {
         let mut bytes = self.to_unsigned_bytes();
         bytes.extend_from_slice(&self.tag);
@@ -797,7 +797,6 @@ struct FieldMonolithSurfaceSummary {
     digest: u8,
     front: u8,
     back: u8,
-    surface_len: usize,
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
@@ -829,8 +828,10 @@ fn field_monolith_encode_payload_with_state(
     mut state: FieldMonolithState,
     mut rng: DeterministicRng,
 ) -> Vec<u8> {
-    let geometry = field_monolith_current_geometry_profile(data.len(), target_cell_size);
-    let mut payload = Vec::with_capacity(data.len().saturating_add(geometry.block_count));
+    let chunk_count = chunk_count(data.len(), target_cell_size.max(1));
+    let block_cells = field_monolith_current_anchor_block_cells(target_cell_size, chunk_count);
+    let block_count = field_monolith_block_count_for_cells(chunk_count, block_cells);
+    let mut payload = Vec::with_capacity(data.len().saturating_add(block_count));
     let mut cursor = 0usize;
     let mut cell_index = 0u32;
     let mut block_index = 0u32;
@@ -846,7 +847,7 @@ fn field_monolith_encode_payload_with_state(
         );
         payload.push(anchor);
 
-        for ordinal_in_block in 0..geometry.block_cells {
+        for ordinal_in_block in 0..block_cells {
             if cursor >= data.len() {
                 break;
             }
@@ -857,14 +858,23 @@ fn field_monolith_encode_payload_with_state(
             let plan =
                 field_monolith_plan_for_anchor_cell(anchor, cell_index, cell_len, ordinal_in_block);
             let descriptor = field_monolith_descriptor(plan);
-            let summary = field_monolith_encode_surface_with_summary_into(
-                plaintext,
+            let mask_lanes = field_monolith_mask_lanes(&state, cell_index, plan.stride);
+            surface.clear();
+            surface.extend_from_slice(plaintext);
+            field_monolith_xor_masked_bytes_in_place(&mut surface, &mask_lanes);
+            field_monolith_apply_mutation_in_place(
+                &mut surface,
+                plan.mutation,
+                plan.stride,
+                &mut mutation_scratch,
+            );
+            field_monolith_apply_virtual_permutation(&mut surface, &state, plan, cell_index);
+            let summary = field_monolith_apply_virtual_mix_with_summary(
+                &mut surface,
                 &state,
                 plan,
                 cell_index,
                 descriptor,
-                &mut surface,
-                &mut mutation_scratch,
             );
 
             payload.extend_from_slice(&surface);
@@ -993,27 +1003,6 @@ struct ProtectedMonolithPlan {
 }
 
 #[cfg(feature = "compression")]
-impl ProtectedMonolithPlan {
-    fn mix_bytes(self) -> [u8; 32] {
-        let mut mix = [0u8; 32];
-        mix[0] = self.preset as u8;
-        mix[1] = self.compression_algorithm as u8;
-        mix[2] = self.encryption_algorithm as u8;
-        mix[3] = (self.target_cell_size as u16).to_le_bytes()[0];
-        mix[4..12].copy_from_slice(&(self.original_len as u64).to_le_bytes());
-        mix[12..20].copy_from_slice(&(self.compressed_len as u64).to_le_bytes());
-        mix[20..28].copy_from_slice(&(self.encrypted_len as u64).to_le_bytes());
-        mix[28..30].copy_from_slice(&(self.target_cell_size as u16).to_le_bytes());
-        mix[30] = protected_monolith_ratio_bucket(self.compressed_len, self.original_len);
-        mix[31] = protected_monolith_ratio_bucket(
-            self.encrypted_len.saturating_sub(self.compressed_len),
-            self.compressed_len.max(1),
-        );
-        mix
-    }
-}
-
-#[cfg(feature = "compression")]
 fn protected_monolith_encode_payload(
     encrypted_bytes: &[u8],
     shell_key: &Key,
@@ -1131,16 +1120,21 @@ fn protected_monolith_initial_state(
 ) -> Result<FieldMonolithState> {
     let mut state = field_monolith_initial_state(shell_key, nonce, plan.encrypted_len)?;
     let seed = derive_chunk_seed(shell_key, nonce, 0, PROTECTED_MONOLITH_STATE_PURPOSE, 32)?;
-    let mix = plan.mix_bytes();
+    let target_cell_size = (plan.target_cell_size as u16).to_le_bytes();
+    let compressed_ratio = protected_monolith_ratio_bucket(plan.compressed_len, plan.original_len);
+    let encrypted_overhead_ratio = protected_monolith_ratio_bucket(
+        plan.encrypted_len.saturating_sub(plan.compressed_len),
+        plan.compressed_len.max(1),
+    );
 
-    state.phase = (state.phase ^ seed[0] ^ mix[0].rotate_left(1)) | 1;
-    state.tension ^= seed[1].rotate_right(1) ^ mix[1];
-    state.curvature ^= seed[2].rotate_left(2) ^ mix[2];
-    state.drift ^= seed[3].rotate_right(2) ^ mix[3];
-    state.echo ^= seed[4].rotate_left(3) ^ mix[30];
-    state.reserve ^= seed[5].rotate_right(3) ^ mix[31];
-    state.stride = (state.stride ^ ((seed[6] ^ mix[28]) & 0x0F)).max(1);
-    state.parity ^= seed[7] ^ mix[29];
+    state.phase = (state.phase ^ seed[0] ^ (plan.preset as u8).rotate_left(1)) | 1;
+    state.tension ^= seed[1].rotate_right(1) ^ plan.compression_algorithm as u8;
+    state.curvature ^= seed[2].rotate_left(2) ^ plan.encryption_algorithm as u8;
+    state.drift ^= seed[3].rotate_right(2) ^ target_cell_size[0];
+    state.echo ^= seed[4].rotate_left(3) ^ compressed_ratio;
+    state.reserve ^= seed[5].rotate_right(3) ^ encrypted_overhead_ratio;
+    state.stride = (state.stride ^ ((seed[6] ^ target_cell_size[0]) & 0x0F)).max(1);
+    state.parity ^= seed[7] ^ target_cell_size[1];
 
     Ok(state)
 }
@@ -1541,21 +1535,6 @@ fn field_monolith_current_auto_target_cell_size(payload_len: usize) -> usize {
     }
 }
 
-fn field_monolith_current_geometry_profile(
-    payload_len: usize,
-    target_cell_size: usize,
-) -> FieldMonolithGeometry {
-    let chunk_count = chunk_count(payload_len, target_cell_size.max(1));
-    let block_cells = field_monolith_current_anchor_block_cells(target_cell_size, chunk_count);
-    let block_count = field_monolith_block_count_for_cells(chunk_count, block_cells);
-    FieldMonolithGeometry {
-        original_len: payload_len,
-        chunk_count,
-        block_cells,
-        block_count,
-    }
-}
-
 fn field_monolith_infer_geometry(
     payload_len: usize,
     target_cell_size: usize,
@@ -1629,24 +1608,6 @@ fn field_monolith_current_anchor_block_cells(target_cell_size: usize, chunk_coun
     }
 }
 
-fn field_monolith_current_anchor_block_count(chunk_count: usize, target_cell_size: usize) -> usize {
-    let block_cells = field_monolith_current_anchor_block_cells(target_cell_size, chunk_count);
-    field_monolith_block_count_for_cells(chunk_count, block_cells)
-}
-
-fn field_monolith_current_anchor_total_original_len(
-    payload_len: usize,
-    chunk_count: usize,
-    target_cell_size: usize,
-) -> Result<usize> {
-    let anchor_bytes = field_monolith_current_anchor_block_count(chunk_count, target_cell_size);
-    payload_len.checked_sub(anchor_bytes).ok_or_else(|| {
-        Error::InvalidConfiguration(
-            "field monolith current payload underflowed anchor bytes".to_string(),
-        )
-    })
-}
-
 fn field_monolith_current_surface_len(
     payload: &[u8],
     cursor: usize,
@@ -1674,8 +1635,15 @@ fn field_monolith_current_surface_len(
         return Ok(chunk_size);
     }
 
-    let total_original_len =
-        field_monolith_current_anchor_total_original_len(payload.len(), chunk_count, chunk_size)?;
+    let anchor_bytes = field_monolith_block_count_for_cells(
+        chunk_count,
+        field_monolith_current_anchor_block_cells(chunk_size, chunk_count),
+    );
+    let total_original_len = payload.len().checked_sub(anchor_bytes).ok_or_else(|| {
+        Error::InvalidConfiguration(
+            "field monolith current payload underflowed anchor bytes".to_string(),
+        )
+    })?;
     let consumed_before_last = chunk_size
         .checked_mul(chunk_count.saturating_sub(1))
         .ok_or_else(|| {
@@ -2146,16 +2114,6 @@ fn field_monolith_mask_lanes(
     }
 }
 
-fn field_monolith_xor_masked_bytes_into(
-    input: &[u8],
-    mask_lanes: &FieldMonolithMaskLanes,
-    output: &mut Vec<u8>,
-) {
-    output.clear();
-    output.extend_from_slice(input);
-    field_monolith_xor_masked_bytes_in_place(output, mask_lanes);
-}
-
 fn field_monolith_xor_masked_bytes_in_place(bytes: &mut [u8], mask_lanes: &FieldMonolithMaskLanes) {
     let mut offset = 0usize;
     let mut tension_mix = mask_lanes.tension_base;
@@ -2419,7 +2377,6 @@ fn field_monolith_apply_virtual_mix_with_summary(
         digest,
         front,
         back,
-        surface_len: bytes.len(),
     }
 }
 
@@ -2471,50 +2428,6 @@ fn field_monolith_apply_virtual_mix(
     }
 }
 
-fn field_monolith_encode_surface_with_summary_into(
-    plaintext: &[u8],
-    state: &FieldMonolithState,
-    plan: FieldMonolithCellPlan,
-    cell_index: u32,
-    descriptor: u8,
-    surface: &mut Vec<u8>,
-    mutation_scratch: &mut Vec<u8>,
-) -> FieldMonolithSurfaceSummary {
-    let mask_lanes = field_monolith_mask_lanes(state, cell_index, plan.stride);
-    field_monolith_xor_masked_bytes_into(plaintext, &mask_lanes, surface);
-    field_monolith_apply_mutation_in_place(surface, plan.mutation, plan.stride, mutation_scratch);
-    field_monolith_apply_virtual_permutation(surface, state, plan, cell_index);
-    field_monolith_apply_virtual_mix_with_summary(surface, state, plan, cell_index, descriptor)
-}
-
-fn field_monolith_append_surface_with_summary(
-    surface: &[u8],
-    state: &FieldMonolithState,
-    cell_index: u32,
-    descriptor: u8,
-    output: &mut Vec<u8>,
-) -> FieldMonolithSurfaceSummary {
-    let mut digest =
-        field_monolith_surface_checksum_seed(surface.len(), state, cell_index, descriptor);
-    let mut front = 0u8;
-    let mut back = 0u8;
-    for (offset, &byte) in surface.iter().enumerate() {
-        if offset == 0 {
-            front = byte;
-        }
-        back = byte;
-        digest = field_monolith_surface_checksum_step(digest, state, offset, byte);
-    }
-    output.extend_from_slice(surface);
-
-    FieldMonolithSurfaceSummary {
-        digest,
-        front,
-        back,
-        surface_len: surface.len(),
-    }
-}
-
 fn field_monolith_decode_surface_with_summary_append(
     surface: &[u8],
     state: &FieldMonolithState,
@@ -2531,9 +2444,24 @@ fn field_monolith_decode_surface_with_summary_append(
         ));
     }
 
+    let mut digest =
+        field_monolith_surface_checksum_seed(surface.len(), state, cell_index, descriptor);
+    let mut front = 0u8;
+    let mut back = 0u8;
+    for (offset, &byte) in surface.iter().enumerate() {
+        if offset == 0 {
+            front = byte;
+        }
+        back = byte;
+        digest = field_monolith_surface_checksum_step(digest, state, offset, byte);
+    }
+    let summary = FieldMonolithSurfaceSummary {
+        digest,
+        front,
+        back,
+    };
     let output_start = output.len();
-    let summary =
-        field_monolith_append_surface_with_summary(surface, state, cell_index, descriptor, output);
+    output.extend_from_slice(surface);
     let decoded = &mut output[output_start..];
     field_monolith_apply_virtual_mix(decoded, state, plan, cell_index);
     field_monolith_remove_virtual_permutation(decoded, state, plan, cell_index);
@@ -2553,12 +2481,10 @@ fn field_monolith_update_state_with_summary(
 ) {
     let control_a = field_monolith_control_token_a(state, cell_len);
     let control_b = field_monolith_control_token_b(state, cell_index);
-    let span = (summary.surface_len as u8) ^ (cell_len as u8);
 
     state.phase = state.phase.wrapping_add(3).rotate_left(1) ^ summary.digest;
-    state.tension =
-        state.tension.wrapping_add(control_a).rotate_left(1) ^ summary.surface_len as u8;
-    state.curvature = state.curvature.wrapping_add(summary.digest.rotate_left(1)) ^ span;
+    state.tension = state.tension.wrapping_add(control_a).rotate_left(1) ^ cell_len as u8;
+    state.curvature = state.curvature.wrapping_add(summary.digest.rotate_left(1));
     state.drift = state.drift.wrapping_add(summary.front).rotate_right(1) ^ descriptor;
     state.echo = state.echo.wrapping_add(summary.back) ^ summary.digest.rotate_right(1);
     state.reserve = state.reserve.wrapping_add(control_b) ^ summary.digest.rotate_left(1);
@@ -2566,7 +2492,7 @@ fn field_monolith_update_state_with_summary(
         .stride
         .wrapping_add(((descriptor >> 4) & 0x03) + 1)
         .max(1);
-    state.parity ^= summary.digest ^ summary.front ^ summary.back ^ span;
+    state.parity ^= summary.digest ^ summary.front ^ summary.back;
 }
 
 fn transform_payload_v1(
