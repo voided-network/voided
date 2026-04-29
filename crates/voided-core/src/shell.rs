@@ -54,6 +54,12 @@ const FIELD_MONOLITH_ANCHOR_BLOCK_CELLS_DENSE: usize = 8;
 const FIELD_MONOLITH_MIN_CELL_BYTES: usize = 24;
 const FIELD_MONOLITH_EXPERIMENTAL_MIN_CELL_BYTES: usize = 8;
 const FIELD_MONOLITH_MAX_CELL_BYTES: usize = 512;
+#[cfg(feature = "compression")]
+const PROTECTED_MONOLITH_MAX_CELL_BYTES: usize = 1024;
+#[cfg(feature = "compression")]
+const FIELD_MONOLITH_DENSE_ANCHOR_MAX_CELL_BYTES: usize = PROTECTED_MONOLITH_MAX_CELL_BYTES;
+#[cfg(not(feature = "compression"))]
+const FIELD_MONOLITH_DENSE_ANCHOR_MAX_CELL_BYTES: usize = FIELD_MONOLITH_MAX_CELL_BYTES;
 const FIELD_MONOLITH_AUTO_TINY_CELL_BYTES: usize = 96;
 const FIELD_MONOLITH_CURRENT_AUTO_TINY_MAX: usize = 224;
 const FIELD_MONOLITH_CURRENT_AUTO_DENSE_SMALL_CELL_BYTES: usize = 96;
@@ -1101,7 +1107,7 @@ fn resolve_protected_monolith_cell_size(
     } else if encrypted_len <= FIELD_MONOLITH_CURRENT_AUTO_DIFFUSED_SMALL_MAX {
         FIELD_MONOLITH_CURRENT_AUTO_DIFFUSED_SMALL_CELL_BYTES
     } else {
-        FIELD_MONOLITH_MAX_CELL_BYTES
+        PROTECTED_MONOLITH_MAX_CELL_BYTES
     };
 
     Ok(if encrypted_len == 0 {
@@ -1600,7 +1606,7 @@ fn field_monolith_block_count_for_cells(chunk_count: usize, block_cells: usize) 
 }
 
 fn field_monolith_anchor_block_cells(target_cell_size: usize) -> usize {
-    if target_cell_size.max(1) <= FIELD_MONOLITH_MAX_CELL_BYTES {
+    if target_cell_size.max(1) <= FIELD_MONOLITH_DENSE_ANCHOR_MAX_CELL_BYTES {
         FIELD_MONOLITH_ANCHOR_BLOCK_CELLS_DENSE
     } else {
         FIELD_MONOLITH_ANCHOR_BLOCK_CELLS_COMPACT
