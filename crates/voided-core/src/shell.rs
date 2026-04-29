@@ -1727,15 +1727,6 @@ fn field_monolith_anchor_intensity_limit(cell_len: usize) -> usize {
     }
 }
 
-fn field_monolith_anchor_baseline_intensity_limit(cell_len: usize) -> usize {
-    match field_monolith_cell_band(cell_len) {
-        0 => 2,
-        1 => 3,
-        2 => 3,
-        _ => 4,
-    }
-}
-
 fn field_monolith_anchor_diffused_pad_len(
     anchor: u8,
     cell_index: u32,
@@ -1814,78 +1805,43 @@ fn field_monolith_anchor_diffused_pad_len(
     }
 }
 
-fn field_monolith_anchor_for_block(
-    state: &FieldMonolithState,
-    block_index: u32,
-    rng: &mut DeterministicRng,
-    base_cell_size: usize,
-) -> u8 {
-    let block0 = block_index as u8;
-    let block1 = (block_index >> 8) as u8;
-    let block2 = (block_index >> 16) as u8;
-    let block3 = (block_index >> 24) as u8;
-    let size0 = base_cell_size as u8;
-    let size1 = (base_cell_size >> 8) as u8;
-    let phase_rot = state.phase.rotate_left(1);
-    let echo_rot = state.echo.rotate_right(1);
-    let size0_rot1 = size0.rotate_left(1);
-    let size0_rot2 = size0.rotate_left(2);
-    let size1_rot1 = size1.rotate_right(1);
-    let regime = (rng.next_u32() as u8 ^ state.phase ^ state.curvature ^ block0 ^ size0) & 0x03;
-    let cadence = (rng.next_u32() as u8 ^ state.echo ^ state.reserve ^ block1 ^ size1) & 0x03;
-    let intensity =
-        (rng.next_u32() as u8 ^ state.parity ^ state.tension ^ block2 ^ size0_rot1) & 0x03;
-    let stride_seed =
-        (rng.next_u32() as u8 ^ state.stride ^ state.drift ^ block3 ^ size1_rot1) & 0x03;
-    let counter_orbit = block0 ^ phase_rot ^ echo_rot ^ size0_rot2 ^ size1_rot1;
-    let cadence = (cadence.wrapping_add(counter_orbit) ^ intensity.rotate_left(1)) & 0x03;
-    let intensity =
-        (intensity.wrapping_add(counter_orbit.rotate_right(1)) ^ stride_seed.rotate_left(1)) & 0x03;
-    let stride_seed =
-        (stride_seed.wrapping_add(counter_orbit.rotate_left(1)) ^ regime.rotate_right(1)) & 0x03;
-
-    regime | (cadence << 2) | (intensity << 4) | (stride_seed << 6)
-}
-
-fn field_monolith_anchor_baseline_for_block(
-    state: &FieldMonolithState,
-    block_index: u32,
-    rng: &mut DeterministicRng,
-    base_cell_size: usize,
-) -> u8 {
-    let block_mix = block_index.to_le_bytes();
-    let size_mix = (base_cell_size as u16).to_le_bytes();
-    let regime =
-        (rng.next_u32() as u8 ^ state.phase ^ state.curvature ^ block_mix[0] ^ size_mix[0]) & 0x03;
-    let cadence =
-        (rng.next_u32() as u8 ^ state.echo ^ state.reserve ^ block_mix[1] ^ size_mix[1]) & 0x03;
-    let intensity = (rng.next_u32() as u8
-        ^ state.parity
-        ^ state.tension
-        ^ block_mix[2]
-        ^ size_mix[0].rotate_left(1))
-        & 0x03;
-    let stride_seed = (rng.next_u32() as u8
-        ^ state.stride
-        ^ state.drift
-        ^ block_mix[3]
-        ^ size_mix[1].rotate_right(1))
-        & 0x03;
-
-    regime | (cadence << 2) | (intensity << 4) | (stride_seed << 6)
-}
-
 fn field_monolith_current_anchor_for_block(
     state: &FieldMonolithState,
     block_index: u32,
     rng: &mut DeterministicRng,
     base_cell_size: usize,
 ) -> u8 {
-    if base_cell_size >= FIELD_MONOLITH_AUTO_MID_CELL_BYTES {
-        field_monolith_anchor_baseline_for_block(state, block_index, rng, base_cell_size)
-    } else {
-        field_monolith_anchor_for_block(state, block_index, rng, base_cell_size)
+    let baseline = base_cell_size >= FIELD_MONOLITH_AUTO_MID_CELL_BYTES;
+    let block0 = block_index as u8;
+    let block1 = (block_index >> 8) as u8;
+    let block2 = (block_index >> 16) as u8;
+    let block3 = (block_index >> 24) as u8;
+    let size0 = base_cell_size as u8;
+    let size1 = (base_cell_size >> 8) as u8;
+    let regime = (rng.next_u32() as u8 ^ state.phase ^ state.curvature ^ block0 ^ size0) & 0x03;
+    let mut cadence = (rng.next_u32() as u8 ^ state.echo ^ state.reserve ^ block1 ^ size1) & 0x03;
+    let mut intensity =
+        (rng.next_u32() as u8 ^ state.parity ^ state.tension ^ block2 ^ size0.rotate_left(1))
+            & 0x03;
+    let mut stride_seed =
+        (rng.next_u32() as u8 ^ state.stride ^ state.drift ^ block3 ^ size1.rotate_right(1)) & 0x03;
+
+    if !baseline {
+        let counter_orbit = block0
+            ^ state.phase.rotate_left(1)
+            ^ state.echo.rotate_right(1)
+            ^ size0.rotate_left(2)
+            ^ size1.rotate_right(1);
+        cadence = (cadence.wrapping_add(counter_orbit) ^ intensity.rotate_left(1)) & 0x03;
+        intensity = (intensity.wrapping_add(counter_orbit.rotate_right(1))
+            ^ stride_seed.rotate_left(1))
+            & 0x03;
+        stride_seed = (stride_seed.wrapping_add(counter_orbit.rotate_left(1))
+            ^ regime.rotate_right(1))
+            & 0x03;
     }
+
+    regime | (cadence << 2) | (intensity << 4) | (stride_seed << 6)
 }
 
 fn field_monolith_plan_for_anchor_cell(
@@ -1894,15 +1850,7 @@ fn field_monolith_plan_for_anchor_cell(
     cell_len: usize,
     ordinal_in_block: usize,
 ) -> FieldMonolithCellPlan {
-    if cell_len >= FIELD_MONOLITH_CURRENT_AUTO_DIFFUSED_SMALL_CELL_BYTES {
-        return field_monolith_plan_for_anchor_baseline_cell(
-            anchor,
-            cell_index,
-            cell_len,
-            ordinal_in_block,
-        );
-    }
-
+    let baseline = cell_len >= FIELD_MONOLITH_CURRENT_AUTO_DIFFUSED_SMALL_CELL_BYTES;
     let regime = anchor & 0x03;
     let cadence = (anchor >> 2) & 0x03;
     let intensity = (anchor >> 4) & 0x03;
@@ -1912,7 +1860,7 @@ fn field_monolith_plan_for_anchor_cell(
     let cell_phase = (cell_index as u8)
         .wrapping_add(ordinal.wrapping_mul(3))
         .wrapping_add(band.rotate_left(1));
-    let lane_orbit = if band >= 2 {
+    let lane_orbit = if !baseline && band >= 2 {
         intensity.wrapping_add(regime.rotate_left((ordinal_in_block % 2) as u32))
             ^ cadence.rotate_right(((cell_index as usize + ordinal_in_block) % 2) as u32)
             ^ (cell_index as u8).rotate_left(((ordinal_in_block + band as usize) % 3) as u32)
@@ -1936,66 +1884,28 @@ fn field_monolith_plan_for_anchor_cell(
         + ordinal_in_block
         + ((cell_index as usize) & 0x01)
         + band as usize
-        + if band >= 2 {
+        + if !baseline && band >= 2 {
             intensity as usize + (((cell_index as usize) >> 1) & 0x01)
         } else {
             0
         })
         % stride_limit)
         + 1;
-    let intensity_limit = field_monolith_anchor_intensity_limit(cell_len);
-    let pad_len = if intensity_limit <= 1 {
-        0
+    let pad_len = if baseline {
+        let intensity_limit = match field_monolith_cell_band(cell_len) {
+            0 => 2,
+            1 | 2 => 3,
+            _ => 4,
+        };
+        (intensity as usize
+            + cadence as usize
+            + ordinal_in_block
+            + (((cell_index as usize) >> 1) & 0x01)
+            + band as usize)
+            % intensity_limit
     } else {
         field_monolith_anchor_diffused_pad_len(anchor, cell_index, cell_len, ordinal_in_block)
     };
-
-    FieldMonolithCellPlan {
-        mutation,
-        weave,
-        stride,
-        pad_len,
-    }
-}
-
-fn field_monolith_plan_for_anchor_baseline_cell(
-    anchor: u8,
-    cell_index: u32,
-    cell_len: usize,
-    ordinal_in_block: usize,
-) -> FieldMonolithCellPlan {
-    let regime = anchor & 0x03;
-    let cadence = (anchor >> 2) & 0x03;
-    let intensity = (anchor >> 4) & 0x03;
-    let stride_seed = (anchor >> 6) & 0x03;
-    let band = field_monolith_cell_band(cell_len) as u8;
-    let ordinal = ordinal_in_block as u8;
-    let cell_phase = (cell_index as u8)
-        .wrapping_add(ordinal.wrapping_mul(3))
-        .wrapping_add(band.rotate_left(1));
-    let mutation = FieldMonolithMutationMode::from_bits(
-        regime.wrapping_add(cell_phase) ^ cadence.rotate_left((ordinal_in_block % 2) as u32),
-    );
-    let weave = FieldMonolithWeaveMode::from_bits(
-        cadence
-            .wrapping_add(ordinal)
-            .wrapping_add((cell_index as u8).rotate_left(1))
-            .wrapping_add(band),
-    );
-    let stride_limit = field_monolith_anchor_stride_limit(cell_len);
-    let stride = ((stride_seed as usize
-        + ordinal_in_block
-        + ((cell_index as usize) & 0x01)
-        + band as usize)
-        % stride_limit)
-        + 1;
-    let intensity_limit = field_monolith_anchor_baseline_intensity_limit(cell_len);
-    let pad_len = (intensity as usize
-        + cadence as usize
-        + ordinal_in_block
-        + (((cell_index as usize) >> 1) & 0x01)
-        + band as usize)
-        % intensity_limit;
 
     FieldMonolithCellPlan {
         mutation,
@@ -2010,14 +1920,6 @@ fn field_monolith_descriptor(plan: FieldMonolithCellPlan) -> u8 {
         | ((plan.weave as u8) << 2)
         | (((plan.stride - 1) as u8) << 4)
         | ((plan.pad_len as u8) << 6)
-}
-
-fn field_monolith_control_token_a(state: &FieldMonolithState, cell_len: usize) -> u8 {
-    state.phase.wrapping_add(state.tension).rotate_left(1) ^ (cell_len as u8)
-}
-
-fn field_monolith_control_token_b(state: &FieldMonolithState, cell_index: u32) -> u8 {
-    state.drift.wrapping_add(state.reserve).rotate_right(1) ^ (cell_index as u8)
 }
 
 fn field_monolith_surface_checksum_seed(
@@ -2479,8 +2381,8 @@ fn field_monolith_update_state_with_summary(
     cell_index: u32,
     cell_len: usize,
 ) {
-    let control_a = field_monolith_control_token_a(state, cell_len);
-    let control_b = field_monolith_control_token_b(state, cell_index);
+    let control_a = state.phase.wrapping_add(state.tension).rotate_left(1) ^ cell_len as u8;
+    let control_b = state.drift.wrapping_add(state.reserve).rotate_right(1) ^ cell_index as u8;
 
     state.phase = state.phase.wrapping_add(3).rotate_left(1) ^ summary.digest;
     state.tension = state.tension.wrapping_add(control_a).rotate_left(1) ^ cell_len as u8;
