@@ -393,7 +393,7 @@ export async function decompress(
 
 function fusedWasmOnlyError(): Error {
   return new Error(
-    'Voided v2 fused shell APIs currently require the Rust WASM backend in e2ee-client'
+    'Voided v3 shell and monolith artifact APIs currently require the Rust WASM backend in e2ee-client'
   );
 }
 

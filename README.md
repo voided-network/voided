@@ -1,19 +1,19 @@
 # Voided
 
-Voided is a fused-first encryption toolkit built around a shared Rust core and
-first-party Node.js and browser wrappers.
+Voided is a monolith-first encryption toolkit built around a shared Rust core
+and first-party Node.js and browser wrappers.
 
 The current library surface is organized around three layers:
 
 1. primitive cryptography
-2. fused shell primitives
-3. full-flow fused artifacts
+2. fused shell primitives for callers that already own their inner bytes
+3. v3 whole-monolith protected artifacts for the normal product path
 
 The default full flow in Voided v3 is:
 
 1. compression
 2. encryption
-3. fused shell
+3. whole-monolith shell/artifact shaping
 
 ## Contents
 
@@ -55,13 +55,13 @@ Use the package that matches the environment and level of control you want:
 
 - `voided-core`
   - use this when you want direct Rust access to primitives, shell helpers, or
-    fused artifacts
+    v3 monolith artifacts
 - `@voideddev/enc-server`
   - use this in Node.js when you want native Rust-backed hashing, encryption,
-    compression, and fused artifact handling
+    compression, and v3 monolith artifact handling
 - `@voideddev/e2ee-client`
   - use this in browser runtimes when you want stateful client-side encryption,
-    key storage, and browser-facing fused artifact helpers
+    key storage, and browser-facing protected artifact helpers
 
 ## Core Concepts
 
@@ -90,7 +90,7 @@ Use fused shell primitives when:
 - you want shell metadata without managing a separate artifact format
 - you want preset-driven shell behavior without building your own outer wrapper
 
-### Full-Flow Fused Artifact
+### Full-Flow Monolith Artifact
 
 The full-flow helpers are the normal Voided v3 product surface:
 
@@ -114,16 +114,19 @@ without immediately decrypting the payload.
 ## What Fused Means
 
 The fused shell is not a second encryption algorithm and it is not the old map
-system under a new name.
+system under a new name. It remains available as a lower-level primitive for
+callers that already own the bytes they want to shell.
 
-It is the outer container layer that wraps already-prepared bytes into a
-versioned, preset-driven, inspectable envelope.
+The v3 product path is the whole-monolith protected artifact. It still runs the
+safe sequence of compression, encryption, and shell shaping, but the shell state
+is derived from the full artifact plan instead of treating each step as an
+isolated piece.
 
 In the standard Voided protected flow, the bytes going into the shell are:
 
 1. optionally compressed
 2. encrypted with an AEAD
-3. wrapped by the fused shell
+3. shaped by the v3 whole-monolith shell
 
 What the shell adds on top of the encrypted payload:
 
@@ -136,11 +139,10 @@ What the shell adds on top of the encrypted payload:
 The shell does not replace encryption. It sits outside encryption and gives the
 encrypted payload a first-class artifact shape.
 
-Current protected artifacts use the v3 protect-level monolith path: compression,
-encryption, and shelling still run in the safe order above, but the shell state
-is now derived from the full-flow artifact plan rather than only from encrypted
-payload length. Normal `open` is current-v3-only; legacy v1 and v2 protected
-artifacts are handled through the explicit rotation helpers.
+Current protected artifacts use the v3 whole-monolith path. Normal `protect`,
+`open`, `inspectArtifact`, and `repackArtifact` are current-v3-only. Legacy v1
+and v2 protected artifacts are handled only through the explicit rotation
+helpers.
 
 If you already have the bytes you want inside the shell, use shell primitives.
 If you want Voided to do the whole flow for you, use full-flow helpers.
@@ -200,6 +202,7 @@ Corpus: `synthetic` | fixtures: `11` | input bytes: `1,885,227` | samples:
 | candidate | roundtrip failures | tamper accepts / trials | wrong-key accepts / trials |
 |---|---:|---:|---:|
 | `voided-protect-current` | 0 | 0 / 33 | 0 / 11 |
+| `voided-protect-old-fused-v2` | 0 | 0 / 33 | 0 / 11 |
 | `voided-c1e-current` | 0 | 0 / 33 | 0 / 11 |
 | `voided-fuse-shell-current` | 0 | 0 / 33 | 0 / 11 |
 | `xchacha20-poly1305-raw` | 0 | 0 / 33 | 0 / 11 |
@@ -212,6 +215,7 @@ Corpus: `synthetic` | fixtures: `11` | input bytes: `1,885,227` | samples:
 | candidate | known Voided magic prefix hits / trials |
 |---|---:|
 | `voided-protect-current` | 0 / 11 |
+| `voided-protect-old-fused-v2` | 11 / 11 |
 | `voided-c1e-current` | 11 / 11 |
 | `voided-fuse-shell-current` | 11 / 11 |
 | `xchacha20-poly1305-raw` | 0 / 11 |
@@ -223,20 +227,22 @@ Corpus: `synthetic` | fixtures: `11` | input bytes: `1,885,227` | samples:
 
 | candidate | output bytes | byte delta | output/input | overhead % | median enc MiB/s | median dec MiB/s | weighted enc MiB/s | weighted dec MiB/s |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|
-| `voided-protect-current` | 1,377,230 | -507,997 | 0.730538 | -26.946198 | 70.298 | 10.716 | 74.068 | 76.087 |
-| `voided-c1e-current` | 1,376,389 | -508,838 | 0.730092 | -26.990808 | 87.929 | 49.036 | 129.785 | 247.793 |
-| `voided-fuse-shell-current` | 1,886,119 | 892 | 1.000473 | 0.047315 | 117.743 | 104.244 | 122.613 | 105.039 |
-| `xchacha20-poly1305-raw` | 1,885,667 | 440 | 1.000233 | 0.023339 | 303.198 | 301.879 | 302.323 | 299.508 |
-| `aes-256-gcm-raw` | 1,885,535 | 308 | 1.000163 | 0.016338 | 130.186 | 131.769 | 133.121 | 133.024 |
-| `gzip+xchacha20-poly1305` | 1,389,776 | -495,451 | 0.737193 | -26.280708 | 68.379 | 27.080 | 51.008 | 246.177 |
-| `brotli+xchacha20-poly1305` | 1,376,238 | -508,989 | 0.730012 | -26.998818 | 127.043 | 12.842 | 112.509 | 218.506 |
+| `voided-protect-current` | 1,377,062 | -508,165 | 0.730449 | -26.955109 | 74.573 | 11.548 | 77.567 | 77.974 |
+| `voided-protect-old-fused-v2` | 1,377,284 | -507,943 | 0.730567 | -26.943334 | 58.862 | 14.607 | 65.339 | 76.514 |
+| `voided-c1e-current` | 1,376,389 | -508,838 | 0.730092 | -26.990808 | 89.597 | 47.656 | 133.632 | 257.163 |
+| `voided-fuse-shell-current` | 1,886,119 | 892 | 1.000473 | 0.047315 | 135.248 | 108.649 | 137.639 | 110.820 |
+| `xchacha20-poly1305-raw` | 1,885,667 | 440 | 1.000233 | 0.023339 | 315.601 | 316.285 | 316.533 | 309.034 |
+| `aes-256-gcm-raw` | 1,885,535 | 308 | 1.000163 | 0.016338 | 133.811 | 133.734 | 134.307 | 135.029 |
+| `gzip+xchacha20-poly1305` | 1,389,776 | -495,451 | 0.737193 | -26.280708 | 75.802 | 29.901 | 54.825 | 264.841 |
+| `brotli+xchacha20-poly1305` | 1,376,238 | -508,989 | 0.730012 | -26.998818 | 160.819 | 13.192 | 137.780 | 252.764 |
 
 ### Artifact Statistics
 
 | candidate | entropy bits/byte | entropy gap | chi-square/df | serial corr | mean bit bias % | max byte freq % | same-input drift % | input-bit delta % | delta minus drift % | input delta len mean |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| `voided-protect-current` | 7.999867 | 0.000133 | 0.995160 | -0.001269 | 0.054321 | 0.406032 | 41.863724 | 44.411715 | 2.547992 | 6.000 |
-| `voided-c1e-current` | 7.999847 | 0.000153 | 1.144004 | -0.001083 | 0.035019 | 0.406571 | 48.236194 | 48.982580 | 0.746386 | 6.000 |
+| `voided-protect-current` | 7.999869 | 0.000131 | 0.980411 | 0.000409 | 0.031308 | 0.402596 | 41.708743 | 45.308849 | 3.600106 | 6.000 |
+| `voided-protect-old-fused-v2` | 7.999868 | 0.000132 | 0.988865 | -0.000078 | 0.025857 | 0.406380 | 41.428279 | 44.051412 | 2.623133 | 6.000 |
+| `voided-c1e-current` | 7.999871 | 0.000129 | 0.964162 | -0.000183 | 0.048515 | 0.406862 | 48.136698 | 49.651558 | 1.514860 | 6.000 |
 | `voided-fuse-shell-current` | 7.999898 | 0.000102 | 1.044534 | -0.000696 | 0.026350 | 0.404640 | 0.000000 | 22.833510 | 22.833510 | 0.182 |
 | `xchacha20-poly1305-raw` | 7.999893 | 0.000107 | 1.091969 | 0.000145 | 0.032078 | 0.405957 | 0.000000 | 2.583258 | 2.583258 | 0.091 |
 | `aes-256-gcm-raw` | 7.999892 | 0.000108 | 1.110937 | -0.000797 | 0.038464 | 0.403175 | 0.000000 | 4.282732 | 4.282732 | 0.091 |
@@ -252,8 +258,8 @@ above.
 
 | candidate | known prefix hits | output bytes | byte delta | overhead % | median enc MiB/s | median dec MiB/s | weighted enc MiB/s | weighted dec MiB/s | entropy gap | chi-square/df | same-input drift % | input-bit delta % |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| `current-v3-protect-monolith` | 0 / 11 | 1,377,230 | -507,997 | -26.946198 | 70.298 | 10.716 | 74.068 | 76.087 | 0.000133 | 0.995160 | 41.863724 | 44.411715 |
-| `old-v2-full-protect-fused` | 11 / 11 | 1,377,284 | -507,943 | -26.943334 | 66.742 | 14.452 | 69.449 | 72.687 | 0.000142 | 1.066319 | 41.560871 | 44.604100 |
+| `current-v3-protect-monolith` | 0 / 11 | 1,377,062 | -508,165 | -26.955109 | 74.573 | 11.548 | 77.567 | 77.974 | 0.000131 | 0.980411 | 41.708743 | 45.308849 |
+| `old-v2-full-protect-fused` | 11 / 11 | 1,377,284 | -507,943 | -26.943334 | 58.862 | 14.607 | 65.339 | 76.514 | 0.000132 | 0.988865 | 41.428279 | 44.051412 |
 
 ## Command Map
 
@@ -285,10 +291,10 @@ fused envelope:
 
 ### Full-Flow Artifact Layer
 
-Use these when you want the normal Voided v2 artifact model:
+Use these when you want the normal Voided v3 monolith artifact model:
 
 - `protect`
-  - compress, encrypt, and shell data into a fused artifact
+  - compress, encrypt, and shape data into a v3 monolith artifact
 - `open`
   - reverse the full flow and return the original plaintext bytes
 - `inspectArtifact`
@@ -348,9 +354,9 @@ through `VOIDED_ZIG_BIN` or an untracked `tools/zig/` directory.
 Each primary surface has its own detailed guide:
 
 - [Root Rust crate manual](./crates/voided-core/README.md)
-  - direct Rust usage, feature flags, module map, and fused artifact examples
+  - direct Rust usage, feature flags, module map, and protected artifact examples
 - [Node.js manual](./packages/enc-server/README.md)
-  - native loading, synchronous Node APIs, fused artifact usage, and higher-level
+  - native loading, synchronous Node APIs, monolith artifact usage, and higher-level
     helper exports
 - [Browser manual](./packages/e2ee-client/README.md)
   - stateful browser client flows, top-level helpers, crypto namespace usage,
@@ -361,7 +367,7 @@ Each primary surface has its own detailed guide:
 Repository examples live in [`examples/`](./examples/):
 
 - `simple-demo.js`
-  - smallest fused-first example
+  - smallest monolith-first example
 - `full-demo.js`
   - full artifact lifecycle with `protect`, `inspect`, `repack`, and `open`
 - `temperature-demo.js`
@@ -405,15 +411,15 @@ Testing is split across the Rust core and the package wrappers:
 - `@voideddev/e2ee-client`
   - browser-facing integration coverage plus dedicated WASM binding tests
 
-When changing the fused artifact model, the most important checks are:
+When changing the monolith artifact model, the most important checks are:
 
-- Rust core fused tests
+- Rust core monolith protect/open tests
 - Node wrapper integration tests
 - browser/WASM fused roundtrip tests
 
 ## v1 Boundary
 
-Voided v2 is fused-first. The old map-based surface is not part of the current
+Voided v3 is monolith-first. The old map-based surface is not part of the current
 library contract.
 
 That means:

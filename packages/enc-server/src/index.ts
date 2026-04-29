@@ -113,7 +113,8 @@ export {
   type OpBenchmarkResult,
 } from "./benchmark-all.js";
 
-// Planning metadata for the fused-first Voided v2 migration
+// Historical planning metadata for the v2 fused-first migration.
+// The current product protect/open path is the v3 whole-monolith artifact.
 export {
   VOIDED_V2_PRESET_PLAN,
   DEFAULT_VOIDED_V2_POLICY_PLAN,

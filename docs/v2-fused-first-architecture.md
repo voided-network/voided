@@ -1,6 +1,7 @@
 # Voided v2 Fused-First Architecture
 
-Status: implemented fused-first architecture with ongoing cleanup and release work
+Status: historical v2 transition note. The current product protect/open surface
+is Voided v3 whole-monolith; keep this file only as migration context.
 
 ## Summary
 

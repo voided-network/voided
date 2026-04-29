@@ -1,10 +1,9 @@
 /**
- * Planning-only metadata for the fused-first Voided v2 preset and role-alias
- * migration.
+ * Historical planning-only metadata for the fused-first Voided v2 preset and
+ * role-alias migration.
  *
- * This file captures the fused-first preset and policy surface for Voided v2.
- * Keeping these ids and defaults in source gives downstream consumers one
- * place to align on names while the runtime surfaces settle.
+ * The current protect/open runtime surface is Voided v3 whole-monolith. These
+ * ids remain exported for callers that still consume the old planning metadata.
  */
 
 export type VoidedV2PresetId =

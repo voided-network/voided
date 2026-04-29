@@ -316,7 +316,7 @@ impl Default for ProtectOptions {
 }
 
 #[cfg(feature = "compression")]
-/// Keyless metadata for a fused protected artifact.
+/// Keyless metadata for a Voided v3 monolith protected artifact.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ProtectedArtifactInfo {
     /// Artifact version.
@@ -712,7 +712,7 @@ pub fn inspect_rotation_artifact(artifact: &[u8]) -> Result<ProtectedArtifactInf
 }
 
 #[cfg(feature = "compression")]
-/// Repack an artifact under a new preset or full-flow configuration.
+/// Repack a current v3 monolith artifact under a new full-flow configuration.
 pub fn repack_artifact(
     artifact: &[u8],
     master_key: &Key,

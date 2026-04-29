@@ -604,7 +604,7 @@ pub fn inspect_rotation_artifact(artifact: &[u8]) -> Result<JsValue, JsValue> {
         .map_err(|e| JsValue::from_str(&e.to_string()))
 }
 
-/// Repack an artifact under a new fused preset/profile.
+/// Repack a current v3 monolith artifact under a new full-flow configuration.
 #[wasm_bindgen(js_name = repackArtifact)]
 pub fn repack_artifact(
     artifact: &[u8],

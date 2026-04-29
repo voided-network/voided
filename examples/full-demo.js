@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 /**
- * Full fused artifact lifecycle demo.
+ * Full v3 monolith artifact lifecycle demo.
  *
  * Build the workspace first:
  *   npm run build
@@ -25,8 +25,8 @@ const documentBody = JSON.stringify(
   {
     title: "Slipner cloud note",
     author: "alice",
-    tags: ["fused", "voided", "artifact"],
-    content: "Compression, encryption, and fused shell now travel together.",
+    tags: ["monolith", "voided", "artifact"],
+    content: "Compression, encryption, and monolith shell planning now travel together.",
   },
   null,
   2,

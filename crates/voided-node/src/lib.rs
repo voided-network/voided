@@ -616,7 +616,7 @@ pub fn inspect_rotation_artifact(artifact: Buffer) -> Result<ProtectedArtifactIn
     Ok(artifact_info_from_core(info))
 }
 
-/// Repack an artifact under a new fused preset/profile.
+/// Repack a current v3 monolith artifact under a new full-flow configuration.
 #[napi]
 pub fn repack_artifact(
     artifact: Buffer,

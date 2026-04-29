@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 /**
- * Minimal fused-first Voided example.
+ * Minimal monolith-first Voided example.
  *
  * Build the workspace first:
  *   npm run build
@@ -23,7 +23,7 @@ const {
 } = pkg;
 
 const key = generateKey();
-const payload = Buffer.from("Voided v2 is fused-first now.".repeat(128));
+const payload = Buffer.from("Voided v3 protect/open is monolith-first now.".repeat(128));
 
 console.log("Voided simple demo\n");
 console.log(`Plaintext bytes: ${payload.length}`);

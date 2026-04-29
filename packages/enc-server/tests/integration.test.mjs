@@ -1,5 +1,5 @@
 /**
- * Fused-first integration tests for @voideddev/enc-server.
+ * Monolith-first integration tests for @voideddev/enc-server.
  *
  * Run with:
  *   node packages/enc-server/tests/integration.test.mjs
@@ -30,7 +30,7 @@ async function test(name, fn) {
 }
 
 console.log('\n' + '='.repeat(60));
-console.log('@voideddev/enc-server Fused Integration Tests');
+console.log('@voideddev/enc-server Monolith Integration Tests');
 console.log('='.repeat(60) + '\n');
 
 let pkg;
@@ -59,7 +59,7 @@ const {
 
 await test('encrypt/decrypt roundtrip still works', () => {
   const key = generateKey();
-  const plaintext = Buffer.from('Voided v2 core encryption check');
+  const plaintext = Buffer.from('Voided v3 core encryption check');
   const encrypted = encrypt(plaintext, key, 'xchacha20-poly1305');
   const decrypted = decrypt(encrypted, key);
 
@@ -117,7 +117,7 @@ for (const preset of ['compact', 'balanced', 'concealed']) {
   });
 }
 
-await test('protect/open handles a large fused artifact payload', () => {
+await test('protect/open handles a large monolith artifact payload', () => {
   const key = generateKey();
   const plaintext = Buffer.alloc(192 * 1024);
   let state = 0x12345678;
@@ -172,4 +172,4 @@ if (failed > 0) {
   process.exit(1);
 }
 
-console.log('\nAll fused-first integration tests passed.\n');
+console.log('\nAll monolith-first integration tests passed.\n');

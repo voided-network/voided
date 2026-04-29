@@ -629,7 +629,7 @@ mod fused_shell_stress {
             FusedPreset::Balanced,
             FusedPreset::Concealed,
         ] {
-            let payload = b"voided fused artifact stress ".repeat(24 * 1024);
+            let payload = b"voided monolith artifact stress ".repeat(24 * 1024);
             let protected = protect(
                 &payload,
                 &key,

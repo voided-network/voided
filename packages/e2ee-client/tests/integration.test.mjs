@@ -337,24 +337,24 @@ await test('convenience decrypt function exists', () => {
 });
 
 // ============================================================================
-// FUSED ARTIFACT TESTS
+// MONOLITH ARTIFACT TESTS
 // ============================================================================
 
-console.log('\n=== Fused Artifact Tests ===\n');
+console.log('\n=== Monolith Artifact Tests ===\n');
 
 await test('protect/open roundtrip with preset inspection', async () => {
   try {
     await initWasm();
   } catch (error) {
-    log(`  Skipping WASM-only fused roundtrip in Node integration harness: ${error.message || error}`);
+    log(`  Skipping WASM-only monolith roundtrip in Node integration harness: ${error.message || error}`);
     return;
   }
   if (!isWasmBackendReady()) {
-    log('  Skipping WASM-only fused roundtrip in Node integration harness');
+    log('  Skipping WASM-only monolith roundtrip in Node integration harness');
     return;
   }
 
-  const plaintext = 'browser fused artifact '.repeat(4096);
+  const plaintext = 'browser monolith artifact '.repeat(4096);
   const protectedBlob = await protectArtifact(plaintext, { preset: 'balanced' });
   const info = await inspectProtected(protectedBlob);
   const restored = await openArtifact(protectedBlob);
@@ -371,14 +371,14 @@ await test('concealed preset handles larger payloads', async () => {
   try {
     await initWasm();
   } catch (error) {
-    log(`  Skipping WASM-only large fused artifact check: ${error.message || error}`);
+    log(`  Skipping WASM-only large monolith artifact check: ${error.message || error}`);
     return;
   }
   if (!isWasmBackendReady()) {
-    log('  Skipping WASM-only large fused artifact check in Node integration harness');
+    log('  Skipping WASM-only large monolith artifact check in Node integration harness');
     return;
   }
-  const plaintext = 'concealed fused payload '.repeat(12 * 1024);
+  const plaintext = 'concealed monolith payload '.repeat(12 * 1024);
   const protectedBlob = await protectArtifact(plaintext, { preset: 'concealed' });
   const info = await inspectProtected(protectedBlob);
   const restored = await openArtifact(protectedBlob);
@@ -390,7 +390,7 @@ await test('concealed preset handles larger payloads', async () => {
     throw new Error('Protected artifact should report a positive size');
   }
   if (restored !== plaintext) {
-    throw new Error('Large fused artifact roundtrip failed');
+    throw new Error('Large monolith artifact roundtrip failed');
   }
 });
 

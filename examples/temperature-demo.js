@@ -20,7 +20,7 @@ const payload = Buffer.from(
   JSON.stringify(
     {
       project: "voided-v2",
-      summary: "Preset-driven fused artifacts replace the old legacy shell story.",
+      summary: "Preset-driven monolith artifacts replace the old legacy shell story.",
       repeated: "artifact-profile-data".repeat(2048),
     },
     null,
@@ -47,4 +47,4 @@ for (const preset of ["compact", "balanced", "concealed"]) {
   console.log("");
 }
 
-console.log("Presets replace the old temperature/map tuning story in Voided v2.");
+console.log("Presets replace the old temperature/map tuning story in Voided v3.");

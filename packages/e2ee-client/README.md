@@ -24,7 +24,7 @@ At a high level, the package exposes four layers:
 - [Top-Level Helper Guide](#top-level-helper-guide)
 - [Low-Level Crypto Guide](#low-level-crypto-guide)
 - [WASM And Backend Behavior](#wasm-and-backend-behavior)
-- [Fused Artifact Guide](#fused-artifact-guide)
+- [Monolith Artifact Guide](#monolith-artifact-guide)
 - [Key Storage And Lifecycle](#key-storage-and-lifecycle)
 - [Development](#development)
 - [Troubleshooting](#troubleshooting)
@@ -37,7 +37,7 @@ Use `@voideddev/e2ee-client` when you want:
 
 - browser-side encryption with first-party Voided APIs
 - a stateful client that manages browser key storage for you
-- fused artifact helpers in browser runtimes
+- v3 monolith artifact helpers in browser runtimes
 - top-level helper functions for simpler app code
 - access to the WASM-backed low-level crypto layer when you need more control
 
@@ -53,18 +53,18 @@ npm install @voideddev/e2ee-client
 If you plan to use fused helpers in the browser, treat the WASM runtime as part
 of the normal package requirement. The TypeScript fallback is useful for the
 older browser encryption path and primitive helpers, but it is not the current
-fused artifact path.
+monolith artifact path.
 
 ## Recommended Browser Path
 
 If you are choosing quickly and do not need a custom integration, start here:
 
 1. create a `VoidedE2EEClient`
-2. use `protect` to produce a fused artifact
+2. use `protect` to produce a v3 monolith artifact
 3. use `inspectProtected` when you want metadata without opening it
 4. use `open` to restore the original text
 
-That is the normal browser-facing Voided v2 path.
+That is the normal browser-facing Voided v3 path.
 
 Use a different layer only when you have a clear reason:
 
@@ -111,7 +111,7 @@ Use `crypto` when you want direct lower-level control over:
 - `Uint8Array` inputs and outputs
 - backend selection
 - primitive crypto helpers
-- fused artifact helpers without the stateful client wrapper
+- monolith artifact helpers without the stateful client wrapper
 
 Use this when you want byte-level control or you want to make the WASM/runtime
 choice explicit.
@@ -129,7 +129,7 @@ than something you want the library to resolve lazily.
 
 ## Quick Start
 
-### Stateful Fused Artifact Example
+### Stateful Monolith Artifact Example
 
 ```ts
 import { VoidedE2EEClient } from "@voideddev/e2ee-client";
@@ -172,19 +172,19 @@ The fused shell is the outer artifact envelope. It does not replace browser
 encryption. It wraps already-prepared bytes in a stable, inspectable,
 preset-driven format.
 
-In the standard Voided v2 browser flow, the steps are:
+In the standard Voided v3 browser flow, the steps are:
 
 1. optional compression
 2. encryption
-3. fused shell wrapping
+3. whole-monolith shell shaping
 
 That means:
 
 - `encrypt` returns the older encrypted blob shape
 - `fuse` wraps prepared bytes in the shell
-- `protect` returns the standard fused artifact shape
+- `protect` returns the standard v3 monolith artifact shape
 
-Use `protect/open` when you want the standard Voided v2 artifact contract.
+Use `protect/open` when you want the standard Voided v3 monolith artifact contract.
 
 Use `fuse/unfuse` only when you already control the inner bytes and only need
 the outer shell.
@@ -213,9 +213,9 @@ Important behaviors:
 Common client operations:
 
 - `protect` / `open`
-  - fused-first artifact path
+  - monolith-first artifact path
 - `inspectProtected`
-  - inspect a fused protected blob without opening it
+  - inspect a monolith protected blob without opening it
 - `encrypt` / `decrypt`
   - older stateful encrypted blob path
 - `exportKey` / `importKey`
@@ -240,13 +240,13 @@ Recommended mental model:
 Command intent:
 
 - `protect`
-  - compress, encrypt, and shell text through the standard fused flow
+  - compress, encrypt, and shape text through the standard monolith flow
 - `open`
   - reverse the full fused flow and return the original text
 - `inspectProtected`
-  - inspect fused artifact metadata without opening it
+  - inspect monolith artifact metadata without opening it
 - `encrypt` / `decrypt`
-  - use the older encrypted blob format instead of the fused artifact format
+  - use the older encrypted blob format instead of the monolith artifact format
 
 ## Top-Level Helper Guide
 
@@ -337,7 +337,7 @@ What they do:
 - `inspectFused`
   - inspect shell metadata without opening the inner payload
 - `protect`
-  - compress, encrypt, and shell bytes into a standard fused artifact
+  - compress, encrypt, and shape bytes into a standard v3 monolith artifact
 - `open`
   - reverse the full fused flow and return the original bytes
 - `inspectArtifact`
@@ -354,7 +354,7 @@ The browser package has two backend modes:
 
 Important behavior:
 
-- the fused shell and fused artifact helpers currently require the Rust/WASM
+- the fused shell and monolith artifact helpers currently require the Rust/WASM
   backend
 - the older browser primitive APIs can fall back to TypeScript/Web Crypto when
   WASM is unavailable
@@ -399,9 +399,9 @@ console.log(await getCurrentBackend());
 If you plan to use fused helpers through the `crypto` namespace, explicit WASM
 initialization can make startup behavior easier to reason about.
 
-## Fused Artifact Guide
+## Monolith Artifact Guide
 
-The fused artifact APIs are:
+The monolith artifact APIs are:
 
 - `protect`
 - `open`
@@ -421,7 +421,7 @@ Recommended starting point:
 The normal browser artifact lifecycle is:
 
 1. `protect`
-   - produce a fused artifact from text or bytes
+   - produce a v3 monolith artifact from text or bytes
 2. `inspectProtected` or `inspectArtifact`
    - read preset, sizes, and envelope metadata
 3. `open`
@@ -454,7 +454,7 @@ Important caveats:
 - those older options still belong to the stateful `encrypt/decrypt` path for
   now
 
-In other words, the fused artifact flow is the storage/artifact flow. It is not
+In other words, the monolith artifact flow is the storage/artifact flow. It is not
 trying to replace every older high-level browser feature in one API.
 
 ## Key Storage And Lifecycle
@@ -498,7 +498,7 @@ fused browser path depends on the WASM runtime.
 
 ### Fused helpers throw instead of using the fallback backend
 
-That is expected today. The fused shell and fused artifact helpers currently
+That is expected today. The fused shell and monolith artifact helpers currently
 require the Rust/WASM backend in `@voideddev/e2ee-client`.
 
 Typical fixes:
@@ -508,7 +508,7 @@ Typical fixes:
 - check `getWasmError()`
 - verify the WASM assets are present in your bundle or local build output
 
-### I only need browser encryption and do not care about fused artifacts
+### I only need browser encryption and do not care about monolith artifacts
 
 Use the older `encrypt/decrypt` path or the relevant primitive helpers through
 `crypto`.
@@ -524,7 +524,7 @@ selection.
 
 ## v1 Boundary
 
-This package is the fused-first current line. The old map-based surface is not
+This package is the monolith-first current line. The old map-based surface is not
 part of the current public browser package contract.
 
 That means:

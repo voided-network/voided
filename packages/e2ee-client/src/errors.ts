@@ -177,7 +177,7 @@ export class Validator {
     }
 
     /**
-     * Validate fused protected blob
+     * Validate v3 monolith protected blob
      */
     static validateProtectedBlob(blob: any): void {
         if (!blob || typeof blob !== 'object') {

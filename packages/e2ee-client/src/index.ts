@@ -881,7 +881,7 @@ export class VoidedE2EEClient {
   }
 
   /**
-   * Protect data with the fused-first Voided v2 full flow.
+   * Protect data with the Voided v3 whole-monolith full flow.
    */
   public async protect(
     data: string,
@@ -1248,7 +1248,7 @@ export class VoidedE2EEClient {
   }
 
   /**
-   * Open a fused protected blob.
+   * Open a v3 monolith protected blob.
    */
   public async open(blob: ProtectedBlob): Promise<string> {
     Validator.validateProtectedBlob(blob);
@@ -1293,7 +1293,7 @@ export class VoidedE2EEClient {
   }
 
   /**
-   * Inspect a fused protected blob without opening it.
+   * Inspect a v3 monolith protected blob without opening it.
    */
   public async inspectProtected(blob: ProtectedBlob): Promise<ProtectedBlobInfo> {
     Validator.validateProtectedBlob(blob);

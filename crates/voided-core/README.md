@@ -8,8 +8,8 @@ JavaScript wrappers.
 The crate is organized around three layers:
 
 1. primitive cryptography
-2. fused shell primitives
-3. full-flow fused artifacts
+2. fused shell primitives for already-prepared bytes
+3. v3 whole-monolith protected artifacts for the normal product path
 
 ## Contents
 
@@ -33,10 +33,10 @@ The crate is organized around three layers:
 Use `voided-core` directly when you want:
 
 - native Rust access to Voided's primitives and artifact formats
-- the fused-first Voided v2 model without a JavaScript wrapper
+- the monolith-first Voided v3 model without a JavaScript wrapper
 - one implementation that stays aligned across Rust, Node, and WASM
 - direct control over whether you use raw primitives, fused shell, or the full
-  fused artifact flow
+  monolith artifact flow
 
 If you want the wrapper layers instead:
 
@@ -87,13 +87,13 @@ Use this layer when:
 - you want to inspect shell metadata independently
 - you want to apply or remove the shell without using the full artifact flow
 
-### Full-Flow Fused Artifact
+### Full-Flow Monolith Artifact
 
-The full-flow helper layer is the normal Voided v2 path:
+The full-flow helper layer is the normal Voided v3 path:
 
 1. optional compression
 2. authenticated encryption
-3. fused shell envelope
+3. whole-monolith artifact shaping
 
 The main functions are:
 
@@ -102,19 +102,20 @@ The main functions are:
 - `inspect_artifact`
 - `repack_artifact`
 
-Use this layer when you want the standard Voided v2 artifact contract.
+Use this layer when you want the standard Voided v3 monolith artifact contract.
 
 ## What Fused Means
 
-The fused shell is the outer envelope format for bytes that are already ready
-to store or transport. In the normal Voided v2 flow, those bytes are encrypted
-payload bytes.
+The fused shell is the outer envelope primitive for bytes that are already ready
+to store or transport. In the normal Voided v3 product flow, callers should use
+the whole-monolith `protect/open` helpers instead of assembling the product
+artifact by hand.
 
 That means the standard pipeline is:
 
 1. optional compression
 2. authenticated encryption
-3. fused shell envelope
+3. whole-monolith shell shaping
 
 The shell is responsible for the outer artifact contract:
 
@@ -143,11 +144,11 @@ The public shell commands break down like this:
 - `inspect_fused`
   - inspect shell metadata without opening the inner payload
 - `protect`
-  - compress, encrypt, and shell plaintext into a standard fused artifact
+  - compress, encrypt, and shape plaintext into a standard v3 monolith artifact
 - `open`
   - reverse the full `protect` pipeline and return the original plaintext
 - `inspect_artifact`
-  - inspect a fused artifact without opening it
+  - inspect a protected monolith artifact without opening it
 - `repack_artifact`
   - reopen and rewrite an artifact with different preset or pipeline options
 
@@ -155,7 +156,7 @@ That gives you three clean entry points:
 
 - primitives when you only need crypto or compression
 - shell helpers when you already own the inner bytes
-- full-flow helpers when you want the standard Voided v2 artifact contract
+- full-flow helpers when you want the standard Voided v3 monolith artifact contract
 
 ## Public Modules
 
@@ -259,16 +260,16 @@ assert_eq!(decrypted, plaintext);
 # Ok::<(), voided_core::Error>(())
 ```
 
-### Example: Standard Fused Artifact
+### Example: Standard Monolith Artifact
 
-Use `protect/open` when you want the normal Voided v2 artifact shape.
+Use `protect/open` when you want the normal Voided v3 monolith artifact shape.
 
 ```rust
 use voided_core::encryption::generate_key;
 use voided_core::shell::{inspect_artifact, open, protect, FusedPreset, ProtectOptions};
 
 let key = generate_key();
-let plaintext = b"hello fused world";
+let plaintext = b"hello monolith world";
 
 let protected = protect(
     plaintext,
@@ -324,10 +325,10 @@ assert_eq!(restored, payload);
   touching the artifact flow.
 - Use `compression` when you want direct compression results and metadata.
 - Use `fuse_bytes` when you already have the bytes you want inside the shell.
-- Use `protect` when you want the standard Voided v2 artifact path.
+- Use `protect` when you want the standard Voided v3 monolith artifact path.
 - Use `inspect_fused` or `inspect_artifact` when you want metadata without
   opening the payload.
-- Use `repack_artifact` when you want to move an artifact between fused presets
+- Use `repack_artifact` when you want to move an artifact between monolith presets
   without changing the underlying plaintext.
 
 ## Fused Presets
@@ -397,7 +398,7 @@ rather than reimplemented elsewhere.
 When changing this crate, the most important checks are:
 
 - unit tests around the touched module
-- fused artifact stress and vector coverage
+- monolith artifact stress and vector coverage
 - deterministic shell behavior when nonce or chunk settings are fixed
 
 From the workspace Rust root:
@@ -408,7 +409,7 @@ cargo test -p voided-core
 
 ## v1 Boundary
 
-`voided-core` is the fused-first Rust crate for the current library line.
+`voided-core` is the monolith-first Rust crate for the current library line.
 Map-based obfuscation belongs to deprecated v1 and is not part of the current
 crate surface.
 

@@ -777,7 +777,7 @@ fn test_fused_presets_roundtrip() {
 #[test]
 fn test_fused_tamper_detection() {
     const TEST: &str = "fused_tamper";
-    log_test!(TEST, "Testing fused artifact tamper detection");
+    log_test!(TEST, "Testing monolith artifact tamper detection");
 
     let key = generate_key();
     let payload = b"tamper-me".repeat(2048);

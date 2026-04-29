@@ -2,7 +2,7 @@
 
 `@voideddev/enc-server` is the Node.js package for Voided's native Rust-backed
 runtime. It exposes synchronous server-side APIs for hashing, compression,
-authenticated encryption, fused shell operations, and full-flow fused
+authenticated encryption, fused shell operations, and v3 monolith protected
 artifacts.
 
 Under the hood, the package is layered like this:
@@ -37,7 +37,7 @@ Use `@voideddev/enc-server` when you want:
 
 - Node.js access to the Voided native runtime
 - synchronous server-side APIs backed by Rust
-- the fused-first Voided v2 artifact model
+- the monolith-first Voided v3 artifact model
 - direct use of hashing, compression, encryption, shell, and artifact helpers
 - small higher-level utilities that are packaged on top of the native runtime
 
@@ -56,9 +56,9 @@ case, Rust must be installed on the machine.
 
 ## Quick Start
 
-### Full-Flow Fused Artifact
+### Full-Flow Monolith Artifact
 
-This is the normal Voided v2 path in Node.js.
+This is the normal Voided v3 path in Node.js.
 
 ```ts
 import {
@@ -135,18 +135,19 @@ console.log(restored.equals(payload));
 The fused shell is the outer artifact format. It wraps bytes that are already
 prepared and gives them a stable, inspectable, preset-driven envelope.
 
-In the standard Voided v2 flow, the bytes entering the shell are:
+In the standard Voided v3 product flow, `protect/open` own the whole artifact
+plan:
 
 1. optionally compressed
 2. encrypted
-3. wrapped by the fused shell
+3. shaped by the whole-monolith shell
 
 That means:
 
 - `encrypt` gives you ciphertext and encryption metadata, but not the standard
-  fused artifact
+  v3 monolith artifact
 - `fuse` wraps prepared bytes in the shell
-- `protect` runs the normal full flow and returns the standard fused artifact
+- `protect` runs the normal full flow and returns the standard v3 monolith artifact
 
 Use `fuse/unfuse` when you already control the bytes that should live inside
 the shell.
@@ -179,7 +180,7 @@ These are for cases where you already own the bytes being shelled.
 - `inspectArtifact`
 - `repackArtifact`
 
-These are the standard Voided v2 artifact APIs.
+These are the standard Voided v3 monolith artifact APIs.
 
 ## Primitive Crypto APIs
 
@@ -245,7 +246,7 @@ What each one does:
 
 ### Full-Flow Artifacts
 
-Use these when you want the standard Voided v2 artifact contract:
+Use these when you want the standard Voided v3 monolith artifact contract:
 
 - `protect(data, key, options?)`
 - `open(artifact, key)`
@@ -255,7 +256,7 @@ Use these when you want the standard Voided v2 artifact contract:
 What each one does:
 
 - `protect`
-  - compress, encrypt, and shell the input into the standard fused artifact
+  - compress, encrypt, and shape the input into the standard v3 monolith artifact
 - `open`
   - reverse `protect` and return the original plaintext bytes
 - `inspectArtifact`
@@ -374,7 +375,7 @@ npm run test:all
 ```
 
 The package-level integration tests are especially useful when you change the
-fused artifact model or its Node wrapper behavior.
+monolith artifact model or its Node wrapper behavior.
 
 ## Troubleshooting
 
@@ -395,7 +396,7 @@ Typical fixes:
 ### I want the standard artifact path, but I am using `encrypt/decrypt`
 
 Use `protect/open` instead. `encrypt/decrypt` are primitive AEAD helpers, while
-`protect/open` are the fused-first full-flow artifact APIs.
+`protect/open` are the monolith-first full-flow artifact APIs.
 
 ### I only want the shell layer
 
@@ -403,7 +404,7 @@ Use `fuse/unfuse` instead of `protect/open`.
 
 ## v1 Boundary
 
-This package is the fused-first current line. The old map-based APIs such as
+This package is the monolith-first current line. The old map-based APIs such as
 `encryptWithMap` and `VoidedService` have been removed from this branch and
 belong to deprecated v1 only.
 
