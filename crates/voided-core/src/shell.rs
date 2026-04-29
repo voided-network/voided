@@ -10,7 +10,7 @@ use crate::{
         derive_key_hkdf, derive_key_hkdf_raw, Algorithm as EncryptionAlgorithm, EncryptionResult,
         Key,
     },
-    hash::{compare_hashes, generate_hmac, generate_hmac_parts, HashAlgorithm},
+    hash::{compare_hashes, generate_hmac_sha256, generate_hmac_sha256_parts},
     Error, Result,
 };
 
@@ -511,14 +511,14 @@ pub fn derive_chunk_seed(
 
 /// Compute a truncated outer tag for shell payloads.
 pub fn compute_shell_tag(data: &[u8], tag_key: &Key) -> Result<[u8; SHELL_TAG_SIZE]> {
-    let mac = generate_hmac(data, tag_key.as_bytes(), HashAlgorithm::Sha256)?;
+    let mac = generate_hmac_sha256(data, tag_key.as_bytes())?;
     let mut tag = [0u8; SHELL_TAG_SIZE];
     tag.copy_from_slice(&mac[..SHELL_TAG_SIZE]);
     Ok(tag)
 }
 
 fn compute_shell_tag_parts(parts: &[&[u8]], tag_key: &Key) -> Result<[u8; SHELL_TAG_SIZE]> {
-    let mac = generate_hmac_parts(parts, tag_key.as_bytes(), HashAlgorithm::Sha256)?;
+    let mac = generate_hmac_sha256_parts(parts, tag_key.as_bytes())?;
     let mut tag = [0u8; SHELL_TAG_SIZE];
     tag.copy_from_slice(&mac[..SHELL_TAG_SIZE]);
     Ok(tag)

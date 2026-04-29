@@ -81,6 +81,16 @@ pub fn generate_hmac(data: &[u8], key: &[u8], algorithm: HashAlgorithm) -> Resul
     }
 }
 
+/// Generate a SHA-256 HMAC without heap-allocating the digest.
+pub fn generate_hmac_sha256(data: &[u8], key: &[u8]) -> Result<[u8; 32]> {
+    let mut mac =
+        Hmac::<Sha256>::new_from_slice(key).map_err(|e| Error::HashFailed(e.to_string()))?;
+    mac.update(data);
+    let mut output = [0u8; 32];
+    output.copy_from_slice(&mac.finalize().into_bytes());
+    Ok(output)
+}
+
 /// Generate HMAC over multiple contiguous logical parts without copying them first.
 pub fn generate_hmac_parts(
     parts: &[&[u8]],
@@ -105,6 +115,18 @@ pub fn generate_hmac_parts(
             Ok(mac.finalize().into_bytes().to_vec())
         }
     }
+}
+
+/// Generate a SHA-256 HMAC over multiple logical parts without heap-allocating the digest.
+pub fn generate_hmac_sha256_parts(parts: &[&[u8]], key: &[u8]) -> Result<[u8; 32]> {
+    let mut mac =
+        Hmac::<Sha256>::new_from_slice(key).map_err(|e| Error::HashFailed(e.to_string()))?;
+    for part in parts {
+        mac.update(*part);
+    }
+    let mut output = [0u8; 32];
+    output.copy_from_slice(&mac.finalize().into_bytes());
+    Ok(output)
 }
 
 /// Generate HMAC and return as hex string
