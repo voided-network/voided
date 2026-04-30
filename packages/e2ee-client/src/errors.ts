@@ -215,7 +215,7 @@ export class Validator {
             throw new ValidationError('Invalid protected blob: compression info required');
         }
 
-        const validCompressionAlgorithms = ['gzip', 'brotli', 'none', 'iliad.foundation.v2'];
+        const validCompressionAlgorithms = ['gzip', 'brotli', 'none'];
         if (!validCompressionAlgorithms.includes(blob.compression.algorithm)) {
             throw new ValidationError('Invalid protected blob: unsupported compression algorithm');
         }

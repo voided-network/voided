@@ -305,7 +305,7 @@ impl Default for ProtectOptions {
     fn default() -> Self {
         Self {
             preset: FusedPreset::Balanced,
-            compression_algorithm: CompressionAlgorithm::IliadFoundationV2,
+            compression_algorithm: CompressionAlgorithm::Brotli,
             compression_level: 6,
             compression_min_size_threshold: 100,
             encryption_algorithm: None,
@@ -2749,10 +2749,6 @@ mod tests {
         assert_eq!(inspected.version, PROTECTED_ARTIFACT_VERSION);
         assert_eq!(inspected.protected_size, protected.artifact.len());
         assert_eq!(inspected.original_size, payload.len());
-        assert_eq!(
-            inspected.compression_algorithm,
-            CompressionAlgorithm::IliadFoundationV2
-        );
         assert_eq!(inspected.encrypted_size, protected.info.encrypted_size);
         assert!(inspected.encrypted_size >= inspected.compressed_size);
         assert!(inspected.shell_chunk_count >= 1);
@@ -2768,7 +2764,7 @@ mod tests {
         let expected_compression = compression::compress(
             &payload,
             Some(CompressionOptions {
-                algorithm: ProtectOptions::default().compression_algorithm,
+                algorithm: CompressionAlgorithm::Brotli,
                 min_size_threshold: 100,
                 level: 6,
             }),

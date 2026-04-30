@@ -1,10 +1,8 @@
-//! Compression module providing Brotli, Gzip, and Iliad Foundation compression.
+//! Compression module providing Brotli and Gzip compression.
 
 use crate::{Error, Result, MAGIC_COMPRESSED};
 use alloc::vec::Vec;
 use serde::{Deserialize, Serialize};
-
-mod iliad;
 
 /// Supported compression algorithms
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -16,8 +14,6 @@ pub enum CompressionAlgorithm {
     Gzip = 0x01,
     /// Brotli compression
     Brotli = 0x02,
-    /// Iliad Foundation v2 routed compression
-    IliadFoundationV2 = 0x03,
 }
 
 impl CompressionAlgorithm {
@@ -27,7 +23,6 @@ impl CompressionAlgorithm {
             0x00 => Ok(CompressionAlgorithm::None),
             0x01 => Ok(CompressionAlgorithm::Gzip),
             0x02 => Ok(CompressionAlgorithm::Brotli),
-            0x03 => Ok(CompressionAlgorithm::IliadFoundationV2),
             _ => Err(Error::UnsupportedAlgorithm(byte)),
         }
     }
@@ -38,7 +33,6 @@ impl CompressionAlgorithm {
             CompressionAlgorithm::None => "none",
             CompressionAlgorithm::Gzip => "gzip",
             CompressionAlgorithm::Brotli => "brotli",
-            CompressionAlgorithm::IliadFoundationV2 => "iliad.foundation.v2",
         }
     }
 
@@ -48,9 +42,6 @@ impl CompressionAlgorithm {
             "none" => Ok(CompressionAlgorithm::None),
             "gzip" => Ok(CompressionAlgorithm::Gzip),
             "brotli" => Ok(CompressionAlgorithm::Brotli),
-            "iliad" | "iliad-foundation-v2" | "iliad.foundation.v2" => {
-                Ok(CompressionAlgorithm::IliadFoundationV2)
-            }
             _ => Err(Error::UnsupportedAlgorithm(0)),
         }
     }
@@ -78,7 +69,7 @@ pub struct CompressionOptions {
     pub algorithm: CompressionAlgorithm,
     /// Minimum size threshold for compression (skip for smaller data)
     pub min_size_threshold: usize,
-    /// Compression level (1-9 for gzip, 1-11 for brotli; Iliad Foundation owns its routing lanes)
+    /// Compression level (1-9 for gzip, 1-11 for brotli)
     pub level: u32,
 }
 
@@ -122,7 +113,6 @@ pub fn compress(data: &[u8], options: Option<CompressionOptions>) -> Result<Comp
     let (compressed, algorithm) = match opts.algorithm {
         CompressionAlgorithm::Brotli => compress_brotli(data, opts.level)?,
         CompressionAlgorithm::Gzip => compress_gzip(data, opts.level)?,
-        CompressionAlgorithm::IliadFoundationV2 => iliad::compress_foundation_v2(data)?,
         CompressionAlgorithm::None => (data.to_vec(), CompressionAlgorithm::None),
     };
 
@@ -155,7 +145,6 @@ pub fn decompress(data: &[u8], algorithm: CompressionAlgorithm) -> Result<Vec<u8
         CompressionAlgorithm::None => Ok(data.to_vec()),
         CompressionAlgorithm::Gzip => decompress_gzip(data),
         CompressionAlgorithm::Brotli => decompress_brotli(data),
-        CompressionAlgorithm::IliadFoundationV2 => iliad::decompress_foundation_v2(data),
     }
 }
 
@@ -297,35 +286,6 @@ mod tests {
 
         let decompressed = decompress(&result.compressed, result.algorithm).unwrap();
         assert_eq!(data, &decompressed[..]);
-    }
-
-    #[test]
-    fn test_iliad_foundation_v2_roundtrip() {
-        let data = br#"{"projectType":"screenplay","manifest":{"version":1},"blocks":[{"type":"dialogue","speaker":"ADA","text":"Iliad Foundation v2 should route this export through the protected artifact compression lane."}],"draft":{"blocks":[]}}"#
-            .repeat(512);
-
-        let result = compress(
-            &data,
-            Some(CompressionOptions {
-                algorithm: CompressionAlgorithm::IliadFoundationV2,
-                min_size_threshold: 10,
-                level: 6,
-            }),
-        )
-        .unwrap();
-
-        assert_eq!(result.algorithm, CompressionAlgorithm::IliadFoundationV2);
-        assert_eq!(
-            CompressionAlgorithm::from_byte(0x03).unwrap(),
-            result.algorithm
-        );
-        assert_eq!(
-            CompressionAlgorithm::from_name("iliad-foundation-v2").unwrap(),
-            result.algorithm
-        );
-
-        let decompressed = decompress(&result.compressed, result.algorithm).unwrap();
-        assert_eq!(data, decompressed);
     }
 
     #[test]

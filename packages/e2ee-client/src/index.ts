@@ -172,18 +172,9 @@ export interface EncryptOptions {
   compressionLevel?: number; // 1-9 for gzip, 1-11 for brotli
 }
 
-export type ProtectCompressionAlgorithm =
-  | "gzip"
-  | "brotli"
-  | "none"
-  | "auto"
-  | "iliad"
-  | "iliad-foundation-v2"
-  | "iliad.foundation.v2";
-
 export interface ProtectOptions {
   preset?: "compact" | "balanced" | "concealed";
-  compressionAlgorithm?: ProtectCompressionAlgorithm;
+  compressionAlgorithm?: "gzip" | "brotli" | "none";
   compressionLevel?: number;
   encryptionAlgorithm?: "aes-256-gcm" | "xchacha20-poly1305";
   shellChunkSize?: number;
@@ -196,7 +187,7 @@ export interface ProtectedBlob {
   pipeline: "compression->encryption->fused-shell";
   preset: "compact" | "balanced" | "concealed";
   compression: {
-    algorithm: "gzip" | "brotli" | "none" | "iliad.foundation.v2";
+    algorithm: "gzip" | "brotli" | "none";
     originalSize: number;
     compressedSize: number;
   };
