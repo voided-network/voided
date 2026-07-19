@@ -17,6 +17,13 @@ const X25519_BASEPOINT = (() => {
   return point;
 })();
 
+class X25519AgreementRejectedError extends CryptoError {
+  constructor(detail: string) {
+    super(`X25519 agreement rejected: ${detail}`);
+    this.name = "X25519AgreementRejectedError";
+  }
+}
+
 /**
  * CryptoService - Handles all cryptographic operations for the E2EE client
  * Uses the Web Crypto API for browser-based encryption.
@@ -479,7 +486,6 @@ export class CryptoService {
     ourPrivateKey: ArrayBuffer | Uint8Array,
     theirPublicKey: ArrayBuffer | Uint8Array
   ): Promise<ArrayBuffer> {
-    const privateKeyBytes = this.normalizeX25519PrivateKey(ourPrivateKey);
     const publicKeyBytes = this.toUint8ArrayCopy(theirPublicKey);
 
     if (publicKeyBytes.length !== 32) {
@@ -487,44 +493,75 @@ export class CryptoService {
         `X25519 public key must be 32 bytes, received ${publicKeyBytes.length}`
       );
     }
+    if (this.isAllZero(publicKeyBytes)) {
+      throw new X25519AgreementRejectedError("peer public key is all zero");
+    }
 
+    const privateKeyBytes = this.normalizeX25519PrivateKey(ourPrivateKey);
     try {
-      const privateKey = await crypto.subtle.importKey(
-        "pkcs8",
-        toBuffer(this.x25519Pkcs8FromSeed(privateKeyBytes)),
-        { name: "X25519" } as AlgorithmIdentifier,
-        false,
-        ["deriveBits"]
-      );
-      const publicKey = await crypto.subtle.importKey(
-        "raw",
-        toBuffer(publicKeyBytes),
-        { name: "X25519" } as AlgorithmIdentifier,
-        false,
-        []
-      );
+      let webCryptoError: unknown;
+      try {
+        const privateKeyPkcs8 = this.x25519Pkcs8FromSeed(privateKeyBytes);
+        let privateKey: CryptoKey;
+        try {
+          privateKey = await crypto.subtle.importKey(
+            "pkcs8",
+            toBuffer(privateKeyPkcs8),
+            { name: "X25519" } as AlgorithmIdentifier,
+            false,
+            ["deriveBits"]
+          );
+        } finally {
+          this.secureWipe(privateKeyPkcs8);
+        }
+        const publicKey = await crypto.subtle.importKey(
+          "raw",
+          toBuffer(publicKeyBytes),
+          { name: "X25519" } as AlgorithmIdentifier,
+          false,
+          []
+        );
 
-      return await crypto.subtle.deriveBits(
-        { name: "X25519", public: publicKey } as EcdhKeyDeriveParams,
-        privateKey,
-        256
-      );
-    } catch (error) {
+        const shared = await crypto.subtle.deriveBits(
+          { name: "X25519", public: publicKey } as EcdhKeyDeriveParams,
+          privateKey,
+          256
+        );
+        this.assertContributoryX25519Secret(shared, "WebCrypto");
+        return shared;
+      } catch (error) {
+        if (error instanceof X25519AgreementRejectedError) {
+          throw error;
+        }
+        webCryptoError = error;
+      }
+
       const wasm = await this.getAnyWasmModule();
       if (wasm?.x25519_shared_secret) {
+        let shared: Uint8Array | null = null;
         try {
-          const shared = wasm.x25519_shared_secret(privateKeyBytes, publicKeyBytes);
+          shared = wasm.x25519_shared_secret(privateKeyBytes, publicKeyBytes);
+          this.assertContributoryX25519Secret(shared, "Voided WASM");
           return this.typedArrayToArrayBuffer(shared);
         } catch (wasmError) {
+          if (wasmError instanceof X25519AgreementRejectedError) {
+            throw wasmError;
+          }
           throw new CryptoError(
             `X25519 shared secret derivation failed in WASM fallback: ${wasmError}`
           );
+        } finally {
+          if (shared) {
+            this.secureWipe(shared);
+          }
         }
       }
 
       throw new CryptoError(
-        `X25519 shared secret derivation failed: ${error}`
+        `X25519 shared secret derivation failed: ${webCryptoError}`
       );
+    } finally {
+      this.secureWipe(privateKeyBytes);
     }
   }
 
@@ -700,11 +737,43 @@ export class CryptoService {
       bytes.length === X25519_PKCS8_PREFIX.length + 32 &&
       X25519_PKCS8_PREFIX.every((value, index) => bytes[index] === value)
     ) {
-      return bytes.slice(X25519_PKCS8_PREFIX.length);
+      const privateKey = bytes.slice(X25519_PKCS8_PREFIX.length);
+      this.secureWipe(bytes);
+      return privateKey;
     }
+    this.secureWipe(bytes);
     throw new CryptoError(
       `X25519 private key must be 32-byte raw seed or PKCS8. Received ${bytes.length} bytes`
     );
+  }
+
+  private assertContributoryX25519Secret(
+    sharedSecret: ArrayBuffer | Uint8Array,
+    backend: string
+  ): void {
+    const bytes = sharedSecret instanceof Uint8Array
+      ? sharedSecret
+      : new Uint8Array(sharedSecret);
+    if (bytes.length !== 32) {
+      this.secureWipe(bytes);
+      throw new CryptoError(
+        `${backend} returned an invalid X25519 shared secret length: ${bytes.length}`
+      );
+    }
+    if (this.isAllZero(bytes)) {
+      this.secureWipe(bytes);
+      throw new X25519AgreementRejectedError(
+        `${backend} produced an all-zero shared secret from a low-order or invalid peer public key`
+      );
+    }
+  }
+
+  private isAllZero(bytes: Uint8Array): boolean {
+    let combined = 0;
+    for (const byte of bytes) {
+      combined |= byte;
+    }
+    return combined === 0;
   }
 
   private getReadyWasmModule(): WasmModule | null {

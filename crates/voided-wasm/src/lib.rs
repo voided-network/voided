@@ -235,10 +235,13 @@ pub fn x25519_shared_secret(
     our_private_key: &[u8],
     their_public_key: &[u8],
 ) -> Result<Vec<u8>, JsValue> {
-    let shared = voided_core::encryption::x25519_shared_secret(our_private_key, their_public_key)
-        .map_err(|e| JsValue::from_str(&e.to_string()))?;
+    let mut shared =
+        voided_core::encryption::x25519_shared_secret(our_private_key, their_public_key)
+            .map_err(|e| JsValue::from_str(&e.to_string()))?;
+    let output = shared.to_vec();
+    shared.fill(0);
 
-    Ok(shared.to_vec())
+    Ok(output)
 }
 
 /// Derive AES key bytes from DH shared secret using HKDF.

@@ -199,7 +199,19 @@ pub fn x25519_shared_secret(
     let mut public_key = [0u8; X25519_KEY_SIZE];
     public_key.copy_from_slice(their_public_key);
 
-    Ok(x25519(private_key, public_key))
+    let mut shared_secret = x25519(private_key, public_key);
+    private_key.zeroize();
+
+    let shared_secret_or = shared_secret.iter().fold(0u8, |acc, byte| acc | byte);
+    if shared_secret_or == 0 {
+        shared_secret.zeroize();
+        return Err(Error::KeyDerivationFailed(
+            "X25519 agreement rejected an all-zero shared secret from a low-order or invalid public key"
+                .to_string(),
+        ));
+    }
+
+    Ok(shared_secret)
 }
 
 /// Derive an AES key from raw X25519 shared secret.
@@ -306,6 +318,24 @@ mod tests {
         let s2 = x25519_shared_secret(&bob.private_key, &alice.public_key).unwrap();
 
         assert_eq!(s1, s2);
+    }
+
+    #[test]
+    fn test_x25519_rejects_low_order_public_keys() {
+        let private_key = [7_u8; X25519_KEY_SIZE];
+        let mut one = [0_u8; X25519_KEY_SIZE];
+        one[0] = 1;
+
+        for public_key in [[0_u8; X25519_KEY_SIZE], one] {
+            let error = x25519_shared_secret(&private_key, &public_key).unwrap_err();
+            assert_eq!(
+                error,
+                Error::KeyDerivationFailed(
+                    "X25519 agreement rejected an all-zero shared secret from a low-order or invalid public key"
+                        .to_string()
+                )
+            );
+        }
     }
 
     #[test]
