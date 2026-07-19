@@ -1,7 +1,7 @@
 //! Hashing module providing SHA-256, SHA-512, HMAC, and PBKDF2.
 
 use crate::{Error, Result};
-use alloc::{string::String, vec::Vec};
+use alloc::{format, string::String, vec, vec::Vec};
 use hmac::{Hmac, Mac};
 use sha2::{Digest, Sha256, Sha512};
 
@@ -24,20 +24,67 @@ impl HashAlgorithm {
     }
 }
 
-/// Generate a hash using the specified algorithm
-pub fn hash(data: &[u8], algorithm: HashAlgorithm) -> Vec<u8> {
-    match algorithm {
-        HashAlgorithm::Sha256 => {
-            let mut hasher = Sha256::new();
-            hasher.update(data);
-            hasher.finalize().to_vec()
-        }
-        HashAlgorithm::Sha512 => {
-            let mut hasher = Sha512::new();
-            hasher.update(data);
-            hasher.finalize().to_vec()
+enum StreamingHasherState {
+    Sha256(Sha256),
+    Sha512(Sha512),
+}
+
+/// Incremental SHA-256 or SHA-512 hasher.
+///
+/// This keeps hashing state inside Voided so callers can process large inputs
+/// without first assembling them into one contiguous allocation.
+pub struct StreamingHasher {
+    state: StreamingHasherState,
+    bytes_hashed: u128,
+}
+
+impl StreamingHasher {
+    /// Create an incremental hasher for `algorithm`.
+    pub fn new(algorithm: HashAlgorithm) -> Self {
+        let state = match algorithm {
+            HashAlgorithm::Sha256 => StreamingHasherState::Sha256(Sha256::new()),
+            HashAlgorithm::Sha512 => StreamingHasherState::Sha512(Sha512::new()),
+        };
+
+        Self {
+            state,
+            bytes_hashed: 0,
         }
     }
+
+    /// Add the next contiguous chunk of bytes to the hash.
+    pub fn update(&mut self, data: &[u8]) {
+        match &mut self.state {
+            StreamingHasherState::Sha256(hasher) => hasher.update(data),
+            StreamingHasherState::Sha512(hasher) => hasher.update(data),
+        }
+        self.bytes_hashed += data.len() as u128;
+    }
+
+    /// Return the total number of bytes supplied through [`Self::update`].
+    pub fn bytes_hashed(&self) -> u128 {
+        self.bytes_hashed
+    }
+
+    /// Consume the hasher and return the digest bytes.
+    pub fn finalize_bytes(self) -> Vec<u8> {
+        match self.state {
+            StreamingHasherState::Sha256(hasher) => hasher.finalize().to_vec(),
+            StreamingHasherState::Sha512(hasher) => hasher.finalize().to_vec(),
+        }
+    }
+
+    /// Consume the hasher and return the lowercase hexadecimal digest.
+    pub fn finalize_hex(self) -> String {
+        hex::encode(self.finalize_bytes())
+    }
+}
+
+/// Generate a hash using the specified algorithm
+pub fn hash(data: &[u8], algorithm: HashAlgorithm) -> Vec<u8> {
+    let mut hasher = StreamingHasher::new(algorithm);
+    hasher.update(data);
+    hasher.finalize_bytes()
 }
 
 /// Generate a hash and return as hex string
@@ -208,6 +255,64 @@ pub fn secure_wipe(buffer: &mut [u8]) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn assert_streaming_matches_one_shot(
+        data: &[u8],
+        algorithm: HashAlgorithm,
+        chunk_sizes: &[usize],
+    ) {
+        let expected_bytes = hash(data, algorithm);
+        let expected_hex = hash_hex(data, algorithm);
+
+        let mut bytes_hasher = StreamingHasher::new(algorithm);
+        let mut offset = 0;
+        let mut chunk_index = 0;
+        while offset < data.len() {
+            let chunk_size = chunk_sizes[chunk_index % chunk_sizes.len()];
+            let end = (offset + chunk_size).min(data.len());
+            bytes_hasher.update(&data[offset..end]);
+            offset = end;
+            chunk_index += 1;
+        }
+        assert_eq!(bytes_hasher.bytes_hashed(), data.len() as u128);
+        assert_eq!(bytes_hasher.finalize_bytes(), expected_bytes);
+
+        let mut hex_hasher = StreamingHasher::new(algorithm);
+        for chunk in data.chunks(113) {
+            hex_hasher.update(chunk);
+        }
+        assert_eq!(hex_hasher.bytes_hashed(), data.len() as u128);
+        assert_eq!(hex_hasher.finalize_hex(), expected_hex);
+    }
+
+    #[test]
+    fn streaming_hash_matches_one_shot_for_sha256_and_sha512() {
+        let short = b"incremental hashing across uneven chunks";
+        let multi_megabyte: Vec<u8> = (0..(3 * 1024 * 1024 + 257))
+            .map(|index| ((index * 31 + index / 251) % 256) as u8)
+            .collect();
+
+        for (algorithm, block_size) in [
+            (HashAlgorithm::Sha256, 64usize),
+            (HashAlgorithm::Sha512, 128usize),
+        ] {
+            assert_streaming_matches_one_shot(&[], algorithm, &[1]);
+            assert_streaming_matches_one_shot(short, algorithm, &[1, 2, 7, 19]);
+
+            for length in [block_size - 1, block_size, block_size + 1, block_size * 2] {
+                let block_boundary: Vec<u8> = (0..length)
+                    .map(|index| ((index * 17 + 11) % 256) as u8)
+                    .collect();
+                assert_streaming_matches_one_shot(
+                    &block_boundary,
+                    algorithm,
+                    &[1, block_size - 1, block_size + 3],
+                );
+            }
+
+            assert_streaming_matches_one_shot(&multi_megabyte, algorithm, &[1, 31, 4_096, 65_537]);
+        }
+    }
 
     #[test]
     fn test_sha256() {
