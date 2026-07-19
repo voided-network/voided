@@ -70,6 +70,20 @@ export interface WasmModule {
   generate_key(): Uint8Array;
   encrypt(data: Uint8Array, key: Uint8Array, algorithm?: string): EncryptionResult;
   decrypt(ciphertext: string, nonce: string, tag: string, key: Uint8Array, algorithm: string): Uint8Array;
+  encrypt_with_aad(
+    data: Uint8Array,
+    key: Uint8Array,
+    aad: Uint8Array,
+    algorithm?: string,
+  ): EncryptionResult;
+  decrypt_with_aad(
+    ciphertext: string,
+    nonce: string,
+    tag: string,
+    key: Uint8Array,
+    algorithm: string,
+    aad: Uint8Array,
+  ): Uint8Array;
   derive_key_hkdf(ikm: Uint8Array, salt: Uint8Array | null, info: Uint8Array): Uint8Array;
   derive_key_hkdf_raw?(ikm: Uint8Array, salt: Uint8Array | null, info: Uint8Array, length: number): Uint8Array;
   derive_key_pbkdf2(password: Uint8Array, salt: Uint8Array, iterations: number): Uint8Array;
@@ -196,6 +210,17 @@ function normalizeWasmModule(mod: RawWasmModule): WasmModule {
     (data: Uint8Array, key: Uint8Array, algorithm?: string) => EncryptionResult
   >(mod, ["encrypt"]);
   const decryptFn = getExportFn<(encrypted: any, key: Uint8Array) => Uint8Array>(mod, ["decrypt"]);
+  const encryptWithAadFn = getExportFn<
+    (
+      data: Uint8Array,
+      key: Uint8Array,
+      aad: Uint8Array,
+      algorithm?: string,
+    ) => EncryptionResult
+  >(mod, ["encryptWithAad", "encrypt_with_aad"]);
+  const decryptWithAadFn = getExportFn<
+    (encrypted: any, key: Uint8Array, aad: Uint8Array) => Uint8Array
+  >(mod, ["decryptWithAad", "decrypt_with_aad"]);
   const deriveHkdf = getExportFn<
     (ikm: Uint8Array, salt: Uint8Array | null, info: Uint8Array) => Uint8Array
   >(mod, ["derive_key_hkdf", "deriveKeyHkdf"]);
@@ -269,6 +294,10 @@ function normalizeWasmModule(mod: RawWasmModule): WasmModule {
     encrypt: (data, key, algorithm) => encryptFn(data, key, algorithm),
     decrypt: (ciphertext, nonce, tag, key, algorithm) =>
       decryptFn({ ciphertext, nonce, tag, algorithm }, key),
+    encrypt_with_aad: (data, key, aad, algorithm) =>
+      encryptWithAadFn(data, key, aad, algorithm),
+    decrypt_with_aad: (ciphertext, nonce, tag, key, algorithm, aad) =>
+      decryptWithAadFn({ ciphertext, nonce, tag, algorithm }, key, aad),
     derive_key_hkdf: (ikm, salt, info) => deriveHkdf(ikm, salt, info),
     derive_key_hkdf_raw: deriveHkdfRaw
       ? (ikm, salt, info, length) => deriveHkdfRaw(ikm, salt, info, length)

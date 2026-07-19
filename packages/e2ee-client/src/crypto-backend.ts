@@ -117,6 +117,13 @@ export interface EncryptionResult {
   encryptedSize: number;
 }
 
+export interface AuthenticatedEncryptionResult {
+  ciphertext: string;
+  nonce: string;
+  tag: string;
+  algorithm: 'xchacha20-poly1305' | 'aes-256-gcm';
+}
+
 export interface FusedShellInfo {
   version: number;
   preset: 'compact' | 'balanced' | 'concealed' | string;
@@ -229,6 +236,111 @@ export async function decrypt(
   const dataBytes = Uint8Array.from(atob(encrypted.data), c => c.charCodeAt(0));
   
   return getTsCrypto().decrypt(dataBytes, ivBytes, cryptoKey);
+}
+
+/**
+ * Encrypt bytes while binding caller-owned context as AEAD additional data.
+ * XChaCha20-Poly1305 intentionally requires the first-party Voided WASM backend.
+ */
+export async function encryptWithAad(
+  data: Uint8Array,
+  key: Uint8Array,
+  aad: Uint8Array,
+  algorithm: AuthenticatedEncryptionResult['algorithm'] = 'xchacha20-poly1305',
+): Promise<AuthenticatedEncryptionResult> {
+  if (await useWasmBackend()) {
+    const encrypted = _wasm!.encrypt_with_aad(data, key, aad, algorithm);
+    return {
+      ciphertext: encrypted.ciphertext,
+      nonce: encrypted.nonce,
+      tag: encrypted.tag,
+      algorithm: encrypted.algorithm as AuthenticatedEncryptionResult['algorithm'],
+    };
+  }
+  if (algorithm !== 'aes-256-gcm') {
+    throw new Error(
+      'Voided XChaCha20-Poly1305 authenticated-data encryption requires the WASM backend',
+    );
+  }
+
+  const cryptoKey = await keyToCryptoKey(key);
+  const nonce = crypto.getRandomValues(new Uint8Array(12));
+  const encrypted = new Uint8Array(
+    await crypto.subtle.encrypt(
+      {
+        name: 'AES-GCM',
+        iv: nonce as unknown as BufferSource,
+        additionalData: aad as unknown as BufferSource,
+        tagLength: 128,
+      },
+      cryptoKey,
+      data as unknown as BufferSource,
+    ),
+  );
+  const tagOffset = encrypted.length - 16;
+  return {
+    ciphertext: bytesToBase64(encrypted.subarray(0, tagOffset)),
+    nonce: bytesToBase64(nonce),
+    tag: bytesToBase64(encrypted.subarray(tagOffset)),
+    algorithm,
+  };
+}
+
+/** Decrypt bytes only when the exact authenticated context is supplied. */
+export async function decryptWithAad(
+  encrypted: AuthenticatedEncryptionResult,
+  key: Uint8Array,
+  aad: Uint8Array,
+): Promise<Uint8Array> {
+  if (await useWasmBackend()) {
+    return _wasm!.decrypt_with_aad(
+      encrypted.ciphertext,
+      encrypted.nonce,
+      encrypted.tag,
+      key,
+      encrypted.algorithm,
+      aad,
+    );
+  }
+  if (encrypted.algorithm !== 'aes-256-gcm') {
+    throw new Error(
+      'Voided XChaCha20-Poly1305 authenticated-data decryption requires the WASM backend',
+    );
+  }
+
+  const cryptoKey = await keyToCryptoKey(key);
+  const nonce = base64ToBytes(encrypted.nonce);
+  const ciphertext = base64ToBytes(encrypted.ciphertext);
+  const tag = base64ToBytes(encrypted.tag);
+  const payload = new Uint8Array(ciphertext.length + tag.length);
+  payload.set(ciphertext);
+  payload.set(tag, ciphertext.length);
+  return new Uint8Array(
+    await crypto.subtle.decrypt(
+      {
+        name: 'AES-GCM',
+        iv: nonce as unknown as BufferSource,
+        additionalData: aad as unknown as BufferSource,
+        tagLength: 128,
+      },
+      cryptoKey,
+      payload as unknown as BufferSource,
+    ),
+  );
+}
+
+function bytesToBase64(bytes: Uint8Array): string {
+  let binary = '';
+  const chunkSize = 0x8000;
+  for (let offset = 0; offset < bytes.length; offset += chunkSize) {
+    binary += String.fromCharCode(...bytes.subarray(offset, offset + chunkSize));
+  }
+  return btoa(binary);
+}
+
+function base64ToBytes(value: string): Uint8Array {
+  const binary = atob(value);
+  return Uint8Array.from(binary, (character) => character.charCodeAt(0));
 }
 
 /**

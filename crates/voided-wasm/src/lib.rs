@@ -78,37 +78,94 @@ pub fn encrypt(data: &[u8], key: &[u8], algorithm: Option<String>) -> Result<JsV
     serde_wasm_bindgen::to_value(&js_result).map_err(|e| JsValue::from_str(&e.to_string()))
 }
 
+/// Encrypt bytes while authenticating caller-supplied context without storing it in ciphertext.
+#[wasm_bindgen(js_name = encryptWithAad)]
+pub fn encrypt_with_aad(
+    data: &[u8],
+    key: &[u8],
+    aad: &[u8],
+    algorithm: Option<String>,
+) -> Result<JsValue, JsValue> {
+    let core_key = voided_core::encryption::Key::from_bytes(key)
+        .map_err(|e| JsValue::from_str(&e.to_string()))?;
+    let algorithm = parse_authenticated_algorithm(algorithm.as_deref())?;
+    let result = voided_core::encryption::encrypt(
+        data,
+        &core_key,
+        Some(voided_core::encryption::EncryptOptions {
+            algorithm: Some(algorithm),
+            aad: Some(aad.to_vec()),
+        }),
+    )
+    .map_err(|e| JsValue::from_str(&e.to_string()))?;
+    encryption_result_to_js(result)
+}
+
 /// Decrypt data
 #[wasm_bindgen]
 pub fn decrypt(encrypted: JsValue, key: &[u8]) -> Result<Vec<u8>, JsValue> {
-    let enc: EncryptionResult =
-        serde_wasm_bindgen::from_value(encrypted).map_err(|e| JsValue::from_str(&e.to_string()))?;
-
     let core_key = voided_core::encryption::Key::from_bytes(key)
         .map_err(|e| JsValue::from_str(&e.to_string()))?;
-
-    use base64::{engine::general_purpose::STANDARD, Engine};
-
-    let algorithm = match enc.algorithm.as_str() {
-        "xchacha20-poly1305" => voided_core::encryption::Algorithm::XChaCha20Poly1305,
-        _ => voided_core::encryption::Algorithm::Aes256Gcm,
-    };
-
-    let core_result = voided_core::encryption::EncryptionResult {
-        ciphertext: STANDARD
-            .decode(&enc.ciphertext)
-            .map_err(|e| JsValue::from_str(&e.to_string()))?,
-        algorithm,
-        nonce: STANDARD
-            .decode(&enc.nonce)
-            .map_err(|e| JsValue::from_str(&e.to_string()))?,
-        tag: STANDARD
-            .decode(&enc.tag)
-            .map_err(|e| JsValue::from_str(&e.to_string()))?,
-    };
-
+    let core_result = encryption_result_from_js(encrypted)?;
     voided_core::encryption::decrypt(&core_result, &core_key)
         .map_err(|e| JsValue::from_str(&e.to_string()))
+}
+
+/// Decrypt bytes only when the caller supplies the exact authenticated context.
+#[wasm_bindgen(js_name = decryptWithAad)]
+pub fn decrypt_with_aad(encrypted: JsValue, key: &[u8], aad: &[u8]) -> Result<Vec<u8>, JsValue> {
+    let core_key = voided_core::encryption::Key::from_bytes(key)
+        .map_err(|e| JsValue::from_str(&e.to_string()))?;
+    let core_result = encryption_result_from_js(encrypted)?;
+    voided_core::encryption::decrypt_with_aad(&core_result, &core_key, aad)
+        .map_err(|e| JsValue::from_str(&e.to_string()))
+}
+
+fn parse_authenticated_algorithm(
+    algorithm: Option<&str>,
+) -> Result<voided_core::encryption::Algorithm, JsValue> {
+    match algorithm.unwrap_or("xchacha20-poly1305") {
+        "xchacha20-poly1305" => Ok(voided_core::encryption::Algorithm::XChaCha20Poly1305),
+        "aes-256-gcm" => Ok(voided_core::encryption::Algorithm::Aes256Gcm),
+        value => Err(JsValue::from_str(&format!(
+            "unsupported authenticated encryption algorithm: {value}"
+        ))),
+    }
+}
+
+fn encryption_result_to_js(
+    result: voided_core::encryption::EncryptionResult,
+) -> Result<JsValue, JsValue> {
+    use base64::{engine::general_purpose::STANDARD, Engine};
+
+    serde_wasm_bindgen::to_value(&EncryptionResult {
+        ciphertext: STANDARD.encode(&result.ciphertext),
+        algorithm: result.algorithm.name().to_string(),
+        nonce: STANDARD.encode(&result.nonce),
+        tag: STANDARD.encode(&result.tag),
+    })
+    .map_err(|e| JsValue::from_str(&e.to_string()))
+}
+
+fn encryption_result_from_js(
+    encrypted: JsValue,
+) -> Result<voided_core::encryption::EncryptionResult, JsValue> {
+    use base64::{engine::general_purpose::STANDARD, Engine};
+
+    let encrypted: EncryptionResult =
+        serde_wasm_bindgen::from_value(encrypted).map_err(|e| JsValue::from_str(&e.to_string()))?;
+    Ok(voided_core::encryption::EncryptionResult {
+        ciphertext: STANDARD
+            .decode(encrypted.ciphertext)
+            .map_err(|e| JsValue::from_str(&e.to_string()))?,
+        algorithm: parse_authenticated_algorithm(Some(&encrypted.algorithm))?,
+        nonce: STANDARD
+            .decode(encrypted.nonce)
+            .map_err(|e| JsValue::from_str(&e.to_string()))?,
+        tag: STANDARD
+            .decode(encrypted.tag)
+            .map_err(|e| JsValue::from_str(&e.to_string()))?,
+    })
 }
 
 /// Derive a key using HKDF-SHA256
@@ -686,6 +743,19 @@ mod tests {
         let decrypted = decrypt(encrypted, &key).unwrap();
 
         assert_eq!(data.to_vec(), decrypted);
+    }
+
+    #[wasm_bindgen_test]
+    fn test_xchacha_authenticated_data_roundtrip_and_rejection() {
+        let key = generate_key();
+        let data = b"owned media epoch";
+        let aad = b"session=owned-screen|epoch=7";
+        let encrypted =
+            encrypt_with_aad(data, &key, aad, Some("xchacha20-poly1305".to_string())).unwrap();
+
+        let decrypted = decrypt_with_aad(encrypted.clone(), &key, aad).unwrap();
+        assert_eq!(data.to_vec(), decrypted);
+        assert!(decrypt_with_aad(encrypted, &key, b"session=other|epoch=7").is_err());
     }
 
     #[wasm_bindgen_test]
