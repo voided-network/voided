@@ -21,6 +21,7 @@ At a high level, the package exposes four layers:
 - [Quick Start](#quick-start)
 - [What Fused Means In The Browser](#what-fused-means-in-the-browser)
 - [Stateful Client Guide](#stateful-client-guide)
+- [Authenticated Browser Envelope](#authenticated-browser-envelope)
 - [Top-Level Helper Guide](#top-level-helper-guide)
 - [Low-Level Crypto Guide](#low-level-crypto-guide)
 - [WASM And Backend Behavior](#wasm-and-backend-behavior)
@@ -65,6 +66,12 @@ If you are choosing quickly and do not need a custom integration, start here:
 4. use `open` to restore the original text
 
 That is the normal browser-facing Voided v3 path.
+
+`inspectProtected`, `inspectArtifact`, and `inspectFused` are keyless structural
+inspection helpers. Their returned metadata is unauthenticated and must be
+treated as attacker-controlled until `open` or `unfuse` succeeds with the
+expected key. Do not use inspected fields for authorization, trust decisions,
+or unbounded allocation.
 
 Use a different layer only when you have a clear reason:
 
@@ -233,7 +240,8 @@ Recommended mental model:
 - `protect/open`
   - the current default path for browser artifacts
 - `inspectProtected`
-  - the safe metadata view for those artifacts
+  - a bounded but unauthenticated metadata view; treat every field as
+    attacker-controlled until `open` succeeds
 - `encrypt/decrypt`
   - the older browser blob path, still available but not the main v2 shape
 
@@ -247,6 +255,77 @@ Command intent:
   - inspect monolith artifact metadata without opening it
 - `encrypt` / `decrypt`
   - use the older encrypted blob format instead of the monolith artifact format
+
+## Authenticated Browser Envelope
+
+The stateful `encrypt/decrypt` API emits authenticated browser envelope
+version `1.1`. Version `1.1` cryptographically binds all fields that affect
+plaintext interpretation:
+
+- message ID and key namespace
+- encryption and compression algorithms
+- original and compressed byte lengths
+- text encoding
+- whether the message is chunked
+- total chunk count, chunk size, each chunk index, and each chunk plaintext size
+
+Chunk indices must be unique, contiguous, and already in canonical order.
+Omitted, duplicated, reordered, cross-message, or truncated chunks fail before
+plaintext is returned. The browser helper bounds aggregate decoding to 100 MiB,
+128 chunks, 8 MiB per chunk, and four concurrent cryptographic operations.
+
+### Prelaunch format break
+
+Legacy `1.0` browser blobs are rejected. They did not authenticate the
+metadata and chunk framing above, so silently opening them would reintroduce
+reordering, truncation, and encoding-substitution attacks. This is an
+intentional prelaunch format break; migrate trusted data before updating rather
+than enabling a permissive compatibility fallback.
+
+### Signatures
+
+Signature mode is fail-closed. A sender must create a signing key before
+encryption, and a receiver must explicitly provision the peer public key:
+
+```ts
+const senderPublicKey = await sender.generateSigningKeys();
+await receiver.setTrustedSigningPublicKey(senderPublicKey);
+```
+
+When `enableSignatures: true`, removing the envelope signature or any chunk
+signature causes decryption to fail. A locally generated key is never
+implicitly trusted as a peer identity.
+
+### Compression
+
+High-level browser encryption defaults to `compressionAlgorithm: "none"`.
+Compression can leak secrets through ciphertext length when secret and
+attacker-controlled values share one compression context. Opt in only when the
+entire plaintext has one trust boundary:
+
+```ts
+await client.encrypt(data, { compressionAlgorithm: "gzip" });
+// or
+await client.encrypt(data, { forceCompression: true });
+```
+
+Explicit algorithms are strict: an unsupported or unavailable algorithm
+throws. Only `auto` may decide that uncompressed output is appropriate.
+Decompression enforces authenticated output size, an absolute browser memory
+cap, and an expansion-ratio cap while inflating.
+
+### Forward secrecy and key sharing
+
+`enableForwardSecrecy` was removed and now throws. The previous option was
+not a ratchet and did not provide forward secrecy. Use an independently
+reviewed ratcheting protocol when forward secrecy is required.
+
+`KeySharing` remains available for explicit X25519 key transfer. Every
+transfer now requires sender ID, recipient ID, key ID, and a unique transfer
+ID from `KeySharing.createTransferId()`. Those values and the transfer
+direction are bound into both HKDF and AEAD. Successful transfer IDs are
+consumed by a replay store; provide a durable `KeySharingReplayStore` when
+replay protection must survive a reload.
 
 ## Top-Level Helper Guide
 
@@ -315,8 +394,23 @@ Primitive helpers exposed through `crypto` include:
 - `safetyNumbers`
 - `compress`
 - `decompress`
+- `decompressBounded`
 - `randomBytes`
 - `generateSalt`
+
+`decompressBounded(data, algorithm, maxOutputBytes)` is the lossless,
+WASM-backed path for formats that already carry a trusted or independently
+validated size ceiling. It streams decoder output into an absolute caller cap,
+accepts highly compressible data without a ratio heuristic, and rejects before
+returning any output if that cap would be crossed. The explicit ceiling may be
+at most 512 MiB. This method fails closed when the Rust/WASM backend is
+unavailable; it never substitutes an unbounded TypeScript decoder.
+
+`hashWithSalt` now matches the core/native v2 transcript exactly: a
+domain-separated, length-prefixed encoding of the data and salt. It
+intentionally differs from the legacy `hash(data || salt)` construction.
+Persisted legacy salted digests must be migrated or recomputed before they can
+be verified by the current API.
 
 Fused helpers exposed through `crypto` include:
 
@@ -361,6 +455,8 @@ Important behavior:
 - in that TypeScript fallback, compression support is intentionally limited to
   `gzip` and `none`
 - real browser-side `brotli` support remains part of the Rust/WASM path
+- `decompressBounded` is deliberately WASM-only so its output-bound contract
+  cannot be weakened by fallback behavior
 
 Practical meaning:
 
@@ -375,6 +471,7 @@ rather than an optional acceleration layer.
 
 Useful exports:
 
+- `configureWasmLoader`
 - `initWasm`
 - `getWasm`
 - `getWasmSync`
@@ -385,6 +482,54 @@ Useful exports:
 - `forceWasmBackend`
 - `getCurrentBackend`
 - `isWasmBackendReady`
+
+`configureWasmLoader` and its `WasmLoaderOptions` type are exported from the
+main package, `@voideddev/e2ee-client/wasm`, and
+`@voideddev/e2ee-client/crypto`, so configuration and the code that initializes
+WASM can share the same package entry point.
+Import configuration and initialization from the same entry point; separately
+bundled subpath entry points do not share loader state.
+
+The default loader keeps the package's unbundled layout and tries the shipped
+`wasm/voided_wasm.js` paths. A flattened application bundle cannot preserve
+that relative package layout. For Vite or another static host, copy the glue
+and binary together without renaming either file:
+
+```bash
+mkdir -p public/voided
+cp node_modules/@voideddev/e2ee-client/wasm/voided_wasm.js public/voided/
+cp node_modules/@voideddev/e2ee-client/wasm/voided_wasm_bg.wasm public/voided/
+```
+
+Configure the trusted glue URL before any client, backend, or WASM helper can
+start initialization:
+
+```ts
+import {
+  configureWasmLoader,
+  initWasm,
+} from "@voideddev/e2ee-client";
+
+configureWasmLoader({
+  glueUrl: new URL(
+    `${import.meta.env.BASE_URL}voided/voided_wasm.js`,
+    window.location.origin,
+  ),
+});
+await initWasm();
+```
+
+Vite copies `public/voided` into the static output unchanged. Serve
+`voided_wasm_bg.wasm` with `application/wasm` and keep it adjacent to
+`voided_wasm.js`. Configuration is locked once initialization starts. If a
+configured URL fails, the loader fails closed and does not try package-relative
+assets. There is no production reset API: retrying with different configuration
+requires a fresh page or module context.
+
+The configured URL is a JavaScript module import, not passive data: it executes
+with the application's privileges. Copy it from the exact locked package
+version and serve it only from a trusted, deployment-controlled origin. Do not
+accept this URL from users, query parameters, or untrusted remote configuration.
 
 Optional warm-up:
 
@@ -449,10 +594,9 @@ with a raw `Uint8Array` artifact.
 Important caveats:
 
 - fused helpers currently require the WASM backend
-- `VoidedE2EEClient.protect/open` do not yet wrap the artifact with the older
-  signature or forward-secrecy options
-- those older options still belong to the stateful `encrypt/decrypt` path for
-  now
+- `VoidedE2EEClient.protect/open` do not yet wrap artifacts with peer
+  signatures
+- the removed `enableForwardSecrecy` option is not supported by either path
 
 In other words, the monolith artifact flow is the storage/artifact flow. It is not
 trying to replace every older high-level browser feature in one API.
@@ -460,7 +604,9 @@ trying to replace every older high-level browser feature in one API.
 ## Key Storage And Lifecycle
 
 By default, `VoidedE2EEClient` uses IndexedDB-backed storage through
-`IndexedDBStorage`.
+`IndexedDBStorage`. This is a zero-configuration fallback so the package can
+work on first use; it is not recovery-grade storage and should not be the sole
+custody mechanism for production keys.
 
 That gives you:
 
@@ -471,6 +617,30 @@ That gives you:
 If you need custom storage behavior, provide your own `storage` implementation
 through the client config.
 
+For production custody, prefer Slipner Auth's OPRF-backed key path where it is
+available, or provide an external `E2EEStorage` implementation with the
+durability and recovery guarantees your application requires. Keep an explicit
+export/import or recovery path as appropriate for the product. Browser storage
+can be cleared, isolated, or made unavailable by browser and origin policy.
+Neither IndexedDB nor WebCrypto can hide plaintext or usable keys from fully
+compromised same-origin JavaScript. Treat XSS prevention, dependency hygiene,
+and a restrictive Content Security Policy as part of the application security
+boundary.
+
+The fallback distinguishes confirmed absence from storage failure: only a
+successful `null` read can create a first-use key. Read errors fail closed and
+are retryable; they never authorize overwriting an existing key. IndexedDB also
+does not coordinate multiple tabs as a recovery or custody system, so avoid
+concurrent first-use, rotation, migration, or deletion writers for the same key
+ID.
+
+Each key-dependent operation revalidates persisted authority before taking a
+stable-key lease, so a later operation notices a completed rotation from
+another client instance. Keep exactly one lifecycle writer per key ID: truly
+concurrent rotations or replacements across tabs/processes require an
+application-owned transactional storage lock and are not coordinated by the
+generic `E2EEStorage` interface.
+
 Useful lifecycle operations include:
 
 - `exportKey`
@@ -478,6 +648,27 @@ Useful lifecycle operations include:
 - `rotateKey`
 - `deleteKey`
 - password-derived key setup
+
+`deriveKeyFromPassword` requires a password of at least 12 characters, a
+16-64 byte salt, and 600,000-1,000,000 PBKDF2-SHA256 iterations. It returns
+the exact salt/iteration record needed for recovery and also stores that record
+under an internal, collision-resistant namespace:
+
+```ts
+const parameters = await client.deriveKeyFromPassword({
+  password,
+  // optional: salt and iterations
+});
+
+const persistedParameters =
+  await client.getPasswordKeyDerivationRecord();
+```
+
+Preserve the returned parameters with the same care as other recovery
+metadata. They are not secret, but losing them prevents deterministic
+re-derivation. The stored record is bound to the monotonic primary-key version;
+import, rotation, agreement, and deletion remove it, and a failed cleanup can
+never make an old record describe the newly active key.
 
 ## Development
 
@@ -494,6 +685,21 @@ npm run test:wasm
 `test:wasm` is especially important when you change fused helpers, because the
 fused browser path depends on the WASM runtime.
 
+For a release, build the provenance-bound baseline before invoking
+`npm publish`:
+
+```bash
+npm run build:wasm
+npm publish --access public
+```
+
+The publish lifecycle verifies the baseline against the current source, creates
+a second clean build under a different physical root, requires every shipped
+WASM byte and the provenance manifest to match, rebuilds the TypeScript
+surfaces, and executes the exact packed tarball. Missing, stale, path-leaking,
+toolchain-mismatched, nondeterministic, or hostile-input-failing artifacts
+remain excluded from the package.
+
 ## Troubleshooting
 
 ### Fused helpers throw instead of using the fallback backend
@@ -506,7 +712,8 @@ Typical fixes:
 - call `await initWasm()`
 - call `await forceWasmBackend()`
 - check `getWasmError()`
-- verify the WASM assets are present in your bundle or local build output
+- for flattened bundles, copy and configure the trusted glue URL exactly as
+  shown in [WASM And Backend Behavior](#wasm-and-backend-behavior)
 
 ### I only need browser encryption and do not care about monolith artifacts
 
@@ -526,6 +733,9 @@ selection.
 
 This package is the monolith-first current line. The old map-based surface is not
 part of the current public browser package contract.
+
+Separately, encrypted browser envelope `1.0` is rejected in favor of the
+authenticated `1.1` format described above.
 
 That means:
 

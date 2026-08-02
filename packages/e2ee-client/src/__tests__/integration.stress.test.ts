@@ -61,7 +61,10 @@ describe('E2EE Integration Stress Tests', () => {
 
             const startTime = performance.now();
 
-            const encrypted = await client.encrypt(largeData);
+            const encrypted = await client.encrypt(largeData, {
+                forceCompression: true,
+                compressionAlgorithm: 'gzip'
+            });
             const decrypted = await client.decrypt(encrypted);
 
             const endTime = performance.now();
@@ -78,7 +81,10 @@ describe('E2EE Integration Stress Tests', () => {
 
             const startTime = performance.now();
 
-            const encrypted = await client.encrypt(structuredData);
+            const encrypted = await client.encrypt(structuredData, {
+                forceCompression: true,
+                compressionAlgorithm: 'gzip'
+            });
             const decrypted = await client.decrypt(encrypted);
 
             const endTime = performance.now();
@@ -95,7 +101,10 @@ describe('E2EE Integration Stress Tests', () => {
 
             const startTime = performance.now();
 
-            const encrypted = await client.encrypt(hugeData);
+            const encrypted = await client.encrypt(hugeData, {
+                forceCompression: true,
+                compressionAlgorithm: 'gzip'
+            });
             const decrypted = await client.decrypt(encrypted);
 
             const endTime = performance.now();
@@ -112,7 +121,7 @@ describe('E2EE Integration Stress Tests', () => {
             const client = new VoidedE2EEClient({ storage: new InMemoryStorage() });
             const dataSize = 10000;
 
-            const operations = Array.from({ length: STRESS_TEST_CONFIG.CONCURRENT_OPERATIONS }, async (_, i) => {
+            const operations = Array.from({ length: STRESS_TEST_CONFIG.CONCURRENT_OPERATIONS }, async () => {
                 const data = generateTestData(dataSize, 'mixed');
                 const encrypted = await client.encrypt(data);
                 const decrypted = await client.decrypt(encrypted);
@@ -165,7 +174,10 @@ describe('E2EE Integration Stress Tests', () => {
 
             for (let i = 0; i < 5; i++) {
                 const data = generateTestData(dataSize, 'repetitive');
-                const encrypted = await client.encrypt(data);
+                const encrypted = await client.encrypt(data, {
+                    forceCompression: true,
+                    compressionAlgorithm: 'gzip'
+                });
                 const decrypted = await client.decrypt(encrypted);
 
                 expect(decrypted).toBe(data);
@@ -270,7 +282,12 @@ describe('E2EE Integration Stress Tests', () => {
             ];
 
             for (const { data, expectedRatio } of testCases) {
-                const encrypted = await client.encrypt(data);
+                const encrypted = await client.encrypt(
+                    data,
+                    expectedRatio < 1
+                        ? { forceCompression: true, compressionAlgorithm: 'gzip' }
+                        : { compressionAlgorithm: 'none' }
+                );
                 const decrypted = await client.decrypt(encrypted);
 
                 expect(decrypted).toBe(data);
@@ -285,7 +302,10 @@ describe('E2EE Integration Stress Tests', () => {
             const ratios: number[] = [];
 
             for (let i = 0; i < 10; i++) {
-                const encrypted = await client.encrypt(data);
+                const encrypted = await client.encrypt(data, {
+                    forceCompression: true,
+                    compressionAlgorithm: 'gzip'
+                });
                 const ratio = encrypted.compression.compressedSize / encrypted.compression.originalSize;
                 ratios.push(ratio);
 
@@ -308,7 +328,10 @@ describe('E2EE Integration Stress Tests', () => {
             const client = new VoidedE2EEClient({ storage: new InMemoryStorage() });
             const unicodeData = 'Hello 世界 🌍 emoji test 🚀 特殊字符测试 🎉'.repeat(100);
 
-            const encrypted = await client.encrypt(unicodeData);
+            const encrypted = await client.encrypt(unicodeData, {
+                forceCompression: true,
+                compressionAlgorithm: 'gzip'
+            });
             const decrypted = await client.decrypt(encrypted);
 
             expect(decrypted).toBe(unicodeData);
@@ -353,4 +376,4 @@ describe('E2EE Integration Stress Tests', () => {
             expect(maxTime).toBeLessThan(5000); // 5 seconds max
         });
     });
-}); 
+});

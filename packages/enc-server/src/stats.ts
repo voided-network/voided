@@ -1,4 +1,15 @@
-import { writeFileSync } from "fs";
+import {
+  closeSync,
+  constants,
+  fsyncSync,
+  openSync,
+  realpathSync,
+  renameSync,
+  unlinkSync,
+  writeFileSync,
+} from "fs";
+import { dirname, isAbsolute, relative, resolve } from "path";
+import { randomBytes } from "crypto";
 
 export interface Metric {
   label: string;
@@ -35,6 +46,24 @@ export class StatsTracker {
 
   get summary() {
     const total = this.metrics.length;
+    if (total === 0) {
+      return {
+        count: 0,
+        avgCompressionRatio: 0,
+        minCompressionRatio: 0,
+        maxCompressionRatio: 0,
+        avgExpansionRatio: 0,
+        minExpansionRatio: 0,
+        maxExpansionRatio: 0,
+        totalBytesSaved: 0,
+        totalDataMoved: 0,
+        totalComputeUnits: 0,
+        totalDurationMs: 0,
+        avgStoredSize: 0,
+        maxStoredSize: 0,
+        minStoredSize: 0,
+      };
+    }
     const sum = (key: keyof Metric) =>
       this.metrics.reduce((a, b) => a + ((b[key] as number) || 0), 0);
     const avg = (key: keyof Metric) => sum(key) / total;
@@ -112,9 +141,46 @@ export class StatsTracker {
   }
 
   dumpToJson(path = "voideddev-test-stats.json") {
-    writeFileSync(
-      path,
-      JSON.stringify({ metrics: this.metrics, summary: this.summary }, null, 2)
+    if (isAbsolute(path)) {
+      throw new Error("Stats output must be a relative path inside the current working directory.");
+    }
+    const root = realpathSync(process.cwd());
+    const target = resolve(root, path);
+    const targetRelative = relative(root, target);
+    if (targetRelative === ".." || targetRelative.startsWith(`..${process.platform === "win32" ? "\\" : "/"}`)) {
+      throw new Error("Stats output cannot escape the current working directory.");
+    }
+    const parent = realpathSync(dirname(target));
+    const parentRelative = relative(root, parent);
+    if (parentRelative === ".." || parentRelative.startsWith(`..${process.platform === "win32" ? "\\" : "/"}`)) {
+      throw new Error("Stats output parent cannot escape through a symlink.");
+    }
+
+    const temporary = resolve(
+      parent,
+      `.voided-stats-${process.pid}-${randomBytes(8).toString("hex")}.tmp`,
     );
+    let descriptor: number | undefined;
+    try {
+      descriptor = openSync(
+        temporary,
+        constants.O_CREAT | constants.O_EXCL | constants.O_WRONLY | (constants.O_NOFOLLOW ?? 0),
+        0o600,
+      );
+      writeFileSync(
+        descriptor,
+        JSON.stringify({ metrics: this.metrics, summary: this.summary }, null, 2),
+        "utf8",
+      );
+      fsyncSync(descriptor);
+      closeSync(descriptor);
+      descriptor = undefined;
+      // Atomic rename replaces a target symlink itself; it never follows it.
+      renameSync(temporary, target);
+    } catch (error) {
+      if (descriptor !== undefined) closeSync(descriptor);
+      try { unlinkSync(temporary); } catch { /* best-effort cleanup */ }
+      throw error;
+    }
   }
 }

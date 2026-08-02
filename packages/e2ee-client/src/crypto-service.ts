@@ -1,5 +1,8 @@
 import { CryptoError } from "./errors";
-import { assertWithinClientUploadLimit } from "./limits";
+import {
+  assertWithinClientMemoryLimit,
+  assertWithinClientUploadLimit,
+} from "./limits";
 import { getWasm, getWasmSync, isWasmReady, type WasmModule } from "./wasm/loader";
 
 // Helper to cast binary values to BufferSource for Web Crypto API
@@ -16,6 +19,59 @@ const X25519_BASEPOINT = (() => {
   point[0] = 9;
   return point;
 })();
+
+const HKDF_SHA256_MAX_OUTPUT = 255 * 32;
+const KDF_MAX_INPUT_BYTES = 1024 * 1024;
+const SHARED_SECRET_CONTEXT_MAX_BYTES = 1024;
+const PBKDF2_MIN_ITERATIONS = 100_000;
+const PBKDF2_MAX_ITERATIONS = 1_000_000;
+const PBKDF2_MIN_SALT_BYTES = 16;
+const PBKDF2_MAX_SALT_BYTES = 1024;
+const MAX_P256_SPKI_BYTES = 1024;
+const MAX_P256_SPKI_BASE64_CHARS = 4 * Math.ceil(MAX_P256_SPKI_BYTES / 3);
+const AES_GCM_IV_BYTES = 12;
+const AES_GCM_TAG_BYTES = 16;
+const AES_GCM_FIXED_OVERHEAD_BYTES = AES_GCM_IV_BYTES + AES_GCM_TAG_BYTES;
+const CANONICAL_BASE64_PATTERN =
+  /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/;
+
+const TYPED_ARRAY_BYTE_LENGTH_GETTER = Object.getOwnPropertyDescriptor(
+  Object.getPrototypeOf(Uint8Array.prototype),
+  "byteLength"
+)?.get;
+
+function getUint8ArrayByteLength(value: unknown, label: string): number {
+  if (
+    !(value instanceof Uint8Array) ||
+    !ArrayBuffer.isView(value) ||
+    !TYPED_ARRAY_BYTE_LENGTH_GETTER
+  ) {
+    throw new CryptoError(`${label} must be a Uint8Array`);
+  }
+  try {
+    return Reflect.apply(TYPED_ARRAY_BYTE_LENGTH_GETTER, value, []);
+  } catch {
+    throw new CryptoError(`${label} must be a valid Uint8Array`);
+  }
+}
+
+function getOptionalUint8ArrayByteLength(
+  value: unknown,
+  label: string
+): number {
+  return value === undefined ? 0 : getUint8ArrayByteLength(value, label);
+}
+
+function assertAesGcmMemoryBudget(
+  inputBytes: number,
+  additionalDataBytes: number,
+  label: string
+): void {
+  assertWithinClientMemoryLimit(
+    inputBytes + additionalDataBytes + AES_GCM_FIXED_OVERHEAD_BYTES,
+    `${label} plus AES-GCM IV/tag overhead`
+  );
+}
 
 class X25519AgreementRejectedError extends CryptoError {
   constructor(detail: string) {
@@ -34,7 +90,6 @@ class X25519AgreementRejectedError extends CryptoError {
  */
 export class CryptoService {
   private readonly textEncoder = new TextEncoder();
-  private readonly textDecoder = new TextDecoder();
 
   // ============================================================================
   // METHODS THAT WORK WITH CryptoKey (for VoidedE2EEClient)
@@ -66,11 +121,14 @@ export class CryptoService {
    * Export key to base64 string
    */
   async exportKey(key: CryptoKey): Promise<string> {
+    let rawKey: ArrayBuffer | null = null;
     try {
-      const rawKey = await crypto.subtle.exportKey("raw", key);
+      rawKey = await crypto.subtle.exportKey("raw", key) as ArrayBuffer;
       return this.arrayBufferToBase64(rawKey);
     } catch (error) {
       throw new CryptoError(`Failed to export key: ${error}`);
+    } finally {
+      if (rawKey) this.secureWipe(rawKey);
     }
   }
 
@@ -79,14 +137,32 @@ export class CryptoService {
    */
   async importKey(keyString: string): Promise<CryptoKey> {
     try {
+      if (
+        typeof keyString !== "string" ||
+        keyString.length !== 44 ||
+        !/^[A-Za-z0-9+/]{43}=$/.test(keyString)
+      ) {
+        throw new CryptoError("AES-256 key must be canonical base64 encoding exactly 32 bytes");
+      }
       const rawKey = this.base64ToArrayBuffer(keyString);
-      return await crypto.subtle.importKey(
-        "raw",
-        rawKey,
-        { name: "AES-GCM", length: 256 },
-        true,
-        ["encrypt", "decrypt"]
-      );
+      if (
+        rawKey.byteLength !== 32 ||
+        this.arrayBufferToBase64(rawKey) !== keyString
+      ) {
+        this.secureWipe(rawKey);
+        throw new CryptoError("AES-256 key must be canonical base64 encoding exactly 32 bytes");
+      }
+      try {
+        return await crypto.subtle.importKey(
+          "raw",
+          rawKey,
+          { name: "AES-GCM", length: 256 },
+          true,
+          ["encrypt", "decrypt"]
+        );
+      } finally {
+        this.secureWipe(rawKey);
+      }
     } catch (error) {
       throw new CryptoError(`Failed to import key: ${error}`);
     }
@@ -95,12 +171,30 @@ export class CryptoService {
   /**
    * Encrypt data with CryptoKey
    */
-  async encrypt(data: Uint8Array, key: CryptoKey): Promise<ArrayBuffer> {
+  async encrypt(
+    data: Uint8Array,
+    key: CryptoKey,
+    additionalData?: Uint8Array
+  ): Promise<ArrayBuffer> {
     try {
-      assertWithinClientUploadLimit(data.length);
-      const iv = crypto.getRandomValues(new Uint8Array(12));
+      const dataBytes = getUint8ArrayByteLength(data, "Encryption input");
+      const additionalDataBytes = getOptionalUint8ArrayByteLength(
+        additionalData,
+        "Encryption additional data"
+      );
+      assertAesGcmMemoryBudget(dataBytes, additionalDataBytes, "Encryption input");
+      assertWithinClientUploadLimit(dataBytes);
+      const iv = crypto.getRandomValues(new Uint8Array(AES_GCM_IV_BYTES));
+      const algorithm: AesGcmParams = {
+        name: "AES-GCM",
+        iv: toBuffer(iv),
+        tagLength: 128,
+      };
+      if (additionalData !== undefined) {
+        algorithm.additionalData = toBuffer(additionalData);
+      }
       const ciphertext = await crypto.subtle.encrypt(
-        { name: "AES-GCM", iv: toBuffer(iv) },
+        algorithm,
         key,
         toBuffer(data)
       );
@@ -121,16 +215,63 @@ export class CryptoService {
   async decrypt(
     encryptedData: Uint8Array,
     iv: Uint8Array,
-    key: CryptoKey
+    key: CryptoKey,
+    additionalData?: Uint8Array,
+    encryptedDataIncludesIv = true
   ): Promise<Uint8Array> {
     try {
-      // If the encrypted data includes the IV at the start, extract it
-      const actualData = encryptedData.length > 12 && encryptedData.slice(0, 12).every((b, i) => b === iv[i])
-        ? encryptedData.slice(12)
-        : encryptedData;
+      const encryptedDataBytes = getUint8ArrayByteLength(
+        encryptedData,
+        "Encrypted input"
+      );
+      const ivBytes = getUint8ArrayByteLength(iv, "AES-GCM IV");
+      const additionalDataBytes = getOptionalUint8ArrayByteLength(
+        additionalData,
+        "Decryption additional data"
+      );
+      if (typeof encryptedDataIncludesIv !== "boolean") {
+        throw new CryptoError("encryptedDataIncludesIv must be a boolean");
+      }
+      if (ivBytes !== AES_GCM_IV_BYTES) {
+        throw new CryptoError("AES-GCM IV must contain exactly 12 bytes");
+      }
+      assertAesGcmMemoryBudget(
+        encryptedDataBytes,
+        additionalDataBytes,
+        "Encrypted input"
+      );
+
+      const minimumEncryptedBytes =
+        AES_GCM_TAG_BYTES +
+        (encryptedDataIncludesIv ? AES_GCM_IV_BYTES : 0);
+      if (encryptedDataBytes < minimumEncryptedBytes) {
+        throw new CryptoError(
+          `Encrypted payload must contain at least ${minimumEncryptedBytes} bytes including its AES-GCM tag`
+        );
+      }
+
+      let actualData = encryptedData;
+      if (encryptedDataIncludesIv) {
+        let difference = 0;
+        for (let index = 0; index < AES_GCM_IV_BYTES; index++) {
+          difference |= encryptedData[index] ^ iv[index];
+        }
+        if (difference !== 0) {
+          throw new CryptoError("Encrypted IV prefix does not match the envelope IV");
+        }
+        actualData = encryptedData.subarray(AES_GCM_IV_BYTES);
+      }
         
+      const algorithm: AesGcmParams = {
+        name: "AES-GCM",
+        iv: toBuffer(iv),
+        tagLength: 128,
+      };
+      if (additionalData !== undefined) {
+        algorithm.additionalData = toBuffer(additionalData);
+      }
       const plaintext = await crypto.subtle.decrypt(
-        { name: "AES-GCM", iv: toBuffer(iv) },
+        algorithm,
         key,
         toBuffer(actualData)
       );
@@ -155,10 +296,15 @@ export class CryptoService {
       );
     }
 
+    const [ikmBytes, saltBytes, infoBytes] = this.copyAndValidateKdfInputs(
+      ikm,
+      salt,
+      info
+    );
     try {
       const baseKey = await crypto.subtle.importKey(
         "raw",
-        toBuffer(ikm),
+        toBuffer(ikmBytes),
         "HKDF",
         false,
         ["deriveBits", "deriveKey"]
@@ -168,8 +314,8 @@ export class CryptoService {
         {
           name: "HKDF",
           hash: "SHA-256",
-          salt: toBuffer(salt),
-          info: toBuffer(info),
+          salt: toBuffer(saltBytes),
+          info: toBuffer(infoBytes),
         },
         baseKey,
         { name: "AES-GCM", length },
@@ -178,6 +324,10 @@ export class CryptoService {
       );
     } catch (error) {
       throw new CryptoError(`HKDF deriveKey failed: ${error}`);
+    } finally {
+      this.secureWipe(ikmBytes);
+      this.secureWipe(saltBytes);
+      this.secureWipe(infoBytes);
     }
   }
 
@@ -190,27 +340,45 @@ export class CryptoService {
     info: ArrayBuffer | Uint8Array,
     lengthBytes = 32
   ): Promise<ArrayBuffer> {
-    if (lengthBytes <= 0) {
+    if (
+      !Number.isSafeInteger(lengthBytes) ||
+      lengthBytes <= 0 ||
+      lengthBytes > HKDF_SHA256_MAX_OUTPUT
+    ) {
       throw new CryptoError(
-        `HKDF deriveBits lengthBytes must be > 0, received ${lengthBytes}`
+        `HKDF-SHA256 lengthBytes must be an integer from 1 to ${HKDF_SHA256_MAX_OUTPUT}, received ${lengthBytes}`
       );
     }
 
-    const wasm = this.getReadyWasmModule();
-    if (wasm?.derive_key_hkdf_raw) {
-      const derived = wasm.derive_key_hkdf_raw(
-        this.toUint8ArrayCopy(ikm),
-        this.toUint8ArrayCopy(salt),
-        this.toUint8ArrayCopy(info),
-        lengthBytes
-      );
-      return this.typedArrayToArrayBuffer(derived);
-    }
-
+    const [ikmBytes, saltBytes, infoBytes] = this.copyAndValidateKdfInputs(
+      ikm,
+      salt,
+      info
+    );
     try {
+      const wasm = this.getReadyWasmModule();
+      if (wasm?.derive_key_hkdf_raw) {
+        const derived = wasm.derive_key_hkdf_raw(
+          ikmBytes,
+          saltBytes,
+          infoBytes,
+          lengthBytes
+        );
+        try {
+          if (derived.length !== lengthBytes) {
+            throw new CryptoError(
+              `WASM HKDF returned ${derived.length} bytes, expected ${lengthBytes}`
+            );
+          }
+          return this.typedArrayToArrayBuffer(derived);
+        } finally {
+          this.secureWipe(derived);
+        }
+      }
+
       const baseKey = await crypto.subtle.importKey(
         "raw",
-        toBuffer(ikm),
+        toBuffer(ikmBytes),
         "HKDF",
         false,
         ["deriveBits", "deriveKey"]
@@ -220,14 +388,19 @@ export class CryptoService {
         {
           name: "HKDF",
           hash: "SHA-256",
-          salt: toBuffer(salt),
-          info: toBuffer(info),
+          salt: toBuffer(saltBytes),
+          info: toBuffer(infoBytes),
         },
         baseKey,
         lengthBytes * 8
       );
     } catch (error) {
+      if (error instanceof CryptoError) throw error;
       throw new CryptoError(`HKDF deriveBits failed: ${error}`);
+    } finally {
+      this.secureWipe(ikmBytes);
+      this.secureWipe(saltBytes);
+      this.secureWipe(infoBytes);
     }
   }
 
@@ -251,10 +424,30 @@ export class CryptoService {
     salt: Uint8Array,
     iterations: number
   ): Promise<Uint8Array> {
+    if (
+      !Number.isSafeInteger(iterations) ||
+      iterations < PBKDF2_MIN_ITERATIONS ||
+      iterations > PBKDF2_MAX_ITERATIONS
+    ) {
+      throw new CryptoError(
+        `PBKDF2 iterations must be an integer from ${PBKDF2_MIN_ITERATIONS} to ${PBKDF2_MAX_ITERATIONS}`
+      );
+    }
+    if (
+      !(password instanceof Uint8Array) ||
+      password.length < 1 ||
+      password.length > KDF_MAX_INPUT_BYTES
+    ) {
+      throw new CryptoError(
+        `PBKDF2 password must contain 1 to ${KDF_MAX_INPUT_BYTES} bytes`
+      );
+    }
+    const saltBytes = this.copyAndValidatePbkdf2Salt(salt);
+    const passwordBytes = new Uint8Array(password);
     try {
       const baseKey = await crypto.subtle.importKey(
         "raw",
-        toBuffer(password),
+        toBuffer(passwordBytes),
         "PBKDF2",
         false,
         ["deriveBits"]
@@ -264,7 +457,7 @@ export class CryptoService {
         {
           name: "PBKDF2",
           hash: "SHA-256",
-          salt: toBuffer(salt),
+          salt: toBuffer(saltBytes),
           iterations,
         },
         baseKey,
@@ -274,6 +467,9 @@ export class CryptoService {
       return new Uint8Array(derivedBits);
     } catch (error) {
       throw new CryptoError(`Key derivation (PBKDF2) failed: ${error}`);
+    } finally {
+      this.secureWipe(passwordBytes);
+      this.secureWipe(saltBytes);
     }
   }
 
@@ -285,9 +481,31 @@ export class CryptoService {
     salt: Uint8Array,
     iterations: number
   ): Promise<CryptoKey> {
+    if (
+      !Number.isSafeInteger(iterations) ||
+      iterations < PBKDF2_MIN_ITERATIONS ||
+      iterations > PBKDF2_MAX_ITERATIONS
+    ) {
+      throw new CryptoError(
+        `PBKDF2 iterations must be an integer from ${PBKDF2_MIN_ITERATIONS} to ${PBKDF2_MAX_ITERATIONS}`
+      );
+    }
+    if (typeof password !== "string") {
+      throw new CryptoError("PBKDF2 password must be a string");
+    }
+    const saltBytes = this.copyAndValidatePbkdf2Salt(salt);
+    const passwordBuffer = this.textEncoder.encode(password);
+    if (
+      passwordBuffer.length < 1 ||
+      passwordBuffer.length > KDF_MAX_INPUT_BYTES
+    ) {
+      this.secureWipe(passwordBuffer);
+      this.secureWipe(saltBytes);
+      throw new CryptoError(
+        `PBKDF2 password must contain 1 to ${KDF_MAX_INPUT_BYTES} UTF-8 bytes`
+      );
+    }
     try {
-      const passwordBuffer = this.textEncoder.encode(password);
-      
       const baseKey = await crypto.subtle.importKey(
         "raw",
         toBuffer(passwordBuffer),
@@ -300,7 +518,7 @@ export class CryptoService {
         {
           name: "PBKDF2",
           hash: "SHA-256",
-          salt: toBuffer(salt),
+          salt: toBuffer(saltBytes),
           iterations,
         },
         baseKey,
@@ -310,6 +528,9 @@ export class CryptoService {
       );
     } catch (error) {
       throw new CryptoError(`Key derivation from password failed: ${error}`);
+    } finally {
+      this.secureWipe(passwordBuffer);
+      this.secureWipe(saltBytes);
     }
   }
 
@@ -317,6 +538,9 @@ export class CryptoService {
    * Generate random salt
    */
   generateSalt(length = 16): Uint8Array {
+    if (!Number.isSafeInteger(length) || length < 16 || length > 64) {
+      throw new CryptoError("Salt length must be an integer from 16 to 64 bytes");
+    }
     return crypto.getRandomValues(new Uint8Array(length));
   }
 
@@ -369,8 +593,35 @@ export class CryptoService {
     keyString: string,
     usage: "ECDSA" | "ECDH"
   ): Promise<CryptoKey> {
+    let keyBuffer: ArrayBuffer | null = null;
     try {
-      const keyBuffer = this.base64ToArrayBuffer(keyString);
+      if (usage !== "ECDSA" && usage !== "ECDH") {
+        throw new CryptoError(
+          `Public key usage must be ECDSA or ECDH, received ${String(usage)}`
+        );
+      }
+      if (
+        typeof keyString !== "string" ||
+        keyString.length === 0 ||
+        keyString.length > MAX_P256_SPKI_BASE64_CHARS ||
+        keyString.length % 4 !== 0 ||
+        !CANONICAL_BASE64_PATTERN.test(keyString)
+      ) {
+        throw new CryptoError(
+          `P-256 SPKI must be canonical base64 no larger than ${MAX_P256_SPKI_BASE64_CHARS} characters`
+        );
+      }
+
+      keyBuffer = this.base64ToArrayBuffer(keyString);
+      if (
+        keyBuffer.byteLength === 0 ||
+        keyBuffer.byteLength > MAX_P256_SPKI_BYTES ||
+        this.arrayBufferToBase64(keyBuffer) !== keyString
+      ) {
+        throw new CryptoError(
+          `P-256 SPKI must decode canonically to 1-${MAX_P256_SPKI_BYTES} bytes`
+        );
+      }
       const algorithm =
         usage === "ECDSA"
           ? { name: "ECDSA", namedCurve: "P-256" }
@@ -385,6 +636,10 @@ export class CryptoService {
       );
     } catch (error) {
       throw new CryptoError(`Public key import failed: ${error}`);
+    } finally {
+      if (keyBuffer) {
+        this.secureWipe(keyBuffer);
+      }
     }
   }
 
@@ -419,63 +674,77 @@ export class CryptoService {
       ? this.toUint8ArrayCopy(seed)
       : crypto.getRandomValues(new Uint8Array(32));
 
-    if (privateKeyBytes.length !== 32) {
-      throw new CryptoError(
-        `X25519 private key seed must be 32 bytes, received ${privateKeyBytes.length}`
-      );
-    }
-
     try {
-      const privateKey = await crypto.subtle.importKey(
-        "pkcs8",
-        toBuffer(this.x25519Pkcs8FromSeed(privateKeyBytes)),
-        { name: "X25519" } as AlgorithmIdentifier,
-        false,
-        ["deriveBits"]
-      );
-
-      const basepointPublicKey = await crypto.subtle.importKey(
-        "raw",
-        toBuffer(X25519_BASEPOINT),
-        { name: "X25519" } as AlgorithmIdentifier,
-        false,
-        []
-      );
-
-      const publicKey = await crypto.subtle.deriveBits(
-        { name: "X25519", public: basepointPublicKey } as EcdhKeyDeriveParams,
-        privateKey,
-        256
-      );
-
-      return {
-        publicKey,
-        privateKey: this.typedArrayToArrayBuffer(privateKeyBytes),
-      };
-    } catch (error) {
-      const wasm = await this.getAnyWasmModule();
-      if (wasm?.generate_x25519_key_pair) {
-        try {
-          const pair = wasm.generate_x25519_key_pair(
-            seed ? this.toUint8ArrayCopy(seed) : undefined
-          );
-          const publicBytes = "public_key" in pair ? pair.public_key : pair.publicKey;
-          const privateBytes = "private_key" in pair ? pair.private_key : pair.privateKey;
-
-          return {
-            publicKey: this.typedArrayToArrayBuffer(publicBytes),
-            privateKey: this.typedArrayToArrayBuffer(privateBytes),
-          };
-        } catch (wasmError) {
-          throw new CryptoError(
-            `X25519 key pair generation failed in WASM fallback: ${wasmError}`
-          );
-        }
+      if (privateKeyBytes.length !== 32) {
+        throw new CryptoError(
+          `X25519 private key seed must be 32 bytes, received ${privateKeyBytes.length}`
+        );
       }
 
-      throw new CryptoError(
-        `X25519 key pair generation failed. Ensure runtime supports WebCrypto X25519 or WASM fallback: ${error}`
-      );
+      try {
+        let privateKeyPkcs8: Uint8Array | null = null;
+        let privateKey: CryptoKey;
+        try {
+          privateKeyPkcs8 = this.x25519Pkcs8FromSeed(privateKeyBytes);
+          privateKey = await crypto.subtle.importKey(
+            "pkcs8",
+            toBuffer(privateKeyPkcs8),
+            { name: "X25519" } as AlgorithmIdentifier,
+            false,
+            ["deriveBits"]
+          );
+        } finally {
+          if (privateKeyPkcs8) this.secureWipe(privateKeyPkcs8);
+        }
+
+        const basepointPublicKey = await crypto.subtle.importKey(
+          "raw",
+          toBuffer(X25519_BASEPOINT),
+          { name: "X25519" } as AlgorithmIdentifier,
+          false,
+          []
+        );
+
+        const publicKey = await crypto.subtle.deriveBits(
+          { name: "X25519", public: basepointPublicKey } as EcdhKeyDeriveParams,
+          privateKey,
+          256
+        );
+
+        return {
+          publicKey,
+          privateKey: this.typedArrayToArrayBuffer(privateKeyBytes),
+        };
+      } catch (error) {
+        const wasm = await this.getAnyWasmModule();
+        if (wasm?.generate_x25519_key_pair) {
+          let privateBytes: Uint8Array | null = null;
+          try {
+            const pair = wasm.generate_x25519_key_pair(privateKeyBytes);
+            const publicBytes =
+              "public_key" in pair ? pair.public_key : pair.publicKey;
+            privateBytes =
+              "private_key" in pair ? pair.private_key : pair.privateKey;
+
+            return {
+              publicKey: this.typedArrayToArrayBuffer(publicBytes),
+              privateKey: this.typedArrayToArrayBuffer(privateBytes),
+            };
+          } catch (wasmError) {
+            throw new CryptoError(
+              `X25519 key pair generation failed in WASM fallback: ${wasmError}`
+            );
+          } finally {
+            if (privateBytes) this.secureWipe(privateBytes);
+          }
+        }
+
+        throw new CryptoError(
+          `X25519 key pair generation failed. Ensure runtime supports WebCrypto X25519 or WASM fallback: ${error}`
+        );
+      }
+    } finally {
+      this.secureWipe(privateKeyBytes);
     }
   }
 
@@ -573,28 +842,57 @@ export class CryptoService {
     salt: string,
     info: string
   ): Promise<CryptoKey> {
-    const wasm = this.getReadyWasmModule();
-    if (wasm?.derive_key_from_shared_secret) {
-      const rawKey = wasm.derive_key_from_shared_secret(
-        this.toUint8ArrayCopy(sharedSecret),
-        salt,
-        info
-      );
-      return crypto.subtle.importKey(
-        "raw",
-        toBuffer(rawKey),
-        { name: "AES-GCM", length: 256 },
-        true,
-        ["encrypt", "decrypt"]
-      );
+    if (
+      typeof salt !== "string" ||
+      typeof info !== "string" ||
+      salt.length < 1 ||
+      salt.length > SHARED_SECRET_CONTEXT_MAX_BYTES ||
+      info.length < 1 ||
+      info.length > SHARED_SECRET_CONTEXT_MAX_BYTES
+    ) {
+      throw new CryptoError("Shared-secret salt and info must be strings");
     }
+    const secretBytes = this.toUint8ArrayCopy(sharedSecret);
+    const saltBytes = this.textEncoder.encode(salt);
+    const infoBytes = this.textEncoder.encode(info);
+    try {
+      this.assertContributoryX25519Secret(
+        secretBytes,
+        "Caller-provided X25519"
+      );
+      this.validateSharedSecretContext("salt", saltBytes);
+      this.validateSharedSecretContext("info", infoBytes);
 
-    return this.hkdfDerive(
-      sharedSecret,
-      this.textEncoder.encode(salt),
-      this.textEncoder.encode(info),
-      256
-    );
+      const wasm = this.getReadyWasmModule();
+      if (wasm?.derive_key_from_shared_secret) {
+        const wasmSecret = new Uint8Array(secretBytes);
+        let rawKey: Uint8Array | null = null;
+        try {
+          rawKey = wasm.derive_key_from_shared_secret(wasmSecret, salt, info);
+          if (rawKey.length !== 32) {
+            throw new CryptoError(
+              `WASM shared-secret derivation returned ${rawKey.length} bytes, expected 32`
+            );
+          }
+          return await crypto.subtle.importKey(
+            "raw",
+            toBuffer(rawKey),
+            { name: "AES-GCM", length: 256 },
+            true,
+            ["encrypt", "decrypt"]
+          );
+        } finally {
+          this.secureWipe(wasmSecret);
+          if (rawKey) this.secureWipe(rawKey);
+        }
+      }
+
+      return await this.hkdfDerive(secretBytes, saltBytes, infoBytes, 256);
+    } finally {
+      this.secureWipe(secretBytes);
+      this.secureWipe(saltBytes);
+      this.secureWipe(infoBytes);
+    }
   }
 
   /**
@@ -636,13 +934,18 @@ export class CryptoService {
    * Get key fingerprint (hex string)
    */
   async getKeyFingerprint(key: CryptoKey): Promise<string> {
+    let exported: ArrayBuffer | null = null;
+    let hash: ArrayBuffer | null = null;
     try {
-      const exported = await crypto.subtle.exportKey("raw", key);
-      const hash = await crypto.subtle.digest("SHA-256", exported);
+      exported = await crypto.subtle.exportKey("raw", key) as ArrayBuffer;
+      hash = await crypto.subtle.digest("SHA-256", exported);
       const hex = this.arrayBufferToHex(hash);
       return hex.substring(0, 16); // 8 bytes = 16 hex chars
     } catch (error) {
       throw new CryptoError(`Fingerprint generation failed: ${error}`);
+    } finally {
+      if (exported) this.secureWipe(exported);
+      if (hash) this.secureWipe(hash);
     }
   }
 
@@ -650,9 +953,11 @@ export class CryptoService {
    * Get safety numbers for key verification
    */
   async getSafetyNumbers(key: CryptoKey): Promise<string> {
+    let exported: ArrayBuffer | null = null;
+    let hash: ArrayBuffer | null = null;
     try {
-      const exported = await crypto.subtle.exportKey("raw", key);
-      const hash = await crypto.subtle.digest("SHA-256", exported);
+      exported = await crypto.subtle.exportKey("raw", key) as ArrayBuffer;
+      hash = await crypto.subtle.digest("SHA-256", exported);
       const bytes = new Uint8Array(hash);
       
       // Convert to groups of 3-digit numbers
@@ -665,6 +970,9 @@ export class CryptoService {
       return groups.join(" ");
     } catch (error) {
       throw new CryptoError(`Safety numbers generation failed: ${error}`);
+    } finally {
+      if (exported) this.secureWipe(exported);
+      if (hash) this.secureWipe(hash);
     }
   }
 
@@ -706,7 +1014,75 @@ export class CryptoService {
   }
 
   private toUint8ArrayCopy(data: ArrayBuffer | Uint8Array): Uint8Array {
-    return data instanceof Uint8Array ? new Uint8Array(data) : new Uint8Array(data);
+    if (!(data instanceof ArrayBuffer) && !(data instanceof Uint8Array)) {
+      throw new CryptoError("Cryptographic byte input must be an ArrayBuffer or Uint8Array");
+    }
+    return data instanceof Uint8Array
+      ? new Uint8Array(data)
+      : new Uint8Array(data.slice(0));
+  }
+
+  private copyAndValidateKdfInput(
+    label: string,
+    data: ArrayBuffer | Uint8Array,
+    minimumBytes: number
+  ): Uint8Array {
+    const bytes = this.toUint8ArrayCopy(data);
+    if (bytes.length < minimumBytes || bytes.length > KDF_MAX_INPUT_BYTES) {
+      this.secureWipe(bytes);
+      throw new CryptoError(
+        `${label} must contain ${minimumBytes} to ${KDF_MAX_INPUT_BYTES} bytes`
+      );
+    }
+    return bytes;
+  }
+
+  private copyAndValidateKdfInputs(
+    ikm: ArrayBuffer | Uint8Array,
+    salt: ArrayBuffer | Uint8Array,
+    info: ArrayBuffer | Uint8Array
+  ): [Uint8Array, Uint8Array, Uint8Array] {
+    const copies: Uint8Array[] = [];
+    try {
+      copies.push(this.copyAndValidateKdfInput("HKDF input key material", ikm, 1));
+      copies.push(this.copyAndValidateKdfInput("HKDF salt", salt, 0));
+      copies.push(this.copyAndValidateKdfInput("HKDF info", info, 0));
+      return copies as [Uint8Array, Uint8Array, Uint8Array];
+    } catch (error) {
+      for (const copy of copies) this.secureWipe(copy);
+      throw error;
+    }
+  }
+
+  private copyAndValidatePbkdf2Salt(salt: Uint8Array): Uint8Array {
+    if (!(salt instanceof Uint8Array)) {
+      throw new CryptoError("PBKDF2 salt must be a Uint8Array");
+    }
+    const bytes = new Uint8Array(salt);
+    if (
+      bytes.length < PBKDF2_MIN_SALT_BYTES ||
+      bytes.length > PBKDF2_MAX_SALT_BYTES
+    ) {
+      this.secureWipe(bytes);
+      throw new CryptoError(
+        `PBKDF2 salt must contain ${PBKDF2_MIN_SALT_BYTES} to ${PBKDF2_MAX_SALT_BYTES} bytes`
+      );
+    }
+    return bytes;
+  }
+
+  private validateSharedSecretContext(
+    label: "salt" | "info",
+    bytes: Uint8Array
+  ): void {
+    if (
+      bytes.length < 1 ||
+      bytes.length > SHARED_SECRET_CONTEXT_MAX_BYTES
+    ) {
+      throw new CryptoError(
+        `Shared-secret ${label} must contain 1 to ${SHARED_SECRET_CONTEXT_MAX_BYTES} UTF-8 bytes`
+      );
+    }
   }
 
   private typedArrayToArrayBuffer(bytes: Uint8Array): ArrayBuffer {
@@ -805,6 +1181,9 @@ export class CryptoService {
  */
 export class HashService {
   private readonly textEncoder = new TextEncoder();
+  private readonly saltedHashDomain = this.textEncoder.encode(
+    "voided:hash-with-salt:v2"
+  );
 
   /**
    * Hash data with given algorithm
@@ -813,9 +1192,8 @@ export class HashService {
     data: Uint8Array,
     algorithm: "sha256" | "sha512" = "sha256"
   ): Promise<string> {
+    const algorithmName = this.webCryptoHashName(algorithm);
     try {
-      // Map algorithm names to Web Crypto format
-      const algorithmName = algorithm === "sha256" ? "SHA-256" : "SHA-512";
       const hashBuffer = await crypto.subtle.digest(algorithmName, toBuffer(data));
       return this.arrayBufferToHex(hashBuffer);
     } catch (error) {
@@ -831,13 +1209,28 @@ export class HashService {
     salt: Uint8Array,
     algorithm: "sha256" | "sha512" = "sha256"
   ): Promise<string> {
+    this.webCryptoHashName(algorithm);
+    const transcriptLength =
+      this.saltedHashDomain.length + 16 + data.length + salt.length;
+    assertWithinClientMemoryLimit(transcriptLength, "Salted hash transcript");
+    let transcript: Uint8Array | null = null;
     try {
-      const combined = new Uint8Array(data.length + salt.length);
-      combined.set(data, 0);
-      combined.set(salt, data.length);
-      return await this.hash(combined, algorithm);
+      transcript = new Uint8Array(transcriptLength);
+      let offset = 0;
+      transcript.set(this.saltedHashDomain, offset);
+      offset += this.saltedHashDomain.length;
+      this.writeU64Be(transcript, offset, data.length);
+      offset += 8;
+      transcript.set(data, offset);
+      offset += data.length;
+      this.writeU64Be(transcript, offset, salt.length);
+      offset += 8;
+      transcript.set(salt, offset);
+      return await this.hash(transcript, algorithm);
     } catch (error) {
       throw new CryptoError(`Failed to hash with salt: ${error}`);
+    } finally {
+      transcript?.fill(0);
     }
   }
 
@@ -861,8 +1254,8 @@ export class HashService {
     key: Uint8Array,
     algorithm: "sha256" | "sha512" = "sha256"
   ): Promise<string> {
+    const algorithmName = this.webCryptoHashName(algorithm);
     try {
-      const algorithmName = algorithm === "sha256" ? "SHA-256" : "SHA-512";
       const cryptoKey = await crypto.subtle.importKey(
         "raw",
         toBuffer(key),
@@ -881,6 +1274,7 @@ export class HashService {
    * Generate fingerprint
    */
   async fingerprint(data: Uint8Array, length = 8): Promise<string> {
+    this.assertSafeIntegerInRange(length, 1, 32, "Fingerprint length");
     const hash = await this.hash(data, "sha256");
     return hash.substring(0, length * 2);
   }
@@ -889,11 +1283,17 @@ export class HashService {
    * Generate safety numbers
    */
   async safetyNumbers(data: Uint8Array, groupSize = 5): Promise<string> {
+    this.assertSafeIntegerInRange(
+      groupSize,
+      1,
+      32,
+      "Fingerprint group size"
+    );
     const hash = await this.hash(data, "sha256");
     const bytes = this.hexToBytes(hash);
     
     const groups: string[] = [];
-    for (let i = 0; i < bytes.length && groups.length < 8; i += groupSize) {
+    for (let i = 0; i < bytes.length; i += groupSize) {
       const slice = bytes.slice(i, i + groupSize);
       const groupNums = Array.from(slice).map((b) =>
         b.toString().padStart(3, "0")
@@ -902,6 +1302,53 @@ export class HashService {
     }
     
     return groups.join("  ");
+  }
+
+  private webCryptoHashName(algorithm: unknown): "SHA-256" | "SHA-512" {
+    switch (algorithm) {
+      case "sha256":
+        return "SHA-256";
+      case "sha512":
+        return "SHA-512";
+      default:
+        throw new CryptoError(
+          `Unsupported hash algorithm: ${
+            typeof algorithm === "string" ? algorithm : typeof algorithm
+          }`
+        );
+    }
+  }
+
+  private writeU64Be(
+    target: Uint8Array,
+    offset: number,
+    value: number
+  ): void {
+    if (!Number.isSafeInteger(value) || value < 0) {
+      throw new CryptoError(`Hash transcript length is invalid: ${value}`);
+    }
+    let remaining = BigInt(value);
+    for (let index = 7; index >= 0; index--) {
+      target[offset + index] = Number(remaining & 0xffn);
+      remaining >>= 8n;
+    }
+  }
+
+  private assertSafeIntegerInRange(
+    value: number,
+    minimum: number,
+    maximum: number,
+    label: string
+  ): void {
+    if (
+      !Number.isSafeInteger(value) ||
+      value < minimum ||
+      value > maximum
+    ) {
+      throw new CryptoError(
+        `${label} must be a safe integer from ${minimum} to ${maximum}, received ${value}`
+      );
+    }
   }
 
   private arrayBufferToHex(buffer: ArrayBuffer): string {

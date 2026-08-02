@@ -3,6 +3,7 @@ name = "voided-bench"
 version = "0.2.0"
 edition = "2021"
 publish = false
+license = "MIT"
 
 [dependencies]
 aes-gcm = "0.10"

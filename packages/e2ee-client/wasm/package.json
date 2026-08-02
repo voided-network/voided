@@ -1,0 +1,24 @@
+{
+  "name": "voided-wasm",
+  "type": "module",
+  "collaborators": [
+    "Voided Team"
+  ],
+  "description": "WebAssembly binding for voided-core encryption library",
+  "version": "0.2.2",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/voided-network/voided"
+  },
+  "files": [
+    "voided_wasm_bg.wasm",
+    "voided_wasm.js",
+    "voided_wasm.d.ts"
+  ],
+  "main": "voided_wasm.js",
+  "types": "voided_wasm.d.ts",
+  "sideEffects": [
+    "./snippets/*"
+  ]
+}

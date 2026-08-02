@@ -108,7 +108,7 @@ test('HKDF is deterministic', () => {
 test('PBKDF2 derived keys work for encryption', () => {
     const password = Buffer.from('my-password', 'utf8');
     const salt = Buffer.from('salt-123456789012', 'utf8');
-    const derivedKey = deriveKeyPbkdf2(password, salt, 10000);
+    const derivedKey = deriveKeyPbkdf2(password, salt, 100000);
     assert.strictEqual(derivedKey.length, 32);
     const data = Buffer.from('protected data', 'utf8');
     const encrypted = encrypt(data, derivedKey);
@@ -119,19 +119,18 @@ test('PBKDF2 derived keys work for encryption', () => {
 test('PBKDF2 is deterministic', () => {
     const password = Buffer.from('password', 'utf8');
     const salt = Buffer.from('salt-value-12345', 'utf8');
-    const key1 = deriveKeyPbkdf2(password, salt, 5000);
-    const key2 = deriveKeyPbkdf2(password, salt, 5000);
+    const key1 = deriveKeyPbkdf2(password, salt, 100000);
+    const key2 = deriveKeyPbkdf2(password, salt, 100000);
     assert(key1.equals(key2));
 });
 
 test('different PBKDF2 iterations produce different keys', () => {
     const password = Buffer.from('password', 'utf8');
     const salt = Buffer.from('salt-value-12345', 'utf8');
-    const key1 = deriveKeyPbkdf2(password, salt, 1000);
-    const key2 = deriveKeyPbkdf2(password, salt, 2000);
+    const key1 = deriveKeyPbkdf2(password, salt, 100000);
+    const key2 = deriveKeyPbkdf2(password, salt, 200000);
     assert(!key1.equals(key2));
 });
 
 console.log(`\n${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);
-

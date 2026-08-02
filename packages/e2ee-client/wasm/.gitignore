@@ -1,0 +1,4 @@
+# Release artifacts are intentionally tracked so the source tag records the
+# exact WASM payload shipped to npm. Only local loader scratch output is ignored.
+init.js
+*.new

@@ -36,9 +36,8 @@ async function runTests() {
         
         try {
             await new Promise((resolve, reject) => {
-                const proc = spawn('node', [filePath], { 
-                    stdio: 'inherit',
-                    shell: true
+                const proc = spawn(process.execPath, [filePath], {
+                    stdio: 'inherit'
                 });
                 proc.on('close', code => {
                     if (code === 0) resolve();

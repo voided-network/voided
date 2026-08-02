@@ -1,6 +1,6 @@
 [package]
 name = "voided-core"
-version = "0.2.0"
+version = "0.2.3"
 edition = "2021"
 authors = ["Voided Team"]
 description = "Core cryptographic primitives for the Voided encryption library"
@@ -8,6 +8,14 @@ license = "MIT"
 repository = "https://github.com/voided-network/voided"
 keywords = ["encryption", "cryptography", "aead", "security"]
 categories = ["cryptography", "encoding"]
+include = [
+    "src/**",
+    "tests/**",
+    "Cargo.toml",
+    "README.md",
+    "LICENSE",
+    "THIRD_PARTY_NOTICES",
+]
 
 [lib]
 crate-type = ["cdylib", "rlib"]
@@ -18,12 +26,13 @@ default = ["backend"]
 # Full feature set for Node.js backend binding
 backend = ["compression", "signing", "std"]
 
-# Browser-compatible subset for WASM
-browser = ["compression", "wasm"]
+# Browser-compatible subset for WASM. The in-memory compression codecs use
+# std::io, which is available on wasm32-unknown-unknown.
+browser = ["compression", "wasm", "std"]
 
 # Individual feature flags
 compression = ["brotli", "flate2"]
-signing = ["ed25519-dalek", "p256", "rsa"]
+signing = ["ed25519-dalek", "p256"]
 wasm = ["getrandom/js", "wasm-bindgen"]
 std = []
 
@@ -46,9 +55,8 @@ brotli = { version = "3.3", optional = true }
 flate2 = { version = "1.0", optional = true }
 
 # Signing (optional, backend only)
-ed25519-dalek = { version = "2.1", features = ["rand_core"], optional = true }
-p256 = { version = "0.13", features = ["ecdsa", "ecdh"], optional = true }
-rsa = { version = "0.9", optional = true }
+ed25519-dalek = { version = "2.1", features = ["rand_core", "pem"], optional = true }
+p256 = { version = "0.13", features = ["ecdsa", "ecdh", "pem"], optional = true }
 
 # Encoding
 base64 = "0.21"

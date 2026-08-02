@@ -29,8 +29,8 @@
 //! assert_eq!(plaintext, &decrypted[..]);
 //! ```
 
+#![forbid(unsafe_code)]
 #![cfg_attr(not(feature = "std"), no_std)]
-#![deny(unsafe_code)]
 #![warn(missing_docs)]
 #![warn(clippy::all)]
 

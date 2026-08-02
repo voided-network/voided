@@ -1,0 +1,58 @@
+{
+  "schemaVersion": 4,
+  "package": "@voideddev/e2ee-client",
+  "packageVersion": "0.4.4",
+  "target": "wasm32-unknown-unknown",
+  "coreVersion": "0.2.3",
+  "bindingVersion": "0.2.2",
+  "sourceDigest": "sha256:db0023828ad400055da1a7f5cc2ddee7afcdc693b1fbe75c9f2110a1415d816a",
+  "buildId": "sha256:67cc25ba52f2a4f9a756235b58280f13501d334135a291425964c5a1d052b284",
+  "tools": {
+    "cargo": "cargo 1.93.0 (083ac5135 2025-12-15)",
+    "cargoSha256": "sha256:46c9483604e913070b085dc5acf972bc560395c10dfec1cdb389c4b6bf17cf67",
+    "rustc": "rustc 1.93.0 (254b59607 2026-01-19)",
+    "rustcSha256": "sha256:87b02c67012c28083fe485a50b10470a662c828c6e2cd0caf4775e00986cdfc8",
+    "wasmPack": "wasm-pack 0.14.0",
+    "wasmPackSha256": "sha256:05a43c488034c7ea3af1f99819fb9e0915599fb14b672f88bbae048cccb3ff29",
+    "wasmBindgen": "wasm-bindgen 0.2.107",
+    "wasmBindgenSha256": "sha256:988acfffd71c340e9d24a9fdf805fc64d4e82d94fdd35e4deba475679257936b"
+  },
+  "buildEnvironment": {
+    "cargoIncremental": "0",
+    "locale": "C",
+    "offline": "true",
+    "pathRemapBuild": "/voided-build",
+    "pathRemapCargoHome": "/cargo-home",
+    "pathRemapSource": "/voided-source",
+    "pathRemapToolchain": "/rust-toolchain",
+    "sourceDateEpoch": "0",
+    "timezone": "UTC"
+  },
+  "artifacts": [
+    {
+      "file": "voided_wasm.js",
+      "sha256": "sha256:d536549c56182b2444f55a591d633e1a1d8669f9a6e93c3c2dd4c7ff5243a0e6",
+      "size": 62875
+    },
+    {
+      "file": "voided_wasm_bg.wasm",
+      "sha256": "sha256:a5efe8d9f367b885a7c7a8be9184285c42855f87f0ad4c107fbf16da6de5b02b",
+      "size": 1906512
+    },
+    {
+      "file": "voided_wasm.d.ts",
+      "sha256": "sha256:5e7759ae583bf0d5cfcc876f75d2f083f6f4b0ef5478c9f52bae9147ec136d87",
+      "size": 15805
+    },
+    {
+      "file": "voided_wasm_bg.wasm.d.ts",
+      "sha256": "sha256:7701d045bff190adb968d3fed1a78c25dc00e297d5680fb51df0c2a244f7520b",
+      "size": 8941
+    },
+    {
+      "file": "package.json",
+      "sha256": "sha256:536e02161c51eb632e129ee9ccf28a8bff85cd765ca048e61687aa36866e73cd",
+      "size": 496
+    }
+  ]
+}

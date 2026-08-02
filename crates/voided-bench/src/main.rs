@@ -230,7 +230,8 @@ impl Candidate {
                     }),
                 )
                 .map_err(to_string)?;
-                let serialized = compression::serialize_with_header(&compressed);
+                let serialized =
+                    compression::serialize_with_header(&compressed).map_err(to_string)?;
                 encryption::encrypt(
                     &serialized,
                     &key,
@@ -812,7 +813,7 @@ fn run_fixture(
     let output = candidate.encode(input, &KEY, 0)?;
     let decoded = candidate.decode(&output, &KEY);
     let roundtrip_ok = decoded.as_deref() == Ok(input.as_slice());
-    let (tamper_accepts, tamper_trials) = tamper_result(candidate, input, &output)?;
+    let (tamper_accepts, tamper_trials) = tamper_result(candidate, &output)?;
     let wrong_key_accepts = usize::from(candidate.decode(&output, &WRONG_KEY).is_ok());
     let stats = ByteStats::from_bytes(&output);
     let artifact_delta = artifact_delta_result(candidate, input)?;
@@ -852,11 +853,7 @@ fn run_fixture(
     })
 }
 
-fn tamper_result(
-    candidate: Candidate,
-    original: &[u8],
-    output: &[u8],
-) -> Result<(usize, usize), String> {
+fn tamper_result(candidate: Candidate, output: &[u8]) -> Result<(usize, usize), String> {
     if output.is_empty() {
         return Ok((0, 0));
     }
@@ -867,12 +864,8 @@ fn tamper_result(
         let mut tampered = output.to_vec();
         tampered[position] ^= 0x80;
         trials += 1;
-        if let Ok(decoded) = candidate.decode(&tampered, &KEY) {
-            if decoded == original {
-                accepts += 1;
-            } else {
-                accepts += 1;
-            }
+        if candidate.decode(&tampered, &KEY).is_ok() {
+            accepts += 1;
         }
     }
     Ok((accepts, trials))
@@ -952,7 +945,7 @@ fn median(values: &mut [f64]) -> f64 {
     }
     values.sort_by(|left, right| left.total_cmp(right));
     let middle = values.len() / 2;
-    if values.len() % 2 == 0 {
+    if values.len().is_multiple_of(2) {
         (values[middle - 1] + values[middle]) / 2.0
     } else {
         values[middle]
@@ -984,8 +977,8 @@ impl ByteStats {
         let mut bit_counts = [0usize; 8];
         for &byte in bytes {
             counts[byte as usize] += 1;
-            for bit in 0..8 {
-                bit_counts[bit] += ((byte >> bit) & 1) as usize;
+            for (bit, count) in bit_counts.iter_mut().enumerate() {
+                *count += ((byte >> bit) & 1) as usize;
             }
         }
 

@@ -16,7 +16,9 @@
         "declarationMap": true,
         "sourceMap": true,
         "moduleResolution": "node",
-        "useUnknownInCatchVariables": false
+        "useUnknownInCatchVariables": false,
+        "noUnusedLocals": true,
+        "noUnusedParameters": true
     },
     "include": [
         "src/**/*"

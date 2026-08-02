@@ -50,9 +50,13 @@ usage, use `@voideddev/e2ee-client`.
 npm install @voideddev/enc-server
 ```
 
-The package prefers prebuilt native binaries. If a prebuild is not available
-for the current platform, install falls back to a local source build. In that
-case, Rust must be installed on the machine.
+The package ships verified native prebuilds for macOS Apple Silicon,
+Linux x64 GNU, and Windows x64 MSVC. Installation fails closed on other
+platforms rather than compiling unreviewed source during `npm install`.
+
+The Linux x64 prebuild requires glibc 2.34 or newer. Consumers on another
+architecture, C library, or older Linux distribution should build the binding
+from the tagged Voided source release and run the native verification suite.
 
 ## Quick Start
 
@@ -216,6 +220,18 @@ Important behavior notes:
 - the package is synchronous because the native module is loaded directly into
   Node.js
 - there is no TypeScript crypto fallback in this package
+- XChaCha20-Poly1305 is the default primitive; direct AES-256-GCM callers must
+  count uses across their system, prevent nonce reuse, and rotate a key before
+  2^32 encryptions
+- PBKDF2 helpers require a 16-1024 byte salt and 100,000-1,000,000 iterations;
+  they are synchronous, so application-selected higher work factors belong in
+  a worker thread
+- `hashWithSalt` uses domain-separated, length-prefixed fields; it is not
+  compatible with the ambiguous legacy `hash(data || salt)` construction
+- `safetyNumbers` is only a grouped SHA-256 fingerprint display; it is not
+  Signal's identity-binding Safety Number protocol
+- direct decompression and stream helpers enforce output and expansion limits;
+  use bounded authenticated records for larger streaming workloads
 
 ## Fused Shell And Full-Flow APIs
 
@@ -283,6 +299,13 @@ What each one does:
 - protected size
 - shell chunk size
 - shell chunk count
+
+All `inspectFused`, `inspectArtifact`, and `inspectRotationArtifact` results are
+untrusted keyless hints. Do not use them for authorization, quota accounting,
+billing, allocation decisions, or algorithm policy. Only a successful
+`open`/`openRotationArtifact` authenticates the artifact. Native keyless inspect
+accepts at most 1 GiB in one in-memory buffer and rejects metadata values that
+cannot be represented exactly as JavaScript integers.
 
 If you do not have a strong reason otherwise, start with:
 

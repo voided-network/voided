@@ -1,10 +1,7 @@
 import { VoidedE2EEClient } from '../index';
 import { CLIENT_MAX_UPLOAD_BYTES, VOI_FILE_TOO_LARGE } from '../limits';
 import {
-    compress,
-    decompress,
-    stringToUint8Array,
-    uint8ArrayToString
+    compress
 } from '../compression';
 import { InMemoryStorage } from './test-utils';
 
@@ -53,7 +50,11 @@ describe('E2EE Integration Tests with Compression', () => {
             const largeData = generateTestData(5000, 'repetitive');
 
             // Encrypt
-            const encrypted = await client.encrypt(largeData, { originalSizeBytes: largeData.length });
+            const encrypted = await client.encrypt(largeData, {
+                originalSizeBytes: largeData.length,
+                forceCompression: true,
+                compressionAlgorithm: 'gzip'
+            });
             expect(encrypted.compression.compressedSize).toBeLessThan(encrypted.compression.originalSize);
 
             // Decrypt
@@ -177,7 +178,10 @@ describe('E2EE Integration Tests with Compression', () => {
             const startTime = performance.now();
 
             // Full pipeline
-            const encrypted = await client.encrypt(largeData);
+            const encrypted = await client.encrypt(largeData, {
+                forceCompression: true,
+                compressionAlgorithm: 'gzip'
+            });
             const decrypted = await client.decrypt(encrypted);
 
             const endTime = performance.now();

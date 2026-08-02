@@ -3,7 +3,6 @@ import {
     compress,
     decompress,
     analyzeCompression,
-    stringToUint8Array,
     uint8ArrayToString
 } from '../compression';
 
@@ -11,7 +10,7 @@ import {
 const stringArb = fc.string({ minLength: 1, maxLength: 10000 });
 const uint8ArrayArb = fc.uint8Array({ minLength: 1, maxLength: 10000 });
 const compressionLevelArb = fc.integer({ min: 1, max: 9 });
-const algorithmArb = fc.constantFrom('gzip', 'brotli', 'auto', 'none');
+const algorithmArb = fc.constantFrom('gzip', 'auto', 'none');
 
 describe('Compression Property-Based Tests', () => {
     describe('Core Properties', () => {
@@ -64,6 +63,12 @@ describe('Compression Property-Based Tests', () => {
     });
 
     describe('Algorithm Properties', () => {
+        it('should fail closed for explicit brotli without the Rust WASM backend', async () => {
+            await expect(
+                compress('property-test', { algorithm: 'brotli' })
+            ).rejects.toThrow('requires the Rust WASM backend');
+        });
+
         it('should respect explicit algorithm selection', () =>
             fc.assert(
                 fc.asyncProperty(stringArb, algorithmArb, async (data, algorithm) => {
@@ -235,9 +240,9 @@ describe('Compression Property-Based Tests', () => {
             fc.assert(
                 fc.asyncProperty(
                     stringArb,
-                    fc.constantFrom('gzip', 'brotli'),
+                    fc.constantFrom('gzip', 'auto', 'none'),
                     async (data, algorithm) => {
-                        const result = await compress(data, { algorithm: algorithm as 'gzip' | 'brotli' });
+                        const result = await compress(data, { algorithm: algorithm as 'gzip' | 'auto' | 'none' });
                         const decompressed = await decompress(result.compressed, result.algorithm);
                         const originalString = typeof data === 'string' ? data : uint8ArrayToString(data);
                         const decompressedString = typeof decompressed === 'string' ? decompressed : uint8ArrayToString(decompressed);

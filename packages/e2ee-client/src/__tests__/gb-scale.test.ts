@@ -1,7 +1,4 @@
-import {
-    VoidedE2EEClient,
-    EncryptedBlob
-} from '../index';
+import { VoidedE2EEClient } from '../index';
 import { InMemoryStorage } from './test-utils';
 
 // GB-scale test configuration
@@ -131,7 +128,7 @@ describe('GB-Scale Production Tests', () => {
             const client = new VoidedE2EEClient({
                 storage: new InMemoryStorage(),
                 enableChunking: true,
-                chunkSize: 10 * 1024 * 1024, // 10MB chunks
+                chunkSize: 8 * 1024 * 1024, // 8MB chunks
                 minChunkThreshold: 20 * 1024 * 1024 // 20MB threshold
             });
             const data = generateGBScaleData(30 * 1024 * 1024, 'random'); // 30MB of random data (incompressible)
@@ -172,7 +169,7 @@ describe('GB-Scale Production Tests', () => {
             const client = new VoidedE2EEClient({
                 storage: new InMemoryStorage(),
                 enableChunking: true,
-                chunkSize: 10 * 1024 * 1024, // 10MB chunks
+                chunkSize: 8 * 1024 * 1024, // 8MB chunks
                 minChunkThreshold: 20 * 1024 * 1024 // 20MB threshold
             });
             const data = generateGBScaleData(GB_SCALE_CONFIG.LARGE_DATA_SIZE, 'random'); // 20MB of random data
@@ -211,7 +208,7 @@ describe('GB-Scale Production Tests', () => {
             const client = new VoidedE2EEClient({
                 storage: new InMemoryStorage(),
                 enableChunking: true,
-                chunkSize: 10 * 1024 * 1024, // 10MB chunks
+                chunkSize: 8 * 1024 * 1024, // 8MB chunks
                 minChunkThreshold: 20 * 1024 * 1024 // 20MB threshold
             });
             const data = generateGBScaleData(GB_SCALE_CONFIG.HUGE_DATA_SIZE, 'random'); // 30MB of random data
@@ -290,6 +287,7 @@ describe('GB-Scale Production Tests', () => {
 
             // Success rate should be very high
             expect(successRate).toBeGreaterThan(1 - GB_SCALE_CONFIG.MAX_ERROR_RATE);
+            expect(errorRate).toBeLessThan(GB_SCALE_CONFIG.MAX_ERROR_RATE);
 
             // Performance should be reasonable
             expect(duration).toBeLessThan(GB_SCALE_CONFIG.MAX_OPERATION_TIME_MS * 2);
@@ -398,6 +396,7 @@ describe('GB-Scale Production Tests', () => {
             // Assertions
             expect(successRate).toBeGreaterThan(0.99); // 99% success rate
             expect(avgDuration).toBeLessThan(100); // 100ms average per operation
+            expect(totalDuration).toBeLessThan(GB_SCALE_CONFIG.MAX_OPERATION_TIME_MS * 20);
             expect(performanceDegradation).toBeLessThan(1.5); // Max 50% degradation
             expect(memoryPeakMB).toBeLessThan(GB_SCALE_CONFIG.MAX_MEMORY_USAGE_MB);
 
@@ -410,14 +409,14 @@ describe('GB-Scale Production Tests', () => {
             const client = new VoidedE2EEClient({
                 storage: new InMemoryStorage(),
                 enableSignatures: true,
-                enableForwardSecrecy: true,
                 enableChunking: true,
                 chunkSize: 5 * 1024 * 1024, // 5MB chunks
                 minChunkThreshold: 8 * 1024 * 1024 // 8MB threshold
             });
 
             // Generate keys for advanced features
-            await client.generateSigningKeys();
+            const signingPublicKey = await client.generateSigningKeys();
+            await client.setTrustedSigningPublicKey(signingPublicKey);
             await client.generateAgreementKeys();
 
             const largeData = generateGBScaleData(15 * 1024 * 1024, 'mixed'); // 15MB -> will be chunked
@@ -444,7 +443,6 @@ describe('GB-Scale Production Tests', () => {
 
             // Verify advanced security features
             expect(encrypted.signature).toBeDefined(); // Global signature
-            expect(encrypted.ephemeralPublicKey).toBeDefined();
 
             // Each chunk should also have signatures
             if (encrypted.chunks) {
@@ -552,7 +550,7 @@ describe('GB-Scale Production Tests', () => {
             const client = new VoidedE2EEClient({
                 storage: new InMemoryStorage(),
                 enableChunking: true,
-                chunkSize: 10 * 1024 * 1024, // 10MB chunks
+                chunkSize: 8 * 1024 * 1024, // 8MB chunks
                 minChunkThreshold: 20 * 1024 * 1024 // 20MB threshold
             });
 
@@ -602,8 +600,9 @@ describe('GB-Scale Production Tests', () => {
             // Should handle most operations successfully, including chunked ones
             expect(successRate).toBeGreaterThan(0.95); // 95% minimum success rate with chunking
             expect(errorCount).toBeLessThan(results.length * 0.05); // Max 5% errors
+            expect(chunkedCount).toBeGreaterThan(0);
 
             // log removed
         }, 300000);
     });
-}); 
+});

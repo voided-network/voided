@@ -2,7 +2,7 @@
 // Works in any framework: React, Vue, Svelte, vanilla JS, etc.
 
 // Import the library (adjust path as needed)
-import { VoidedE2EEClient, createKeyExport, createKeyImport } from '../dist/index.mjs';
+import { VoidedE2EEClient, createKeyExport, createKeyImport } from '../dist/index.js';
 
 // Initialize the E2EE client
 const client = new VoidedE2EEClient({ keyId: 'user123' });
@@ -225,4 +225,4 @@ if (typeof window !== 'undefined') {
 }
 
 // Export for use in other modules
-export { client, keyExport, keyImport }; 
+export { client, keyExport, keyImport, ReactKeyButtons, VueKeyButtons };

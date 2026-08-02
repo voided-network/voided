@@ -1,6 +1,6 @@
 {
   "name": "@voideddev/enc-server",
-  "version": "0.3.0",
+  "version": "0.3.2",
   "description": "Server-side hashing, compression, encryption, and v3 monolith artifact library backed by Rust",
   "type": "module",
   "main": "dist/index.cjs",
@@ -30,21 +30,26 @@
   },
   "scripts": {
     "build": "tsup",
-    "build:native": "node scripts/build-native.js",
+    "build:native": "node scripts/build-native-release.js",
     "build:all": "npm run build:native && npm run build",
-    "copy:native": "node scripts/copy-native.js",
-    "postinstall": "node scripts/postinstall.js",
+    "postinstall": "node scripts/postinstall-verify.js",
     "test": "node src/__tests__/run-all.mjs",
-    "test:native": "node native/test-native.mjs",
+    "test:native": "npm run verify:release:current",
     "test:integration": "node tests/integration.test.mjs",
     "test:all": "npm run test:native && npm run test:integration && npm run test",
+    "typecheck": "tsc --noEmit",
     "dev": "tsup src/index.ts src/native/index.ts src/crypto-backend.ts --format esm,cjs --dts --watch",
-    "prepublishOnly": "npm run copy:native && npm run build"
+    "verify:release": "node scripts/verify-release.js",
+    "verify:release:current": "node scripts/verify-release.js --current-platform",
+    "verify:reproducible-native:current": "node scripts/verify-reproducible-native.js",
+    "verify:reproducible-native:windows": "node scripts/verify-reproducible-native.js --target=win32-x64-msvc",
+    "verify:source": "node ../../scripts/verify-release-source.js --package packages/enc-server --tag-prefix enc-server-v --allow-untagged",
+    "prepare:prebuilds": "node scripts/prepare-prebuilds.js",
+    "smoke:package": "node scripts/package-smoke.js",
+    "smoke:package:current": "node scripts/package-smoke.js --current-platform",
+    "prepack": "npm run build && npm run verify:release && npm run prepare:prebuilds",
+    "prepublishOnly": "node ../../scripts/verify-release-source.js --package packages/enc-server --tag-prefix enc-server-v && npm run typecheck && npm run build:all && npm run verify:release && npm run prepare:prebuilds && npm run smoke:package"
   },
-  "dependencies": {
-    "hkdf": "^0.0.2"
-  },
-  "optionalDependencies": {},
   "devDependencies": {
     "@types/jest": "^29.5.14",
     "@types/node": "^20.0.0",
@@ -57,8 +62,13 @@
   "files": [
     "dist",
     "prebuilds",
-    "scripts/postinstall.js"
+    "scripts/postinstall-verify.js",
+    "LICENSE",
+    "THIRD_PARTY_NOTICES"
   ],
+  "engines": {
+    "node": ">=18"
+  },
   "keywords": [
     "encryption",
     "compression",
@@ -67,5 +77,10 @@
     "rust",
     "native"
   ],
-  "license": "MIT"
+  "license": "MIT",
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
+  "repository": "https://github.com/voided-network/voided"
 }

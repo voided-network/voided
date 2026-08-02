@@ -1,4 +1,4 @@
-import { compress, decompress, stringToUint8Array } from './compression';
+import { compress, decompress } from './compression';
 import { VoidedE2EEClient } from './index';
 
 export interface OpBenchmarkResult {

@@ -1,4 +1,4 @@
-import { VoidedE2EEClient, RotationOptions } from '../index';
+import { VoidedE2EEClient } from '../index';
 import { InMemoryStorage } from './test-utils';
 
 describe('Key Rotation Tests', () => {
@@ -30,6 +30,7 @@ describe('Key Rotation Tests', () => {
 
             // Default rotation (force: true)
             const newKey = await client.rotateKey();
+            expect(newKey).toEqual(expect.any(String));
 
             // Verify we can still encrypt/decrypt new data
             const newData = 'new data encrypted with new key';
@@ -62,6 +63,7 @@ describe('Key Rotation Tests', () => {
 
             // Explicit force rotate
             const newKey = await client.rotateKey({ force: true });
+            expect(newKey).toEqual(expect.any(String));
 
             // Verify we can still encrypt/decrypt new data
             const newData = 'new data encrypted with new key';
@@ -463,15 +465,15 @@ describe('Key Rotation Tests', () => {
         it('should handle legacy keys without version', async () => {
             // Export the raw key (which doesn't include version - version is stored separately)
             const legacyKey = await client.exportKey();
-            
+
             // Create a new client and import the key
             const newStorage = new InMemoryStorage();
             const newClient = new VoidedE2EEClient({ storage: newStorage });
-            
+
             // Import the raw key - should default to version 1
             await newClient.importKey(legacyKey);
             expect(await newClient.getCurrentKeyVersion()).toBe(1); // Default version
-            
+
             // Verify the key works for encryption/decryption
             const testData = 'test with legacy key';
             const encrypted = await newClient.encrypt(testData);
@@ -513,7 +515,6 @@ describe('Key Rotation Tests', () => {
         it('should handle storage failures gracefully', async () => {
             // Create client with failing storage
             const failingStorage = new InMemoryStorage();
-            const originalSetKey = failingStorage.setKey.bind(failingStorage);
             failingStorage.setKey = async () => { throw new Error('Storage failed'); };
 
             const failingClient = new VoidedE2EEClient({ storage: failingStorage });
@@ -643,4 +644,4 @@ describe('Key Rotation Tests', () => {
             }
         });
     });
-}); 
+});

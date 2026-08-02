@@ -135,7 +135,7 @@ fn prod_realtime_small_messages() {
         .expect("encrypt");
 
         // 1 out of 20 packets get corrupted "in transit"
-        let should_corrupt = (rng.next_u64() % 20) == 0;
+        let should_corrupt = rng.next_u64().is_multiple_of(20);
         let packet = if should_corrupt {
             corrupt_one_bit(enc.clone())
         } else {
@@ -265,7 +265,7 @@ fn prod_file_sync_chunking_parallel_sessions() {
     let keys = Arc::new(keys);
 
     let total_bytes = file_mb * 1024 * 1024;
-    let chunk_sizes = [1 * 1024 * 1024, 8 * 1024 * 1024];
+    let chunk_sizes = [1024 * 1024, 8 * 1024 * 1024];
     let max_chunk = *chunk_sizes.iter().max().unwrap();
 
     let barrier = Arc::new(Barrier::new(sessions));
@@ -280,8 +280,6 @@ fn prod_file_sync_chunking_parallel_sessions() {
         let keys = Arc::clone(&keys);
         let barrier = Arc::clone(&barrier);
         let total_done = Arc::clone(&total_done);
-        let start = start;
-
         handles.push(thread::spawn(move || {
             barrier.wait();
 
@@ -298,7 +296,7 @@ fn prod_file_sync_chunking_parallel_sessions() {
 
             let mut processed = 0usize;
             let mut chunk_index = 0usize;
-            let progress_step = (total_bytes / 4).max(1 * 1024 * 1024);
+            let progress_step = (total_bytes / 4).max(1024 * 1024);
             let mut next_progress = progress_step;
 
             while processed < total_bytes {
@@ -315,8 +313,8 @@ fn prod_file_sync_chunking_parallel_sessions() {
                 chunk_index += 1;
 
                 // mutate small portion to avoid identical blocks
-                for i in 0..32.min(sz) {
-                    pt[i] ^= (rng.next_u64() & 0xFF) as u8;
+                for byte in pt.iter_mut().take(32.min(sz)) {
+                    *byte ^= (rng.next_u64() & 0xFF) as u8;
                 }
 
                 let slice = &pt[..sz];
@@ -392,13 +390,13 @@ fn prod_multi_tenant_isolation_and_failure_modes() {
     // - corrupted packet fails
     let mut encrypted = Vec::with_capacity(tenants);
 
-    for tid in 0..tenants {
+    for (tid, tenant_key) in tenant_keys.iter().enumerate() {
         let aad = format!("tenant={}|route=api|v=1", tid).into_bytes();
         let pt = random_bytes(32 * 1024);
 
         let enc = encrypt(
             &pt,
-            &tenant_keys[tid],
+            tenant_key,
             Some(EncryptOptions {
                 algorithm: Some(Algorithm::XChaCha20Poly1305),
                 aad: Some(aad.clone()),
@@ -406,15 +404,14 @@ fn prod_multi_tenant_isolation_and_failure_modes() {
         )
         .expect("encrypt");
 
-        let out = decrypt_with_aad(&enc, &tenant_keys[tid], &aad).expect("decrypt");
+        let out = decrypt_with_aad(&enc, tenant_key, &aad).expect("decrypt");
         assert_eq!(out, pt);
 
         encrypted.push((aad, pt, enc));
     }
 
     // Cross-tenant decrypt must fail
-    for tid in 0..tenants {
-        let (aad, _pt, enc) = &encrypted[tid];
+    for (tid, (aad, _pt, enc)) in encrypted.iter().enumerate() {
         let wrong = (tid + 1) % tenants;
         assert!(decrypt_with_aad(enc, &tenant_keys[wrong], aad).is_err());
     }

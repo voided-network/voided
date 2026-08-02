@@ -205,7 +205,7 @@
         VoidedE2EEClient,
         createKeyExport,
         createKeyImport,
-      } from "../dist/index.mjs";
+      } from "../dist/index.js";
 
       // Initialize the E2EE client
       const client = new VoidedE2EEClient({ keyId: "demo-user" });
@@ -279,15 +279,22 @@
           // Show result
           const resultDiv = document.getElementById("test-result");
           resultDiv.style.display = "block";
-          resultDiv.innerHTML = `
-                    <strong>✅ Test successful!</strong><br>
-                    <strong>Original:</strong> ${input}<br>
-                    <strong>Encrypted:</strong> ${encrypted.data.substring(
-                      0,
-                      50
-                    )}...<br>
-                    <strong>Decrypted:</strong> ${decrypted}
-                `;
+          resultDiv.replaceChildren();
+          const appendLine = (label, value) => {
+            const heading = document.createElement("strong");
+            heading.textContent = label;
+            resultDiv.append(
+              heading,
+              document.createTextNode(` ${value}`),
+              document.createElement("br")
+            );
+          };
+          const success = document.createElement("strong");
+          success.textContent = "✅ Test successful!";
+          resultDiv.append(success, document.createElement("br"));
+          appendLine("Original:", input);
+          appendLine("Encrypted:", `${encrypted.data.substring(0, 50)}...`);
+          appendLine("Decrypted:", decrypted);
 
           updateStatus(
             "Encryption/decryption test completed successfully!",
@@ -311,10 +318,17 @@
           const hasKey = await client.hasKey();
 
           const keyInfoDiv = document.getElementById("key-info");
-          keyInfoDiv.innerHTML = `
-                    <strong>Key Version:</strong> ${keyVersion}<br>
-                    <strong>Has Key:</strong> ${hasKey ? "Yes" : "No"}
-                `;
+          const versionLabel = document.createElement("strong");
+          versionLabel.textContent = "Key Version:";
+          const hasKeyLabel = document.createElement("strong");
+          hasKeyLabel.textContent = "Has Key:";
+          keyInfoDiv.replaceChildren(
+            versionLabel,
+            document.createTextNode(` ${keyVersion}`),
+            document.createElement("br"),
+            hasKeyLabel,
+            document.createTextNode(` ${hasKey ? "Yes" : "No"}`)
+          );
         } catch (error) {
           console.error("Failed to update key info:", error);
         }

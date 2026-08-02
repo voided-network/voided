@@ -23,6 +23,7 @@ test('add external key and make active', () => {
     const km = new KeyManager();
     const buf = Buffer.alloc(32, 7);
     const added = km.addKey(buf, true, 'fixed');
+    assert.strictEqual(added.id, 'fixed');
     assert.strictEqual(km.activeKey.id, 'fixed');
     assert(km.getKey('fixed').key.equals(buf));
 });
@@ -53,4 +54,3 @@ test('multiple rotations maintain history', () => {
 
 console.log(`\n${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);
-

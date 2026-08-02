@@ -17,6 +17,13 @@ function native(): NativeModule {
   return _native;
 }
 
+function boundedInteger(name: string, value: number, minimum: number, maximum: number): number {
+  if (!Number.isSafeInteger(value) || value < minimum || value > maximum) {
+    throw new RangeError(`${name} must be a safe integer between ${minimum} and ${maximum}.`);
+  }
+  return value;
+}
+
 // ============================================================================
 // ENCRYPTION
 // ============================================================================
@@ -73,6 +80,10 @@ export function deriveKeyPbkdf2(
   salt: Buffer,
   iterations: number
 ): Buffer {
+  boundedInteger('iterations', iterations, 100_000, 1_000_000);
+  if (salt.length < 16 || salt.length > 1024) {
+    throw new RangeError('PBKDF2 salt must be between 16 and 1024 bytes.');
+  }
   return native().deriveKeyPbkdf2(password, salt, iterations);
 }
 
@@ -114,6 +125,10 @@ export function verifyHmac(
 }
 
 export function hashPbkdf2(data: Buffer, salt: Buffer, iterations: number): string {
+  boundedInteger('iterations', iterations, 100_000, 1_000_000);
+  if (salt.length < 16 || salt.length > 1024) {
+    throw new RangeError('PBKDF2 salt must be between 16 and 1024 bytes.');
+  }
   return native().hashWithPbkdf2(data, salt, iterations);
 }
 
@@ -123,14 +138,24 @@ export function verifyPbkdf2(
   salt: Buffer,
   iterations: number
 ): boolean {
+  boundedInteger('iterations', iterations, 100_000, 1_000_000);
+  if (salt.length < 16 || salt.length > 1024) {
+    throw new RangeError('PBKDF2 salt must be between 16 and 1024 bytes.');
+  }
   return native().verifyPbkdf2(data, expectedHash, salt, iterations);
 }
 
 export function fingerprint(data: Buffer, length: number = 8): string {
+  boundedInteger('length', length, 1, 32);
   return native().generateFingerprint(data, length);
 }
 
+/**
+ * Human-readable groups derived from a SHA-256 fingerprint.
+ * This is not Signal's Safety Number protocol and does not bind identities.
+ */
 export function safetyNumbers(data: Buffer, groupSize: number = 5): string {
+  boundedInteger('groupSize', groupSize, 1, 32);
   return native().generateSafetyNumbers(data, groupSize);
 }
 
@@ -280,10 +305,12 @@ export function repackArtifact(
 // ============================================================================
 
 export function randomBytes(length: number): Buffer {
+  boundedInteger('length', length, 1, 16 * 1024 * 1024);
   return native().randomBytes(length);
 }
 
 export function generateSalt(length: number = 16): Buffer {
+  boundedInteger('length', length, 16, 1024);
   return native().generateSalt(length);
 }
 

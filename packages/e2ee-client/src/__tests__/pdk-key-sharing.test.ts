@@ -1,5 +1,5 @@
 import { CryptoService } from "../crypto-service";
-import { KeySharing } from "../key-sharing";
+import { KeySharing, KeySharingContext } from "../key-sharing";
 import { VoidedE2EEClient } from "../index";
 import { InMemoryStorage } from "./test-utils";
 
@@ -72,16 +72,24 @@ describe("key sharing additions", () => {
     const bobIdentity = await cryptoService.generateX25519KeyPair();
 
     const dataKey = await cryptoService.generateKey();
+    const context: KeySharingContext = {
+      senderId: "alice",
+      recipientId: "bob",
+      keyId: "round-trip-key",
+      transferId: KeySharing.createTransferId(),
+    };
     const encryptedForBob = await sharing.encryptKeyForRecipient(
       dataKey,
       aliceIdentity.privateKey,
-      bobIdentity.publicKey
+      bobIdentity.publicKey,
+      context
     );
 
     const recovered = await sharing.decryptKeyFromSender(
       encryptedForBob,
       bobIdentity.privateKey,
-      aliceIdentity.publicKey
+      aliceIdentity.publicKey,
+      context
     );
 
     const dataKeyRaw = await crypto.subtle.exportKey("raw", dataKey);
@@ -97,14 +105,22 @@ describe("key sharing additions", () => {
     const sharing = new KeySharing(cryptoService);
     const deviceA = await cryptoService.generateX25519KeyPair();
     const deviceB = await cryptoService.generateX25519KeyPair();
+    const context: KeySharingContext = {
+      senderId: "device-a",
+      recipientId: "device-b",
+      keyId: "transfer-key",
+      transferId: KeySharing.createTransferId(),
+    };
 
     const transferA = await sharing.deriveTransferKey(
       deviceA.privateKey,
-      deviceB.publicKey
+      deviceB.publicKey,
+      context
     );
     const transferB = await sharing.deriveTransferKey(
       deviceB.privateKey,
-      deviceA.publicKey
+      deviceA.publicKey,
+      context
     );
 
     const transferARaw = await crypto.subtle.exportKey("raw", transferA);
@@ -112,8 +128,8 @@ describe("key sharing additions", () => {
     expect(toHex(transferARaw)).toBe(toHex(transferBRaw));
 
     const dataKey = await cryptoService.generateKey();
-    const encrypted = await sharing.encryptKeyForTransfer(dataKey, transferA);
-    const recovered = await sharing.decryptKeyFromTransfer(encrypted, transferB);
+    const encrypted = await sharing.encryptKeyForTransfer(dataKey, transferA, context);
+    const recovered = await sharing.decryptKeyFromTransfer(encrypted, transferB, context);
 
     const dataKeyRaw = await crypto.subtle.exportKey("raw", dataKey);
     const recoveredRaw = await crypto.subtle.exportKey("raw", recovered);

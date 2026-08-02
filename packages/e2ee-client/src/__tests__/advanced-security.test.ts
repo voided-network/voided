@@ -4,7 +4,7 @@ import { InMemoryStorage } from './test-utils';
 describe('Advanced Security Features', () => {
     test('Password-based key derivation encrypts and decrypts correctly', async () => {
         const client = new VoidedE2EEClient({ storage: new InMemoryStorage() });
-        await client.deriveKeyFromPassword({ password: 'test-password', iterations: 100000 });
+        await client.deriveKeyFromPassword({ password: 'test-password-long', iterations: 600000 });
         const data = 'password-derived secret';
         const encrypted = await client.encrypt(data);
         const decrypted = await client.decrypt(encrypted);
@@ -13,7 +13,8 @@ describe('Advanced Security Features', () => {
 
     test('Digital signatures: encrypt includes signature, decrypt verifies', async () => {
         const client = new VoidedE2EEClient({ storage: new InMemoryStorage(), enableSignatures: true });
-        await client.generateSigningKeys();
+        const publicKey = await client.generateSigningKeys();
+        await client.setTrustedSigningPublicKey(publicKey);
         const data = 'signed data';
         const encrypted = await client.encrypt(data);
         expect(encrypted.signature).toBeDefined();
@@ -44,13 +45,10 @@ describe('Advanced Security Features', () => {
         expect(decrypted).toBe(msg);
     });
 
-    test('Forward secrecy: ephemeral keys are used and decrypts correctly', async () => {
-        const client = new VoidedE2EEClient({ storage: new InMemoryStorage(), enableForwardSecrecy: true });
-        await client.generateAgreementKeys();
-        const data = 'forward secret message';
-        const encrypted = await client.encrypt(data);
-        expect(encrypted.ephemeralPublicKey).toBeDefined();
-        const decrypted = await client.decrypt(encrypted);
-        expect(decrypted).toBe(data);
+    test('Removed forward-secrecy claim fails closed', () => {
+        expect(() => new VoidedE2EEClient({
+            storage: new InMemoryStorage(),
+            enableForwardSecrecy: true
+        })).toThrow('not a forward-secret ratchet');
     });
-}); 
+});

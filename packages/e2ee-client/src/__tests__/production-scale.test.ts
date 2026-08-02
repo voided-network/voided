@@ -1,7 +1,6 @@
 import {
     VoidedE2EEClient,
-    EncryptedBlob,
-    IndexedDBStorage
+    EncryptedBlob
 } from '../index';
 import { InMemoryStorage } from './test-utils';
 
@@ -205,7 +204,10 @@ describe('Production-Scale E2EE Tests', () => {
             memoryMonitor.start();
             const startTime = performance.now();
 
-            const encrypted = await client.encrypt(largeData);
+            const encrypted = await client.encrypt(largeData, {
+                forceCompression: true,
+                compressionAlgorithm: 'gzip'
+            });
             const decrypted = await client.decrypt(encrypted);
 
             const endTime = performance.now();
@@ -306,7 +308,6 @@ describe('Production-Scale E2EE Tests', () => {
 
         test('should handle 1000 concurrent operations with graceful degradation', async () => {
             const client = new VoidedE2EEClient({ storage: new InMemoryStorage() });
-            const operations: Promise<void>[] = [];
             let successCount = 0;
             let errorCount = 0;
 
@@ -361,6 +362,7 @@ describe('Production-Scale E2EE Tests', () => {
 
             // Memory should not explode
             expect(memStats.max).toBeLessThan(PRODUCTION_CONFIG.MAX_MEMORY_USAGE_MB * 2);
+            expect(endTime - startTime).toBeLessThan(PRODUCTION_CONFIG.MARATHON_TIMEOUT);
 
             // log removed
         }, PRODUCTION_CONFIG.MARATHON_TIMEOUT);
@@ -425,6 +427,7 @@ describe('Production-Scale E2EE Tests', () => {
 
             // Memory should be stable
             expect(memStats.max).toBeLessThan(PRODUCTION_CONFIG.MAX_MEMORY_USAGE_MB);
+            expect(endTime - startTime).toBeLessThan(PRODUCTION_CONFIG.MARATHON_TIMEOUT);
 
             // log removed
         }, PRODUCTION_CONFIG.MARATHON_TIMEOUT);
@@ -496,6 +499,7 @@ describe('Production-Scale E2EE Tests', () => {
 
             // Memory should be reasonable
             expect(memStats.max).toBeLessThan(PRODUCTION_CONFIG.MAX_MEMORY_USAGE_MB * 1.5);
+            expect(endTime - startTime).toBeLessThan(PRODUCTION_CONFIG.MARATHON_TIMEOUT);
 
             // log removed
         }, PRODUCTION_CONFIG.MARATHON_TIMEOUT);
@@ -505,12 +509,12 @@ describe('Production-Scale E2EE Tests', () => {
         test('should maintain security features under extreme load', async () => {
             const client = new VoidedE2EEClient({
                 storage: new InMemoryStorage(),
-                enableSignatures: true,
-                enableForwardSecrecy: true
+                enableSignatures: true
             });
 
             // Generate keys for advanced features
-            await client.generateSigningKeys();
+            const signingPublicKey = await client.generateSigningKeys();
+            await client.setTrustedSigningPublicKey(signingPublicKey);
             await client.generateAgreementKeys();
 
             memoryMonitor.start();
@@ -529,12 +533,10 @@ describe('Production-Scale E2EE Tests', () => {
                     client.encrypt(data).then(encrypted => {
                         // Verify advanced security features are present
                         const hasSignature = encrypted.signature !== undefined;
-                        const hasEphemeralKey = encrypted.ephemeralPublicKey !== undefined;
 
                         return client.decrypt(encrypted).then(decrypted => ({
                             success: decrypted === data,
                             hasSignature,
-                            hasEphemeralKey,
                             compressionRatio: encrypted.compression.compressedSize / encrypted.compression.originalSize,
                         }));
                     })
@@ -553,10 +555,9 @@ describe('Production-Scale E2EE Tests', () => {
 
             // All should have advanced security features
             const signatureRate = results.filter(r => r.hasSignature).length / results.length;
-            const ephemeralKeyRate = results.filter(r => r.hasEphemeralKey).length / results.length;
 
             expect(signatureRate).toBe(1.0); // All should have signatures
-            expect(ephemeralKeyRate).toBe(1.0); // All should have ephemeral keys
+            expect(memStats.max).toBeLessThan(PRODUCTION_CONFIG.MAX_MEMORY_USAGE_MB * 2);
 
             // Performance should still be reasonable
             const avgTimePerOp = (endTime - startTime) / numOperations;
@@ -613,6 +614,7 @@ describe('Production-Scale E2EE Tests', () => {
             const successRate = successfulDecrypts / decryptResults.length;
 
             expect(successRate).toBeGreaterThan(0.8); // 80% success rate minimum under pressure
+            expect(memStats.max).toBeLessThan(PRODUCTION_CONFIG.MAX_MEMORY_USAGE_MB * 2);
 
             // Clean up references to free memory
             results.length = 0;
@@ -680,6 +682,8 @@ describe('Production-Scale E2EE Tests', () => {
 
             // Performance should not degrade significantly over time
             expect(successRate).toBeGreaterThan(0.99);
+            expect(endTime - startTime).toBeLessThan(PRODUCTION_CONFIG.MARATHON_TIMEOUT);
+            expect(memStats.max).toBeLessThan(PRODUCTION_CONFIG.MAX_MEMORY_USAGE_MB * 2);
 
             // Later intervals should not be significantly slower
             const performanceDegradation = avgDurations[avgDurations.length - 1] / avgDurations[0];
@@ -688,4 +692,4 @@ describe('Production-Scale E2EE Tests', () => {
             // log removed
         }, PRODUCTION_CONFIG.MARATHON_TIMEOUT);
     });
-}); 
+});

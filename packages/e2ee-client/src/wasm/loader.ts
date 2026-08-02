@@ -106,6 +106,11 @@ export interface WasmModule {
   // Compression
   compress(data: Uint8Array, algorithm?: string, level?: number): CompressionResult;
   decompress(data: Uint8Array, algorithm: string): Uint8Array;
+  decompress_bounded(
+    data: Uint8Array,
+    algorithm: string,
+    maxOutputBytes: number,
+  ): Uint8Array;
 
   // Fused shell / full-flow
   fuse(data: Uint8Array, key: Uint8Array, preset?: string, chunkSize?: number): Uint8Array;
@@ -143,6 +148,153 @@ export interface WasmModule {
 type RawWasmModule = Record<string, (...args: any[]) => any> & {
   default?: (...args: any[]) => Promise<unknown>;
 };
+
+export interface WasmLoaderOptions {
+  /**
+   * Trusted URL of the wasm-bindgen JavaScript glue module. The adjacent
+   * `voided_wasm_bg.wasm` file must be served beside it.
+   */
+  glueUrl: string | URL;
+}
+
+let configuredWasmGlueUrl: string | null = null;
+let wasmInitializationStarted = false;
+
+function normalizeWasmGlueUrl(value: unknown): string {
+  let raw: string;
+  if (typeof value === 'string') {
+    raw = value;
+  } else if (typeof URL !== 'undefined' && value instanceof URL) {
+    raw = value.href;
+  } else {
+    throw new Error('[voided-wasm] glueUrl must be a string or URL');
+  }
+  if (raw.length === 0 || raw.length > 4096) {
+    throw new Error('[voided-wasm] glueUrl has an invalid length');
+  }
+
+  const browserBase =
+    typeof document !== 'undefined' && document.baseURI
+      ? document.baseURI
+      : typeof globalThis.location !== 'undefined'
+        ? globalThis.location.href
+        : undefined;
+  let parsed: URL;
+  try {
+    parsed = browserBase ? new URL(raw, browserBase) : new URL(raw);
+  } catch {
+    throw new Error(
+      '[voided-wasm] glueUrl must be absolute when no browser base URL is available',
+    );
+  }
+  if (!['https:', 'http:', 'file:'].includes(parsed.protocol)) {
+    throw new Error('[voided-wasm] glueUrl must use http, https, or file');
+  }
+  if (parsed.username || parsed.password) {
+    throw new Error('[voided-wasm] glueUrl must not contain credentials');
+  }
+  if (!parsed.pathname.endsWith('/voided_wasm.js')) {
+    throw new Error('[voided-wasm] glueUrl must end with /voided_wasm.js');
+  }
+  return parsed.href;
+}
+
+function applyWasmLoaderOptions(
+  options: WasmLoaderOptions,
+  allowSameAfterStart: boolean,
+): void {
+  if (
+    !options ||
+    typeof options !== 'object' ||
+    !Object.prototype.hasOwnProperty.call(options, 'glueUrl') ||
+    Object.keys(options).length !== 1
+  ) {
+    throw new Error('[voided-wasm] loader options must contain only glueUrl');
+  }
+  const normalized = normalizeWasmGlueUrl(options.glueUrl);
+  if (wasmInitializationStarted) {
+    if (allowSameAfterStart && normalized === configuredWasmGlueUrl) return;
+    throw new Error(
+      '[voided-wasm] WASM loader configuration cannot change after initialization has started',
+    );
+  }
+  if (
+    configuredWasmGlueUrl !== null &&
+    configuredWasmGlueUrl !== normalized
+  ) {
+    throw new Error('[voided-wasm] WASM glue URL is already configured');
+  }
+  configuredWasmGlueUrl = normalized;
+}
+
+import { secureWasmModule } from './secure-module';
+
+/**
+ * Configure a trusted, host-served wasm-bindgen glue module before any WASM
+ * initialization begins. A configured URL is fail-closed and never falls back
+ * to package-relative assets.
+ */
+export function configureWasmLoader(options: WasmLoaderOptions): void {
+  applyWasmLoaderOptions(options, false);
+}
+
+function runtimeModuleSpecifier(...segments: string[]): string {
+  return segments.join('/');
+}
+
+async function importWasmBindings(): Promise<RawWasmModule> {
+  if (configuredWasmGlueUrl !== null) {
+    try {
+      return (await import(
+        /* @vite-ignore */
+        configuredWasmGlueUrl
+      )) as RawWasmModule;
+    } catch {
+      throw new Error(
+        '[voided-wasm] Could not load the configured WASM glue module; ' +
+          'no package-relative fallback was attempted',
+      );
+    }
+  }
+
+  try {
+    // Dedicated dist/wasm/loader entry and the source-tree loader.
+    // Build the specifier at runtime and preserve Vite's ignore marker so
+    // downstream bundlers cannot inline the generated wasm-bindgen glue and
+    // rebase its adjacent .wasm URL into their JavaScript output directory.
+    const nestedBindingsPath = runtimeModuleSpecifier(
+      '..',
+      '..',
+      'wasm',
+      'voided_wasm.js',
+    );
+    return (await import(
+      /* @vite-ignore */
+      nestedBindingsPath
+    )) as RawWasmModule;
+  } catch (nestedError) {
+    try {
+      // Loader code bundled into dist/index or dist/crypto-backend.
+      const rootBundleBindingsPath = runtimeModuleSpecifier(
+        '..',
+        'wasm',
+        'voided_wasm.js',
+      );
+      return (await import(
+        /* @vite-ignore */
+        rootBundleBindingsPath
+      )) as RawWasmModule;
+    } catch (rootError) {
+      const nestedDetail =
+        nestedError instanceof Error ? nestedError.message : String(nestedError);
+      const rootDetail =
+        rootError instanceof Error ? rootError.message : String(rootError);
+      throw new Error(
+        `[voided-wasm] Could not load packaged WASM bindings (${nestedDetail}; ${rootDetail})`,
+      );
+    }
+  }
+}
 
 function getExportFn<T extends (...args: any[]) => any>(
   mod: RawWasmModule,
@@ -247,6 +399,13 @@ function normalizeWasmModule(mod: RawWasmModule): WasmModule {
   const generateSalt = getExportFn<(length?: number) => Uint8Array>(mod, ["generate_salt", "generateSalt"]);
   const compressFn = getExportFn<(data: Uint8Array, algorithm?: string, level?: number) => any>(mod, ["compress"]);
   const decompressFn = getExportFn<(data: Uint8Array, algorithm: string) => Uint8Array>(mod, ["decompress"]);
+  const decompressBoundedFn = getExportFn<
+    (
+      data: Uint8Array,
+      algorithm: string,
+      maxOutputBytes: number,
+    ) => Uint8Array
+  >(mod, ["decompressBounded", "decompress_bounded"]);
   const fuseFn = getExportFn<(data: Uint8Array, key: Uint8Array, preset?: string, chunkSize?: number) => Uint8Array>(
     mod,
     ["fuse"],
@@ -342,6 +501,8 @@ function normalizeWasmModule(mod: RawWasmModule): WasmModule {
     generate_salt: (length) => generateSalt(length),
     compress: (data, algorithm, level) => normalizeCompressionResult(compressFn(data, algorithm, level)),
     decompress: (data, algorithm) => decompressFn(data, algorithm),
+    decompress_bounded: (data, algorithm, maxOutputBytes) =>
+      decompressBoundedFn(data, algorithm, maxOutputBytes),
     fuse: (data, key, preset, chunkSize) => fuseFn(data, key, preset, chunkSize),
     unfuse: (data, key) => unfuseFn(data, key),
     inspectFused: (data) => normalizeFusedShellInfo(inspectFusedFn(data)),
@@ -400,7 +561,11 @@ const isNode = typeof window === 'undefined' && typeof process !== 'undefined' &
  * Safe to call multiple times - will only initialize once.
  * In Node.js environment, this will immediately fail as WASM is for browsers only.
  */
-export async function initWasm(): Promise<WasmModule> {
+export async function initWasm(options?: WasmLoaderOptions): Promise<WasmModule> {
+  if (options !== undefined) {
+    applyWasmLoaderOptions(options, true);
+  }
+
   // Already initialized
   if (wasmModule) {
     return wasmModule;
@@ -410,6 +575,8 @@ export async function initWasm(): Promise<WasmModule> {
   if (initError) {
     throw initError;
   }
+
+  wasmInitializationStarted = true;
   
   // In Node.js, skip WASM entirely - use TypeScript fallback
   if (isNode) {
@@ -425,17 +592,18 @@ export async function initWasm(): Promise<WasmModule> {
   // Start initialization (browser only)
   initPromise = (async () => {
     try {
-      // Dynamic import of the WASM module
-      // In the built package, this will be at the wasm/ directory
-      const mod = await import('../../wasm/voided_wasm.js');
-      
+      const mod = await importWasmBindings();
+
       // Initialize if needed (wasm-bindgen generated code)
       if (typeof mod.default === 'function') {
+        // wasm-bindgen resolves its adjacent .wasm asset from the imported JS
+        // module URL, so no page-relative or caller-controlled URL is involved.
         await mod.default();
       }
-      
-      wasmModule = normalizeWasmModule(mod as unknown as RawWasmModule);
-      console.log('[voided-wasm] WASM module initialized');
+
+      wasmModule = secureWasmModule(
+        normalizeWasmModule(mod as unknown as RawWasmModule),
+      );
       return wasmModule;
     } catch (err) {
       initError = err instanceof Error ? err : new Error(String(err));
@@ -484,21 +652,3 @@ export function getWasmSync(): WasmModule {
   }
   return wasmModule;
 }
-
-/**
- * Reset WASM state (for testing).
- */
-export function resetWasm(): void {
-  wasmModule = null;
-  initPromise = null;
-  initError = null;
-}
-
-// Auto-initialize in background when module is imported in browser only
-// Skip in Node.js to avoid unnecessary console spam
-if (typeof window !== 'undefined' && !isNode) {
-  initWasm().catch(() => {
-    // Don't throw or log - TypeScript fallback will be used
-  });
-}
-

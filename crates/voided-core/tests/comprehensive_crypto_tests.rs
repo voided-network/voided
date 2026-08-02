@@ -326,7 +326,7 @@ fn test_key_derivation_pbkdf2() {
 
     let password = b"correct horse battery staple";
     let salt = random_bytes(16);
-    let iterations = 10000u32;
+    let iterations = 100_000u32;
 
     log_info!(TEST, "Password: {:?}", String::from_utf8_lossy(password));
     log_info!(TEST, "Salt: {} bytes", salt.len());
@@ -473,13 +473,13 @@ fn test_fingerprint_and_safety_numbers() {
         "Fingerprint should be 16 hex chars for 8 bytes"
     );
 
-    let safety = generate_safety_numbers(&key_bytes, 5);
+    let safety = generate_safety_numbers(&key_bytes, 5).unwrap();
     log_info!(TEST, "Safety numbers: {}", safety);
     assert!(!safety.is_empty());
 
     // Same input should produce same output
     let fingerprint2 = generate_fingerprint(&key_bytes, 8);
-    let safety2 = generate_safety_numbers(&key_bytes, 5);
+    let safety2 = generate_safety_numbers(&key_bytes, 5).unwrap();
     assert_eq!(fingerprint, fingerprint2);
     assert_eq!(safety, safety2);
     log_success!(TEST, "Fingerprints and safety numbers are deterministic");
@@ -492,20 +492,20 @@ fn test_pbkdf2_hash_and_verify() {
 
     let password = b"MySecurePassword123!";
     let salt = random_bytes(16);
-    let iterations = 10000u32;
+    let iterations = 100_000u32;
 
     log_info!(TEST, "Password length: {} bytes", password.len());
     log_info!(TEST, "Salt: {}", hex_encode(&salt));
     log_info!(TEST, "Iterations: {}", iterations);
 
-    let hash = hash_with_pbkdf2(password, &salt, iterations);
+    let hash = hash_with_pbkdf2(password, &salt, iterations).unwrap();
     log_info!(TEST, "Hash: {}", hex_encode(&hash));
 
-    let verified = verify_pbkdf2(password, &hash, &salt, iterations);
+    let verified = verify_pbkdf2(password, &hash, &salt, iterations).unwrap();
     assert!(verified, "Correct password should verify");
     log_success!(TEST, "PBKDF2 verification passed");
 
-    let wrong_verified = verify_pbkdf2(b"WrongPassword", &hash, &salt, iterations);
+    let wrong_verified = verify_pbkdf2(b"WrongPassword", &hash, &salt, iterations).unwrap();
     assert!(!wrong_verified, "Wrong password should fail");
     log_success!(TEST, "Wrong password correctly rejected");
 }

@@ -59,23 +59,20 @@ try {
 
   section('BUILD COMPLETE');
   console.log(`
-Your packages are ready for publishing:
+Build outputs are ready for release verification:
 
   @voideddev/enc-server
     - Location: packages/enc-server/
-    - Native addon: native/voided_node.node
-    - To publish: cd packages/enc-server && npm publish
+    - Release assets: verified prebuilds for every manifest target
+    - Verify: cd packages/enc-server && npm run verify:release && npm run smoke:package
 
   @voideddev/e2ee-client  
     - Location: packages/e2ee-client/
-    - WASM files: wasm/voided_wasm*.{js,wasm}
-    - To publish: cd packages/e2ee-client && npm publish
+    - Release assets: reproducible WASM plus TypeScript declarations
+    - Verify: cd packages/e2ee-client && npm run prepare:wasm && npm run smoke:package
 
-Note: The native addon (.node file) is platform-specific.
-For cross-platform support, you need to build on each target platform
-or use CI (GitHub Actions) to build for multiple platforms.
-
-WASM files work on all platforms.
+Publishing remains fail-closed behind each package's prepublishOnly source,
+artifact, typecheck, and package-smoke gates.
 `);
 
 } catch (err) {

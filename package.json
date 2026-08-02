@@ -13,14 +13,22 @@
     "build:npm": "node scripts/build-all.js --npm",
     "build:node": "node scripts/build-all.js --node",
     "build:wasm": "node scripts/build-all.js --wasm",
-    "build:cross": "node scripts/build-cross-platform.js",
     "build:cross:linux": "node scripts/build-cross-platform.js --linux",
     "build:cross:mac": "node scripts/build-cross-platform.js --mac",
+    "build:cross:windows": "node scripts/build-cross-platform.js --windows",
     "test": "npm run test --workspaces --if-present",
     "test:enc-server": "cd packages/enc-server && npm test",
     "test:e2ee-client": "cd packages/e2ee-client && npm test",
+    "test:release-provenance-inputs": "node scripts/test-release-provenance-inputs.js",
+    "test:rust:performance": "cargo test --manifest-path crates/Cargo.toml -p voided-core --test stress_tests throughput --release -- --ignored --test-threads=1",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "licenses:generate": "node scripts/generate-third-party-notices.js",
+    "release:verify:source": "node scripts/verify-release-source.js --all --allow-untagged",
     "lint": "eslint packages/*/src/**/*.{js,ts}",
     "clean": "rm -rf node_modules packages/*/node_modules packages/*/dist crates/target crates/voided-wasm/pkg packages/enc-server/native/voided_node.node packages/enc-server/prebuilds/darwin-* packages/e2ee-client/wasm/init.js packages/e2ee-client/wasm/voided_wasm*"
+  },
+  "overrides": {
+    "esbuild": "0.28.1"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",

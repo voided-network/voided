@@ -1,6 +1,7 @@
 // Export crypto backend (WASM + TS fallback)
 export * as crypto from "./crypto-backend";
 export {
+  decompressBounded,
   useWasmBackend,
   forceTypeScriptBackend,
   forceWasmBackend,
@@ -18,30 +19,41 @@ import {
 
 // Export WASM loader for advanced usage
 export { 
+  configureWasmLoader,
   initWasm, 
   getWasm, 
   isWasmReady, 
   getWasmError,
   getWasmSync,
 } from "./wasm/loader";
+export type { WasmLoaderOptions } from "./wasm/loader";
 
 import {
   compress,
   decompress,
-  stringToUint8Array,
 } from "./compression";
 import { CryptoService } from "./crypto-service";
+export { CryptoService, cryptoService } from "./crypto-service";
 import { StorageService } from "./storage-service";
-import { KeyManager } from "./key-manager";
+import { KeyManager, type KeyReadLease } from "./key-manager";
 import {
   Validator,
   ValidationError,
   CryptoError,
-  StorageError,
   KeyError,
   E2EEError,
 } from "./errors";
-import { assertWithinClientUploadLimit } from "./limits";
+import {
+  assertWithinClientMemoryLimit,
+  assertWithinClientUploadLimit,
+  CLIENT_CHUNK_CONCURRENCY,
+  CLIENT_MIN_CHUNK_BYTES,
+  CLIENT_MAX_CHUNK_BYTES,
+  CLIENT_MAX_CHUNKS,
+  CLIENT_MAX_ENCODED_BLOB_BYTES,
+  CLIENT_MAX_IN_MEMORY_BYTES,
+} from "./limits";
+import { inspectCanonicalBase64 } from "./base64-validation";
 
 // --- SAFE BASE64 HELPERS ---
 function base64Encode(bytes: Uint8Array): string {
@@ -66,7 +78,18 @@ function base64Encode(bytes: Uint8Array): string {
   return btoa(binary);
 }
 
-function base64Decode(b64: string): Uint8Array {
+function base64Decode(
+  b64: string,
+  maxDecodedBytes = CLIENT_MAX_ENCODED_BLOB_BYTES
+): Uint8Array {
+  const inspection = inspectCanonicalBase64(b64, maxDecodedBytes);
+  if (!inspection.ok && inspection.reason === "too-large") {
+    throw new ValidationError("Base64 value exceeds the browser decoding limit");
+  }
+  if (!inspection.ok) {
+    throw new ValidationError("Invalid canonical base64 value");
+  }
+  const decodedLength = inspection.decodedLength;
   // Prefer Node's Buffer when available (tests), otherwise fallback to browser atob
   try {
     // eslint-disable-next-line @typescript-eslint/ban-ts-comment
@@ -74,7 +97,11 @@ function base64Decode(b64: string): Uint8Array {
     if (typeof Buffer !== "undefined") {
       // eslint-disable-next-line @typescript-eslint/ban-ts-comment
       // @ts-ignore Buffer may not exist in browser
-      return new Uint8Array(Buffer.from(b64, "base64"));
+      const decoded = new Uint8Array(Buffer.from(b64, "base64"));
+      if (decoded.length !== decodedLength) {
+        throw new ValidationError("Invalid canonical base64 value");
+      }
+      return decoded;
     }
   } catch {}
   const binary = atob(b64);
@@ -83,7 +110,43 @@ function base64Decode(b64: string): Uint8Array {
   for (let i = 0; i < len; i++) {
     bytes[i] = binary.charCodeAt(i);
   }
+  if (bytes.length !== decodedLength) {
+    throw new ValidationError("Invalid canonical base64 value");
+  }
   return bytes;
+}
+
+function concatBytes(...arrays: Uint8Array[]): Uint8Array {
+  const total = arrays.reduce((sum, value) => sum + value.length, 0);
+  assertWithinClientMemoryLimit(total, "Combined cryptographic transcript");
+  const result = new Uint8Array(total);
+  let offset = 0;
+  for (const value of arrays) {
+    result.set(value, offset);
+    offset += value.length;
+  }
+  return result;
+}
+
+async function mapWithConcurrency<T, R>(
+  values: readonly T[],
+  concurrency: number,
+  mapper: (value: T, index: number) => Promise<R>
+): Promise<R[]> {
+  const results = new Array<R>(values.length);
+  let nextIndex = 0;
+  const workers = Array.from(
+    { length: Math.min(concurrency, values.length) },
+    async () => {
+      while (true) {
+        const index = nextIndex++;
+        if (index >= values.length) return;
+        results[index] = await mapper(values[index], index);
+      }
+    }
+  );
+  await Promise.all(workers);
+  return results;
 }
 
 export interface E2EEConfig {
@@ -91,10 +154,16 @@ export interface E2EEConfig {
   autoGenerateKey?: boolean;
   storage?: E2EEStorage;
   enableSignatures?: boolean; // Enable digital signatures for authenticity
-  enableForwardSecrecy?: boolean; // Enable ephemeral keys and ratcheting
+  /**
+   * Removed: the old option was a static-key exchange, not a forward-secret
+   * ratchet. Passing true now fails closed.
+   */
+  enableForwardSecrecy?: boolean;
+  /** Explicit peer identity key used to verify signed blobs. */
+  trustedSigningPublicKey?: string;
   enableChunking?: boolean; // Enable automatic chunking for large data (default: true)
-  chunkSize?: number; // Chunk size in bytes (default: 10MB)
-  minChunkThreshold?: number; // Minimum size to trigger chunking (default: 20MB)
+  chunkSize?: number; // Chunk size in bytes (default: 2 MiB)
+  minChunkThreshold?: number; // Minimum size to trigger chunking (default: 10 MiB)
 }
 
 export interface RotationOptions {
@@ -136,23 +205,24 @@ export interface EncryptedChunk {
   data: string; // Base64 encoded encrypted chunk data
   iv: string; // Base64 encoded IV for this chunk
   index: number; // Chunk index for reassembly
-  signature?: string; // Per-chunk signature (optional)
+  plaintextSize: number; // Authenticated compressed bytes in this chunk
+  signature?: string; // Required when signature mode is enabled
 }
 
 export interface EncryptedBlob {
   data?: string; // Base64 encoded encrypted data (for non-chunked data)
   iv?: string; // Base64 encoded IV (for non-chunked data)
   keyId: string;
+  messageId: string; // Random per-message identifier, authenticated as AAD
   algorithm: "AES-GCM";
-  version: "1.0";
+  version: "1.1";
   compression: {
     algorithm: "gzip" | "brotli" | "none";
     originalSize: number;
     compressedSize: number;
   };
   // Enhanced with signature support
-  signature?: string; // Base64 encoded ECDSA signature (optional)
-  ephemeralPublicKey?: string; // Base64 encoded ephemeral public key for forward secrecy
+  signature?: string; // Required when signature mode is enabled
   // Chunking support
   chunks?: EncryptedChunk[]; // Array of encrypted chunks (for large data)
   chunkInfo?: {
@@ -160,15 +230,19 @@ export interface EncryptedBlob {
     chunkSize: number;
     isChunked: true;
   };
-  // Internal text encoding hint to ensure lossless round-trip for extreme Unicode
-  textEncoding?: "utf8" | "utf16le";
+  // Authenticated as AEAD additional data.
+  textEncoding: "utf8" | "utf16le";
 }
 
 export interface EncryptOptions {
   originalSizeBytes?: number;
   resumeTokenOriginalSize?: number;
-  forceCompression?: boolean; // Override automatic compression skipping
-  compressionAlgorithm?: "gzip" | "brotli" | "none" | "auto"; // Explicit compression control
+  forceCompression?: boolean; // Explicitly opt in to compression
+  /**
+   * Defaults to none. Compressing secrets together with attacker-controlled
+   * input can leak information through ciphertext length.
+   */
+  compressionAlgorithm?: "gzip" | "brotli" | "none" | "auto";
   compressionLevel?: number; // 1-9 for gzip, 1-11 for brotli
 }
 
@@ -205,7 +279,16 @@ export type ProtectedBlobInfo = Omit<ProtectedBlob, "artifact">;
 export interface KeyDerivationOptions {
   password: string;
   salt?: Uint8Array; // If not provided, will be generated
-  iterations?: number; // Default: 100000
+  iterations?: number; // Default/minimum: 600000
+}
+
+export interface PasswordKeyDerivationRecord {
+  version: 1;
+  algorithm: "PBKDF2-SHA256";
+  salt: string;
+  iterations: number;
+  /** Monotonic primary-key version this recovery record describes. */
+  keyVersion: number;
 }
 
 export interface KeyVerificationResult {
@@ -253,37 +336,89 @@ export class IndexedDBStorage implements E2EEStorage {
     });
   }
 
+  /**
+   * An IndexedDB request may succeed and its enclosing transaction may still
+   * abort. Resolve reads and writes only after transaction.oncomplete so the
+   * caller never treats an uncommitted value (including null) as authoritative.
+   */
+  private awaitTransactionResult<T>(
+    transaction: IDBTransaction,
+    request: IDBRequest,
+    readResult: (result: unknown) => T
+  ): Promise<T> {
+    return new Promise((resolve, reject) => {
+      let requestSucceeded = false;
+      let value: T;
+      let requestFailure: unknown;
+
+      request.onsuccess = () => {
+        try {
+          value = readResult(request.result);
+          requestSucceeded = true;
+        } catch (error) {
+          requestFailure = error;
+          try {
+            transaction.abort();
+          } catch {
+            // The transaction may already be finishing; oncomplete below still
+            // refuses to resolve a failed result conversion.
+          }
+        }
+      };
+      request.onerror = () => {
+        requestFailure = request.error;
+      };
+
+      const rejectTransaction = () =>
+        {
+          try {
+            transaction.db.close();
+          } catch {}
+          reject(
+          requestFailure ??
+            transaction.error ??
+            request.error ??
+            new Error("IndexedDB transaction failed")
+          );
+        };
+      transaction.onerror = rejectTransaction;
+      transaction.onabort = rejectTransaction;
+      transaction.oncomplete = () => {
+        try {
+          transaction.db.close();
+        } catch {}
+        if (requestFailure || !requestSucceeded) {
+          rejectTransaction();
+          return;
+        }
+        resolve(value!);
+      };
+    });
+  }
+
   async getKey(keyId: string): Promise<string | null> {
     try {
       const db = await this.getDB();
-      return new Promise((resolve, reject) => {
-        const transaction = db.transaction([this.keysStoreName], "readonly");
-        const store = transaction.objectStore(this.keysStoreName);
-        const request = store.get(keyId);
-
-        request.onerror = () => reject(request.error);
-        request.onsuccess = () => {
-          const result = request.result;
-          resolve(result ? result.key : null);
-        };
-      });
+      const transaction = db.transaction([this.keysStoreName], "readonly");
+      const request = transaction.objectStore(this.keysStoreName).get(keyId);
+      return this.awaitTransactionResult(transaction, request, (result: any) =>
+        result ? result.key : null
+      );
     } catch (error) {
-      //if (process.env.NODE_ENV !== 'test') console.warn('IndexedDB access failed');
-      return null;
+      throw new Error(
+        `Failed to read key from IndexedDB: ${
+          error instanceof Error ? error.message : String(error)
+        }`
+      );
     }
   }
 
   async setKey(keyId: string, key: string): Promise<void> {
     try {
       const db = await this.getDB();
-      return new Promise((resolve, reject) => {
-        const transaction = db.transaction([this.keysStoreName], "readwrite");
-        const store = transaction.objectStore(this.keysStoreName);
-        const request = store.put({ id: keyId, key });
-
-        request.onerror = () => reject(request.error);
-        request.onsuccess = () => resolve();
-      });
+      const transaction = db.transaction([this.keysStoreName], "readwrite");
+      const request = transaction.objectStore(this.keysStoreName).put({ id: keyId, key });
+      return this.awaitTransactionResult(transaction, request, () => undefined);
     } catch (error) {
       //if (process.env.NODE_ENV !== 'test') console.warn('IndexedDB access failed');
       throw new Error("Failed to store key: IndexedDB not available");
@@ -293,14 +428,9 @@ export class IndexedDBStorage implements E2EEStorage {
   async removeKey(keyId: string): Promise<void> {
     try {
       const db = await this.getDB();
-      return new Promise((resolve, reject) => {
-        const transaction = db.transaction([this.keysStoreName], "readwrite");
-        const store = transaction.objectStore(this.keysStoreName);
-        const request = store.delete(keyId);
-
-        request.onerror = () => reject(request.error);
-        request.onsuccess = () => resolve();
-      });
+      const transaction = db.transaction([this.keysStoreName], "readwrite");
+      const request = transaction.objectStore(this.keysStoreName).delete(keyId);
+      return this.awaitTransactionResult(transaction, request, () => undefined);
     } catch (error) {
       //if (process.env.NODE_ENV !== 'test') console.warn('IndexedDB access failed');
       throw new Error("Failed to remove key: IndexedDB not available");
@@ -310,48 +440,37 @@ export class IndexedDBStorage implements E2EEStorage {
   async getMigrationState(keyId: string): Promise<MigrationState | null> {
     try {
       const db = await this.getDB();
-      return new Promise((resolve, reject) => {
-        const transaction = db.transaction(
-          [this.migrationStoreName],
-          "readonly"
-        );
-        const store = transaction.objectStore(this.migrationStoreName);
-        const request = store.get(keyId);
-
-        request.onerror = () => reject(request.error);
-        request.onsuccess = () => {
-          const result = request.result;
-          if (result && result.state) {
-            // Convert stored dates back to Date objects
-            const state = result.state;
-            state.cutoffTime = new Date(state.cutoffTime);
-            state.createdAt = new Date(state.createdAt);
-            resolve(state);
-          } else {
-            resolve(null);
-          }
-        };
+      const transaction = db.transaction(
+        [this.migrationStoreName],
+        "readonly"
+      );
+      const request = transaction.objectStore(this.migrationStoreName).get(keyId);
+      return this.awaitTransactionResult(transaction, request, (result: any) => {
+        if (!result?.state) return null;
+        return {
+          ...result.state,
+          cutoffTime: new Date(result.state.cutoffTime),
+          createdAt: new Date(result.state.createdAt),
+        } as MigrationState;
       });
     } catch (error) {
-      //if (process.env.NODE_ENV !== 'test') console.warn('IndexedDB access failed');
-      return null;
+      throw new Error(
+        `Failed to read migration state from IndexedDB: ${
+          error instanceof Error ? error.message : String(error)
+        }`
+      );
     }
   }
 
   async setMigrationState(keyId: string, state: MigrationState): Promise<void> {
     try {
       const db = await this.getDB();
-      return new Promise((resolve, reject) => {
-        const transaction = db.transaction(
-          [this.migrationStoreName],
-          "readwrite"
-        );
-        const store = transaction.objectStore(this.migrationStoreName);
-        const request = store.put({ id: keyId, state });
-
-        request.onerror = () => reject(request.error);
-        request.onsuccess = () => resolve();
-      });
+      const transaction = db.transaction(
+        [this.migrationStoreName],
+        "readwrite"
+      );
+      const request = transaction.objectStore(this.migrationStoreName).put({ id: keyId, state });
+      return this.awaitTransactionResult(transaction, request, () => undefined);
     } catch (error) {
       //if (process.env.NODE_ENV !== 'test') console.warn('IndexedDB access failed');
       throw new Error(
@@ -363,17 +482,12 @@ export class IndexedDBStorage implements E2EEStorage {
   async removeMigrationState(keyId: string): Promise<void> {
     try {
       const db = await this.getDB();
-      return new Promise((resolve, reject) => {
-        const transaction = db.transaction(
-          [this.migrationStoreName],
-          "readwrite"
-        );
-        const store = transaction.objectStore(this.migrationStoreName);
-        const request = store.delete(keyId);
-
-        request.onerror = () => reject(request.error);
-        request.onsuccess = () => resolve();
-      });
+      const transaction = db.transaction(
+        [this.migrationStoreName],
+        "readwrite"
+      );
+      const request = transaction.objectStore(this.migrationStoreName).delete(keyId);
+      return this.awaitTransactionResult(transaction, request, () => undefined);
     } catch (error) {
       //if (process.env.NODE_ENV !== 'test') console.warn('IndexedDB access failed');
       throw new Error(
@@ -388,23 +502,20 @@ export class IndexedDBStorage implements E2EEStorage {
   ): Promise<string | null> {
     try {
       const db = await this.getDB();
-      return new Promise((resolve, reject) => {
-        const transaction = db.transaction(
-          [this.keyPairsStoreName],
-          "readonly"
-        );
-        const store = transaction.objectStore(this.keyPairsStoreName);
-        const request = store.get(`${keyId}_${type}`);
-
-        request.onerror = () => reject(request.error);
-        request.onsuccess = () => {
-          const result = request.result;
-          resolve(result ? result.keyPair : null);
-        };
-      });
+      const transaction = db.transaction(
+        [this.keyPairsStoreName],
+        "readonly"
+      );
+      const request = transaction.objectStore(this.keyPairsStoreName).get(`${keyId}_${type}`);
+      return this.awaitTransactionResult(transaction, request, (result: any) =>
+        result ? result.keyPair : null
+      );
     } catch (error) {
-      //if (process.env.NODE_ENV !== 'test') console.warn('IndexedDB access failed');
-      return null;
+      throw new Error(
+        `Failed to read key pair from IndexedDB: ${
+          error instanceof Error ? error.message : String(error)
+        }`
+      );
     }
   }
 
@@ -415,17 +526,12 @@ export class IndexedDBStorage implements E2EEStorage {
   ): Promise<void> {
     try {
       const db = await this.getDB();
-      return new Promise((resolve, reject) => {
-        const transaction = db.transaction(
-          [this.keyPairsStoreName],
-          "readwrite"
-        );
-        const store = transaction.objectStore(this.keyPairsStoreName);
-        const request = store.put({ id: `${keyId}_${type}`, keyPair });
-
-        request.onerror = () => reject(request.error);
-        request.onsuccess = () => resolve();
-      });
+      const transaction = db.transaction(
+        [this.keyPairsStoreName],
+        "readwrite"
+      );
+      const request = transaction.objectStore(this.keyPairsStoreName).put({ id: `${keyId}_${type}`, keyPair });
+      return this.awaitTransactionResult(transaction, request, () => undefined);
     } catch (error) {
       //if (process.env.NODE_ENV !== 'test') console.warn('IndexedDB access failed');
       throw new Error("Failed to store key pair: IndexedDB not available");
@@ -438,17 +544,12 @@ export class IndexedDBStorage implements E2EEStorage {
   ): Promise<void> {
     try {
       const db = await this.getDB();
-      return new Promise((resolve, reject) => {
-        const transaction = db.transaction(
-          [this.keyPairsStoreName],
-          "readwrite"
-        );
-        const store = transaction.objectStore(this.keyPairsStoreName);
-        const request = store.delete(`${keyId}_${type}`);
-
-        request.onerror = () => reject(request.error);
-        request.onsuccess = () => resolve();
-      });
+      const transaction = db.transaction(
+        [this.keyPairsStoreName],
+        "readwrite"
+      );
+      const request = transaction.objectStore(this.keyPairsStoreName).delete(`${keyId}_${type}`);
+      return this.awaitTransactionResult(transaction, request, () => undefined);
     } catch (error) {
       //console.warn('IndexedDB access failed');
       throw new Error("Failed to remove key pair: IndexedDB not available");
@@ -461,35 +562,61 @@ export class IndexedDBStorage implements E2EEStorage {
  * Enhanced with advanced cryptographic features
  */
 export class VoidedE2EEClient {
+  private static readonly PBKDF2_MIN_ITERATIONS = 600_000;
+  private static readonly PBKDF2_MAX_ITERATIONS = 1_000_000;
+  private static readonly PASSWORD_MIN_LENGTH = 12;
   private keyId: string;
   private storage: StorageService;
   private crypto: CryptoService;
   private keyManager: KeyManager;
   private enableSignatures: boolean;
-  private enableForwardSecrecy: boolean;
   private enableChunking: boolean;
   private chunkSize: number;
   private minChunkThreshold: number;
 
   // Reusable buffers for better memory management
   private readonly textEncoder = new TextEncoder();
-  private readonly textDecoder = new TextDecoder();
 
   // Cached key pairs for advanced features
   private cachedSigningKeyPair?: CryptoKeyPair;
   private cachedAgreementKeyPair?: CryptoKeyPair;
+  private trustedSigningPublicKey?: string;
+  private trustedVerificationKey?: CryptoKey;
 
   constructor(config: E2EEConfig = {}) {
     const configuredStorage = config.storage || new IndexedDBStorage();
 
     this.keyId = config.keyId || "default";
     this.enableSignatures = config.enableSignatures || false;
-    this.enableForwardSecrecy = config.enableForwardSecrecy || false;
-    this.enableChunking = config.enableChunking !== false; // Default to true
-    this.chunkSize = config.chunkSize || 2 * 1024 * 1024; // 2MB default (reduced from 10MB)
-    this.minChunkThreshold = config.minChunkThreshold || 10 * 1024 * 1024; // 10MB default (reduced from 20MB)
+    if (config.enableForwardSecrecy) {
+      throw new ValidationError(
+        "enableForwardSecrecy was removed because the legacy mode was not a forward-secret ratchet"
+      );
+    }
+    this.trustedSigningPublicKey = config.trustedSigningPublicKey;
+    this.enableChunking = config.enableChunking !== false;
+    this.chunkSize = config.chunkSize ?? 2 * 1024 * 1024;
+    this.minChunkThreshold = config.minChunkThreshold ?? 10 * 1024 * 1024;
 
     Validator.validateKeyId(this.keyId);
+    if (
+      !Number.isSafeInteger(this.chunkSize) ||
+      this.chunkSize < CLIENT_MIN_CHUNK_BYTES ||
+      this.chunkSize > CLIENT_MAX_CHUNK_BYTES
+    ) {
+      throw new ValidationError(
+        `chunkSize must be an integer from ${CLIENT_MIN_CHUNK_BYTES} to ${CLIENT_MAX_CHUNK_BYTES} bytes`
+      );
+    }
+    if (
+      !Number.isSafeInteger(this.minChunkThreshold) ||
+      this.minChunkThreshold <= 0 ||
+      this.minChunkThreshold > CLIENT_MAX_IN_MEMORY_BYTES
+    ) {
+      throw new ValidationError(
+        `minChunkThreshold must be an integer from 1 to ${CLIENT_MAX_IN_MEMORY_BYTES} bytes`
+      );
+    }
 
     this.storage = new StorageService(configuredStorage);
     this.crypto = new CryptoService();
@@ -501,23 +628,70 @@ export class VoidedE2EEClient {
    */
   public async deriveKeyFromPassword(
     options: KeyDerivationOptions
-  ): Promise<void> {
+  ): Promise<PasswordKeyDerivationRecord> {
+    if (!options || typeof options !== "object") {
+      throw new KeyError("Key derivation failed: options are required");
+    }
     const {
       password,
-      salt = this.crypto.generateSalt(),
-      iterations = 100000,
+      salt: suppliedSalt = this.crypto.generateSalt(),
+      iterations = VoidedE2EEClient.PBKDF2_MIN_ITERATIONS,
     } = options;
 
     try {
+      if (typeof password !== "string") {
+        throw new ValidationError("Password must be a string");
+      }
+      if (!(suppliedSalt instanceof Uint8Array)) {
+        throw new ValidationError("PBKDF2 salt must be a Uint8Array");
+      }
+      const salt = new Uint8Array(suppliedSalt);
+      if (password.length < VoidedE2EEClient.PASSWORD_MIN_LENGTH) {
+        throw new ValidationError(
+          `Password must contain at least ${VoidedE2EEClient.PASSWORD_MIN_LENGTH} characters`
+        );
+      }
+      if (salt.length < 16 || salt.length > 64) {
+        throw new ValidationError("PBKDF2 salt must contain 16 to 64 bytes");
+      }
+      if (
+        !Number.isSafeInteger(iterations) ||
+        iterations < VoidedE2EEClient.PBKDF2_MIN_ITERATIONS ||
+        iterations > VoidedE2EEClient.PBKDF2_MAX_ITERATIONS
+      ) {
+        throw new ValidationError(
+          `PBKDF2 iterations must be an integer from ${VoidedE2EEClient.PBKDF2_MIN_ITERATIONS} to ${VoidedE2EEClient.PBKDF2_MAX_ITERATIONS}`
+        );
+      }
       const derivedKey = await this.crypto.deriveKeyFromPassword(
         password,
         salt,
         iterations
       );
-      await this.keyManager.setKey(derivedKey, 1);
-
-      // Store salt for future derivations (you'll need to extend storage for this)
-      // For now, we'll just derive the key and store it
+      let record: PasswordKeyDerivationRecord | undefined;
+      await this.keyManager.setKey(
+        derivedKey,
+        1,
+        {
+          beforeCommit: async keyVersion => {
+            record = {
+              version: 1,
+              algorithm: "PBKDF2-SHA256",
+              salt: base64Encode(salt),
+              iterations,
+              keyVersion,
+            };
+            const storageKey = this.getInternalStorageKey("password-kdf");
+            const serialized = JSON.stringify(record);
+            await this.storage.setKey(storageKey, serialized);
+            if (await this.storage.getKey(storageKey) !== serialized) {
+              throw new KeyError("Password derivation metadata storage verification failed");
+            }
+          },
+        }
+      );
+      if (!record) throw new KeyError("Password derivation metadata was not committed");
+      return record;
     } catch (error) {
       throw new KeyError(
         `Key derivation failed: ${
@@ -527,30 +701,46 @@ export class VoidedE2EEClient {
     }
   }
 
-  // Debug-only: detect surrogate anomalies in a JS string
-  private logSurrogateAnalysis(tag: string, input: string): void {
-    try {
-      const unpairedHigh: number[] = [];
-      const unpairedLow: number[] = [];
-      let pairCount = 0;
-      for (let i = 0; i < input.length; i++) {
-        const code = input.charCodeAt(i);
-        if (code >= 0xd800 && code <= 0xdbff) {
-          const next = i + 1 < input.length ? input.charCodeAt(i + 1) : 0;
-          if (next >= 0xdc00 && next <= 0xdfff) {
-            pairCount++;
-            i++;
-          } else {
-            unpairedHigh.push(i);
-          }
-        } else if (code >= 0xdc00 && code <= 0xdfff) {
-          const prev = i - 1 >= 0 ? input.charCodeAt(i - 1) : 0;
-          if (!(prev >= 0xd800 && prev <= 0xdbff)) {
-            unpairedLow.push(i);
-          }
-        }
+  public async getPasswordKeyDerivationRecord(): Promise<PasswordKeyDerivationRecord | null> {
+    return this.keyManager.withKeyReadLease(async lease => {
+      const stored = await this.storage.getKey(
+        this.getInternalStorageKey("password-kdf")
+      );
+      if (!stored) return null;
+      let record: unknown;
+      try {
+        record = JSON.parse(stored);
+      } catch {
+        throw new KeyError("Stored password derivation metadata is invalid");
       }
-    } catch {}
+      if (
+        !record ||
+        typeof record !== "object" ||
+        (record as PasswordKeyDerivationRecord).version !== 1 ||
+        (record as PasswordKeyDerivationRecord).algorithm !== "PBKDF2-SHA256" ||
+        !Number.isSafeInteger((record as PasswordKeyDerivationRecord).iterations) ||
+        (record as PasswordKeyDerivationRecord).iterations <
+          VoidedE2EEClient.PBKDF2_MIN_ITERATIONS ||
+        (record as PasswordKeyDerivationRecord).iterations >
+          VoidedE2EEClient.PBKDF2_MAX_ITERATIONS ||
+        !Number.isSafeInteger((record as PasswordKeyDerivationRecord).keyVersion) ||
+        (record as PasswordKeyDerivationRecord).keyVersion < 1
+      ) {
+        throw new KeyError("Stored password derivation metadata is invalid");
+      }
+      const salt = base64Decode(
+        (record as PasswordKeyDerivationRecord).salt,
+        64
+      );
+      if (salt.length < 16) {
+        throw new KeyError("Stored password derivation salt is invalid");
+      }
+      const activeVersion = await lease.getPersistedKeyVersion();
+      if (activeVersion !== (record as PasswordKeyDerivationRecord).keyVersion) {
+        return null;
+      }
+      return record as PasswordKeyDerivationRecord;
+    });
   }
 
   private hasUnpairedSurrogates(input: string): boolean {
@@ -592,8 +782,16 @@ export class VoidedE2EEClient {
   }
 
   /**
-   * Generate and store key agreement key pair for forward secrecy
+   * Select the peer identity key that signed incoming blobs. Generating a local
+   * signing key never implicitly trusts it for incoming data.
    */
+  public async setTrustedSigningPublicKey(publicKey: string): Promise<void> {
+    const imported = await this.crypto.importPublicKey(publicKey, "ECDSA");
+    this.trustedSigningPublicKey = publicKey;
+    this.trustedVerificationKey = imported;
+  }
+
+  /** Generate an agreement key pair for explicit application key agreement. */
   public async generateAgreementKeys(): Promise<string> {
     try {
       const keyPair = await this.crypto.generateKeyAgreementKeyPair();
@@ -635,7 +833,13 @@ export class VoidedE2EEClient {
       );
 
       // Use the shared key as our encryption key
-      await this.keyManager.setKey(sharedKey, 1);
+      await this.keyManager.setKey(
+        sharedKey,
+        1,
+        {
+          afterCommit: () => this.storage.removeKey(this.getInternalStorageKey("password-kdf")),
+        }
+      );
     } catch (error) {
       throw new KeyError(
         `Key agreement failed: ${
@@ -650,8 +854,10 @@ export class VoidedE2EEClient {
    */
   public async getKeyFingerprint(): Promise<string> {
     try {
-      const key = await this.keyManager.getCurrentKey();
-      return await this.crypto.getKeyFingerprint(key);
+      return await this.keyManager.withKeyReadLease(async lease => {
+        const key = await lease.getCurrentKey();
+        return this.crypto.getKeyFingerprint(key);
+      });
     } catch (error) {
       throw new KeyError(
         `Fingerprint generation failed: ${
@@ -666,8 +872,10 @@ export class VoidedE2EEClient {
    */
   public async getSafetyNumbers(): Promise<string> {
     try {
-      const key = await this.keyManager.getCurrentKey();
-      return await this.crypto.getSafetyNumbers(key);
+      return await this.keyManager.withKeyReadLease(async lease => {
+        const key = await lease.getCurrentKey();
+        return this.crypto.getSafetyNumbers(key);
+      });
     } catch (error) {
       throw new KeyError(
         `Safety numbers generation failed: ${
@@ -684,8 +892,14 @@ export class VoidedE2EEClient {
     theirFingerprint: string
   ): Promise<KeyVerificationResult> {
     try {
-      const ourFingerprint = await this.getKeyFingerprint();
-      const ourSafetyNumbers = await this.getSafetyNumbers();
+      const { ourFingerprint, ourSafetyNumbers } =
+        await this.keyManager.withKeyReadLease(async lease => {
+          const key = await lease.getCurrentKey();
+          return {
+            ourFingerprint: await this.crypto.getKeyFingerprint(key),
+            ourSafetyNumbers: await this.crypto.getSafetyNumbers(key),
+          };
+        });
 
       return {
         fingerprint: ourFingerprint,
@@ -713,129 +927,139 @@ export class VoidedE2EEClient {
    * Split bytes into chunks for processing - OPTIMIZED VERSION
    */
   private chunkBytes(data: Uint8Array): Uint8Array[] {
-    const chunks: Uint8Array[] = [];
     const totalLength = data.length;
     const chunkSize = this.chunkSize;
+    const chunkCount = Math.ceil(totalLength / chunkSize);
+    if (chunkCount < 1 || chunkCount > CLIENT_MAX_CHUNKS) {
+      throw new CryptoError(
+        `Chunk count must be between 1 and ${CLIENT_MAX_CHUNKS}`
+      );
+    }
+    const chunks = new Array<Uint8Array>(chunkCount);
 
     // Use byte-based chunking for efficiency
-    for (let i = 0; i < totalLength; i += chunkSize) {
-      const chunk = data.slice(i, Math.min(i + chunkSize, totalLength));
-      chunks.push(chunk);
+    for (let index = 0; index < chunkCount; index++) {
+      const offset = index * chunkSize;
+      chunks[index] = data.subarray(
+        offset,
+        Math.min(offset + chunkSize, totalLength)
+      );
     }
     return chunks;
   }
 
   private determineCompressionStrategy(
-    data: string,
+    _data: string,
     options?: EncryptOptions
   ): boolean {
-    // If user explicitly forces compression, never skip
-    if (options?.forceCompression === true) {
-      return false;
-    }
-
-    // If user explicitly sets algorithm to 'none', always skip
-    if (options?.compressionAlgorithm === "none") {
-      return true;
-    }
-
-    // If user provides explicit algorithm, don't skip
-    if (
-      options?.compressionAlgorithm &&
-      options.compressionAlgorithm !== "auto"
-    ) {
-      return false;
-    }
-
-    // Legacy behavior: skip compression for small data with advanced features
-    // This maintains backward compatibility while allowing override
-    if (
-      this.enableSignatures &&
-      this.enableForwardSecrecy &&
-      data.length < 1000
-    ) {
-      return true;
-    }
-
-    return false;
+    // Compression is opt-in. This prevents the high-level default from
+    // co-compressing secrets and attacker-controlled input into a length oracle.
+    return !options?.forceCompression && !options?.compressionAlgorithm;
   }
 
   private getCompressionAlgorithm(
     options?: EncryptOptions,
     shouldSkip: boolean = false
   ): "gzip" | "brotli" | "none" | "auto" {
-    if (shouldSkip) {
-      return "none";
+    if (shouldSkip) return "none";
+    const requested =
+      options?.compressionAlgorithm ??
+      (options?.forceCompression ? "auto" : "none");
+    if (!["gzip", "brotli", "none", "auto"].includes(requested)) {
+      throw new ValidationError("Unsupported compression algorithm");
     }
-
-    return options?.compressionAlgorithm || "auto";
+    return requested;
   }
 
-  /**
-   * Encrypt a single chunk with all security features
-   */
-  private async encryptChunk(
-    chunkData: string,
-    chunkIndex: number
-  ): Promise<EncryptedChunk> {
-    // Get current key
-    const key = await this.keyManager.getCurrentKey();
+  private createMessageId(): string {
+    return base64Encode(crypto.getRandomValues(new Uint8Array(16)));
+  }
 
-    // Compress chunk data
-    const compressionResult = await compress(chunkData, {
-      algorithm: "auto",
-      minSizeThreshold: 100,
-      compressionLevel: 6,
-    });
-
-    let ephemeralPublicKey: string | undefined;
-    let encryptionKey = key;
-
-    // Use ephemeral key for forward secrecy if enabled
-    if (this.enableForwardSecrecy && this.cachedAgreementKeyPair) {
-      const ephemeralKeyPair = await this.crypto.generateKeyAgreementKeyPair();
-      ephemeralPublicKey = await this.crypto.exportPublicKey(
-        ephemeralKeyPair.publicKey
-      );
-
-      // Derive shared secret with our long-term key
-      encryptionKey = await this.crypto.deriveSharedKey(
-        ephemeralKeyPair.privateKey,
-        this.cachedAgreementKeyPair.publicKey
-      );
-    }
-
-    // Encrypt compressed chunk data
-    // Ensure we encrypt the raw bytes; when skipCompression was active, compressed already holds raw bytes
-    const encryptedBuffer = await this.crypto.encrypt(
-      compressionResult.compressed,
-      encryptionKey
+  private buildEnvelopeAad(
+    blob: EncryptedBlob,
+    index: number,
+    plaintextSize: number
+  ): Uint8Array {
+    return this.textEncoder.encode(
+      JSON.stringify({
+        domain: "voided/e2ee-client/aead/v1.1",
+        version: blob.version,
+        messageId: blob.messageId,
+        keyId: blob.keyId,
+        algorithm: blob.algorithm,
+        compressionAlgorithm: blob.compression.algorithm,
+        originalSize: blob.compression.originalSize,
+        compressedSize: blob.compression.compressedSize,
+        textEncoding: blob.textEncoding,
+        chunked: Boolean(blob.chunkInfo?.isChunked),
+        totalChunks: blob.chunkInfo?.totalChunks ?? 1,
+        chunkSize: blob.chunkInfo?.chunkSize ?? plaintextSize,
+        index,
+        plaintextSize,
+      })
     );
-    const encryptedArray = new Uint8Array(encryptedBuffer);
+  }
 
-    // Extract IV (first 12 bytes)
-    const iv = encryptedArray.slice(0, 12);
+  private buildSignaturePayload(
+    aad: Uint8Array,
+    encryptedData?: Uint8Array
+  ): Uint8Array {
+    const domain = this.textEncoder.encode("voided/e2ee-client/signature/v1\0");
+    return concatBytes(domain, aad, encryptedData ?? new Uint8Array(0));
+  }
 
-    // Convert to base64 efficiently
-    const dataBase64 = base64Encode(encryptedArray);
-
-    let signature: string | undefined;
-
-    // Add digital signature if enabled
-    if (this.enableSignatures && this.cachedSigningKeyPair) {
-      const signatureBuffer = await this.crypto.signData(
-        encryptedArray,
-        this.cachedSigningKeyPair.privateKey
+  private requireSigningKeyForEncryption(): CryptoKey {
+    if (!this.cachedSigningKeyPair) {
+      throw new CryptoError(
+        "Signature mode requires generateSigningKeys() before encryption"
       );
-      signature = base64Encode(new Uint8Array(signatureBuffer));
     }
+    return this.cachedSigningKeyPair.privateKey;
+  }
 
-    return {
-      data: dataBase64,
-      iv: base64Encode(iv),
-      index: chunkIndex,
-      signature,
-    };
+  private async getTrustedVerificationKey(): Promise<CryptoKey> {
+    if (this.trustedVerificationKey) return this.trustedVerificationKey;
+    if (!this.trustedSigningPublicKey) {
+      throw new CryptoError(
+        "Signature mode requires an explicitly trusted peer signing public key"
+      );
+    }
+    this.trustedVerificationKey = await this.crypto.importPublicKey(
+      this.trustedSigningPublicKey,
+      "ECDSA"
+    );
+    return this.trustedVerificationKey;
+  }
+
+  private async signPayload(payload: Uint8Array): Promise<string> {
+    const signature = await this.crypto.signData(
+      payload,
+      this.requireSigningKeyForEncryption()
+    );
+    return base64Encode(new Uint8Array(signature));
+  }
+
+  private async verifyRequiredSignature(
+    payload: Uint8Array,
+    signature: string | undefined,
+    label: string
+  ): Promise<void> {
+    if (!signature) {
+      throw new CryptoError(`Missing required ${label} signature`);
+    }
+    const verificationKey = await this.getTrustedVerificationKey();
+    const signatureBytes = base64Decode(signature, 1024);
+    const valid = await this.crypto.verifySignature(
+      payload,
+      signatureBytes.buffer.slice(
+        signatureBytes.byteOffset,
+        signatureBytes.byteOffset + signatureBytes.byteLength
+      ) as ArrayBuffer,
+      verificationKey
+    );
+    if (!valid) {
+      throw new CryptoError(`Invalid ${label} signature`);
+    }
   }
 
   /**
@@ -849,21 +1073,35 @@ export class VoidedE2EEClient {
     Validator.validateData(data);
 
     try {
-      // Enforce client-side limit at entry using computed size if original not provided
-      const computedSize = this.textEncoder.encode(data).length;
-      const originalSize = options?.originalSizeBytes ?? computedSize;
+      // Compute the exact chosen encoding length without allocating a full
+      // buffer, then encode once only after the browser memory cap is known.
+      const prepared = this.encodeAuthenticatedText(data);
+      const originalSize = options?.originalSizeBytes ?? prepared.bytes.length;
       assertWithinClientUploadLimit(originalSize);
 
       if (options?.resumeTokenOriginalSize !== undefined) {
         assertWithinClientUploadLimit(options.resumeTokenOriginalSize);
       }
 
-      // Check if data should be chunked
-      if (this.shouldChunk(data.length)) {
-        return await this.encryptWithChunking(data, options);
-      } else {
-        return await this.encryptWithoutChunking(data, options);
-      }
+      return await this.keyManager.withKeyReadLease(async lease => {
+        const key = await lease.getCurrentKey();
+        if (this.shouldChunk(prepared.bytes.length)) {
+          return this.encryptWithChunking(
+            data,
+            prepared.bytes,
+            prepared.textEncoding,
+            key,
+            options
+          );
+        }
+        return this.encryptWithoutChunking(
+          data,
+          prepared.bytes,
+          prepared.textEncoding,
+          key,
+          options
+        );
+      });
     } catch (error) {
       if (
         error instanceof ValidationError ||
@@ -895,31 +1133,28 @@ export class VoidedE2EEClient {
       );
     }
 
-    if (this.enableForwardSecrecy) {
-      throw new CryptoError(
-        "VoidedE2EEClient.protect does not yet support forward secrecy wrapping"
-      );
-    }
-
     try {
       const { bytes, textEncoding } = this.encodeProtectableText(data);
       assertWithinClientUploadLimit(bytes.length);
 
-      // Ensure we do not race with a concurrent rotation
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      await (this.keyManager as any).waitForRotationComplete?.();
-      const key = await this.keyManager.getCurrentKey();
-      const rawKey = await this.exportRawKeyBytes(key);
-
-      const protectedArtifact = await protectArtifactBytes(bytes, rawKey, {
-        preset: options.preset,
-        compressionAlgorithm: options.compressionAlgorithm,
-        compressionLevel: options.compressionLevel,
-        encryptionAlgorithm: options.encryptionAlgorithm,
-        shellChunkSize: options.shellChunkSize,
+      return await this.keyManager.withKeyReadLease(async lease => {
+        const key = await lease.getCurrentKey();
+        const rawKey = await this.exportRawKeyBytes(key);
+        try {
+          const protectedArtifact = await protectArtifactBytes(bytes, rawKey, {
+            preset: options.preset,
+            // Compression is opt-in in the high-level browser API because mixing
+            // secrets and attacker-controlled data creates a length oracle.
+            compressionAlgorithm: options.compressionAlgorithm ?? "none",
+            compressionLevel: options.compressionLevel,
+            encryptionAlgorithm: options.encryptionAlgorithm,
+            shellChunkSize: options.shellChunkSize,
+          });
+          return this.toProtectedBlob(protectedArtifact, textEncoding);
+        } finally {
+          this.crypto.secureWipe(rawKey);
+        }
       });
-
-      return this.toProtectedBlob(protectedArtifact, textEncoding);
     } catch (error) {
       if (
         error instanceof ValidationError ||
@@ -937,283 +1172,142 @@ export class VoidedE2EEClient {
   }
 
   /**
-   * Encrypt data with chunking for large files - OPTIMIZED VERSION
+   * Encrypt data with bounded chunk concurrency and authenticated framing.
    */
   private async encryptWithChunking(
     data: string,
+    plaintextBytes: Uint8Array,
+    textEncoding: "utf8" | "utf16le",
+    key: CryptoKey,
     options?: EncryptOptions
   ): Promise<EncryptedBlob> {
-    try {
-      // Chunker guard: re-check size before processing first chunk
-      const computedSize = this.textEncoder.encode(data).length;
-      const originalSize = options?.originalSizeBytes ?? computedSize;
-      assertWithinClientUploadLimit(originalSize);
+    const originalSize = options?.originalSizeBytes ?? plaintextBytes.length;
+    assertWithinClientUploadLimit(originalSize);
+    assertWithinClientMemoryLimit(plaintextBytes.length, "Plaintext");
 
-      // Enhanced compression logic for chunked data
-      const shouldSkipCompression = this.determineCompressionStrategy(
-        data,
-        options
-      );
-      const compressionAlgorithm = this.getCompressionAlgorithm(
-        options,
-        shouldSkipCompression
-      );
-      const compressionLevel = options?.compressionLevel || 6;
+    const shouldSkipCompression = this.determineCompressionStrategy(data, options);
+    const compressionResult = await compress(plaintextBytes, {
+      algorithm: this.getCompressionAlgorithm(options, shouldSkipCompression),
+      minSizeThreshold: shouldSkipCompression ? Infinity : 100,
+      compressionLevel: options?.compressionLevel ?? 6,
+    });
+    assertWithinClientMemoryLimit(
+      compressionResult.compressed.length,
+      "Compressed plaintext"
+    );
 
-      // Compress the entire data first
-      let compressionResult;
-      try {
-        compressionResult = await compress(data, {
-          algorithm: compressionAlgorithm,
-          minSizeThreshold: shouldSkipCompression ? Infinity : 100,
-          compressionLevel: compressionLevel,
-        });
-      } catch (compressionError) {
-        //if (process.env.NODE_ENV !== 'test') console.warn('Compression failed for large data, proceeding without compression');
-        const dataBytes = stringToUint8Array(data);
-        compressionResult = {
-          compressed: dataBytes,
-          algorithm: "none" as any,
-          originalSize: data.length,
-          compressedSize: dataBytes.length,
+    const dataChunks = this.chunkBytes(compressionResult.compressed);
+    if (this.enableSignatures) this.requireSigningKeyForEncryption();
+
+    const blob: EncryptedBlob = {
+      keyId: this.keyId,
+      messageId: this.createMessageId(),
+      algorithm: "AES-GCM",
+      version: "1.1",
+      compression: {
+        algorithm: compressionResult.algorithm,
+        originalSize: plaintextBytes.length,
+        compressedSize: compressionResult.compressed.length,
+      },
+      textEncoding,
+      chunks: [],
+      chunkInfo: {
+        totalChunks: dataChunks.length,
+        chunkSize: this.chunkSize,
+        isChunked: true,
+      },
+    };
+
+    blob.chunks = await mapWithConcurrency(
+      dataChunks,
+      CLIENT_CHUNK_CONCURRENCY,
+      async (chunkBytes, index): Promise<EncryptedChunk> => {
+        const aad = this.buildEnvelopeAad(blob, index, chunkBytes.length);
+        const encrypted = new Uint8Array(
+          await this.crypto.encrypt(chunkBytes, key, aad)
+        );
+        const chunk: EncryptedChunk = {
+          data: base64Encode(encrypted),
+          iv: base64Encode(encrypted.subarray(0, 12)),
+          index,
+          plaintextSize: chunkBytes.length,
         };
-      }
-
-      // Split compressed data into chunks (work directly with bytes)
-      const dataChunks = this.chunkBytes(compressionResult.compressed);
-
-      // Ensure we do not race with a concurrent rotation
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      await (this.keyManager as any).waitForRotationComplete?.();
-      // Get current key once
-      const key = await this.keyManager.getCurrentKey();
-
-      // Encrypt chunks in parallel for better performance
-      const chunkPromises = dataChunks.map(async (chunkBytes, i) => {
-        // Encrypt chunk directly
-        const encryptedBuffer = await this.crypto.encrypt(chunkBytes, key);
-        const encryptedArray = new Uint8Array(encryptedBuffer);
-
-        // Extract IV (first 12 bytes)
-        const iv = encryptedArray.slice(0, 12);
-
-        // Convert to base64 efficiently
-        const dataBase64 = base64Encode(encryptedArray);
-
-        let chunkSignature: string | undefined;
-
-        // Add per-chunk signature if enabled
-        if (this.enableSignatures && this.cachedSigningKeyPair) {
-          const signatureBuffer = await this.crypto.signData(
-            encryptedArray,
-            this.cachedSigningKeyPair.privateKey
+        if (this.enableSignatures) {
+          chunk.signature = await this.signPayload(
+            this.buildSignaturePayload(aad, encrypted)
           );
-          chunkSignature = base64Encode(new Uint8Array(signatureBuffer));
         }
-
-        return {
-          data: dataBase64,
-          iv: base64Encode(iv),
-          index: i,
-          signature: chunkSignature,
-        };
-      });
-
-      const encryptedChunks = await Promise.all(chunkPromises);
-
-      // Generate global signature if enabled
-      let globalSignature: string | undefined;
-      if (this.enableSignatures && this.cachedSigningKeyPair) {
-        const allChunkData = encryptedChunks
-          .map((chunk) => chunk.data)
-          .join("");
-        const globalData = this.textEncoder.encode(allChunkData);
-        const signatureBuffer = await this.crypto.signData(
-          globalData,
-          this.cachedSigningKeyPair.privateKey
-        );
-        globalSignature = base64Encode(new Uint8Array(signatureBuffer));
+        return chunk;
       }
+    );
 
-      // Generate ephemeral public key if enabled
-      let ephemeralPublicKey: string | undefined;
-      if (this.enableForwardSecrecy && this.cachedAgreementKeyPair) {
-        ephemeralPublicKey = await this.crypto.exportPublicKey(
-          this.cachedAgreementKeyPair.publicKey
-        );
-      }
-
-      const blob: EncryptedBlob = {
-        keyId: this.keyId,
-        algorithm: "AES-GCM",
-        version: "1.0",
-        compression: {
-          algorithm: compressionResult.algorithm,
-          originalSize: data.length,
-          compressedSize: compressionResult.compressedSize,
-        },
-        chunks: encryptedChunks,
-        chunkInfo: {
-          totalChunks: dataChunks.length,
-          chunkSize: this.chunkSize,
-          isChunked: true,
-        },
-      };
-
-      if (globalSignature) {
-        blob.signature = globalSignature;
-      }
-
-      if (ephemeralPublicKey) {
-        blob.ephemeralPublicKey = ephemeralPublicKey;
-      }
-
-      return blob;
-    } catch (error) {
-      //if (process.env.NODE_ENV !== 'test') console.error('Chunking encryption error:', error);
-      throw error;
+    if (this.enableSignatures) {
+      const headerAad = this.buildEnvelopeAad(
+        blob,
+        -1,
+        blob.compression.compressedSize
+      );
+      blob.signature = await this.signPayload(
+        this.buildSignaturePayload(headerAad)
+      );
     }
+    return blob;
   }
 
   /**
-   * Encrypt data without chunking (OPTIMIZED for large data)
+   * Encrypt a single authenticated browser envelope.
    */
   private async encryptWithoutChunking(
     data: string,
+    plaintextBytes: Uint8Array,
+    textEncoding: "utf8" | "utf16le",
+    key: CryptoKey,
     options?: EncryptOptions
   ): Promise<EncryptedBlob> {
-    // Ensure we do not race with a concurrent rotation
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    await (this.keyManager as any).waitForRotationComplete?.();
-    // Get current key
-    const key = await this.keyManager.getCurrentKey();
+    const originalSize = options?.originalSizeBytes ?? plaintextBytes.length;
+    assertWithinClientUploadLimit(originalSize);
+    assertWithinClientMemoryLimit(plaintextBytes.length, "Plaintext");
 
-    // Use efficient encoding for all data sizes
-    let compressionResult;
-    let textEncoding: "utf8" | "utf16le" = "utf8";
-    const originalStringLength = data.length;
-
-    try {
-      this.logSurrogateAnalysis("enc:src", data);
-      // Guard also on non-chunk path prior to compression
-      const computedSize = this.textEncoder.encode(data).length;
-      const originalSize = options?.originalSizeBytes ?? computedSize;
-      assertWithinClientUploadLimit(originalSize);
-
-      // Enhanced compression logic with user control
-      const shouldSkipCompression = this.determineCompressionStrategy(
-        data,
-        options
-      );
-      const compressionAlgorithm = this.getCompressionAlgorithm(
-        options,
-        shouldSkipCompression
-      );
-      const compressionLevel = options?.compressionLevel || 6;
-
-      // If input contains unpaired surrogates, preserve exact UTF-16 code units
-      if (this.hasUnpairedSurrogates(data)) {
-        const utf16Bytes = this.stringToUtf16LEBytes(data);
-        compressionResult = await compress(utf16Bytes, {
-          algorithm: compressionAlgorithm,
-          minSizeThreshold: shouldSkipCompression ? Infinity : 100,
-          compressionLevel: compressionLevel,
-        });
-        textEncoding = "utf16le";
-      } else {
-        // Use consistent UTF-8 encoding for compression input
-        compressionResult = await compress(data, {
-          algorithm: compressionAlgorithm,
-          minSizeThreshold: shouldSkipCompression ? Infinity : 100,
-          compressionLevel: compressionLevel,
-        });
-        textEncoding = "utf8";
-      }
-    } catch (compressionError) {
-      //if (process.env.NODE_ENV !== 'test') console.warn('Compression failed, proceeding without compression');
-      const dataBytes = stringToUint8Array(data);
-      compressionResult = {
-        compressed: dataBytes,
-        algorithm: "none" as any,
-        originalSize: originalStringLength,
-        compressedSize: dataBytes.length,
-      };
-      textEncoding = "utf8";
-    }
-
-    let ephemeralPublicKey: string | undefined;
-    let encryptionKey = key;
-
-    // Use ephemeral key for forward secrecy if enabled
-    if (this.enableForwardSecrecy && this.cachedAgreementKeyPair) {
-      const ephemeralKeyPair = await this.crypto.generateKeyAgreementKeyPair();
-      ephemeralPublicKey = await this.crypto.exportPublicKey(
-        ephemeralKeyPair.publicKey
-      );
-
-      // Derive shared secret with our long-term key
-      encryptionKey = await this.crypto.deriveSharedKey(
-        ephemeralKeyPair.privateKey,
-        this.cachedAgreementKeyPair.publicKey
-      );
-    }
-
-    // Encrypt compressed data with size limit check
-    const dataToEncrypt = compressionResult.compressed;
-
-    // Web Crypto API has limits on data size, so we need to handle large data differently
-    if (dataToEncrypt.length > 64 * 1024 * 1024) {
-      // 64MB limit
-      throw new CryptoError(
-        "Data too large for single encryption operation. Maximum size is 64MB."
-      );
-    }
-
-    const encryptedBuffer = await this.crypto.encrypt(
-      dataToEncrypt,
-      encryptionKey
+    const shouldSkipCompression = this.determineCompressionStrategy(data, options);
+    const compressionResult = await compress(plaintextBytes, {
+      algorithm: this.getCompressionAlgorithm(options, shouldSkipCompression),
+      minSizeThreshold: shouldSkipCompression ? Infinity : 100,
+      compressionLevel: options?.compressionLevel ?? 6,
+    });
+    assertWithinClientMemoryLimit(
+      compressionResult.compressed.length,
+      "Compressed plaintext"
     );
-    const encryptedArray = new Uint8Array(encryptedBuffer);
-
-    // Extract IV (first 12 bytes)
-    const iv = encryptedArray.slice(0, 12);
-
-    // Convert to base64 efficiently
-    const dataBase64 = base64Encode(encryptedArray);
-
-    let signature: string | undefined;
-
-    // Add digital signature if enabled
-    if (this.enableSignatures && this.cachedSigningKeyPair) {
-      const signatureBuffer = await this.crypto.signData(
-        encryptedArray,
-        this.cachedSigningKeyPair.privateKey
-      );
-      signature = base64Encode(new Uint8Array(signatureBuffer));
-    }
+    if (this.enableSignatures) this.requireSigningKeyForEncryption();
 
     const blob: EncryptedBlob = {
-      data: dataBase64,
-      iv: base64Encode(iv),
       keyId: this.keyId,
+      messageId: this.createMessageId(),
       algorithm: "AES-GCM",
-      version: "1.0",
+      version: "1.1",
       compression: {
         algorithm: compressionResult.algorithm,
-        originalSize: originalStringLength,
-        compressedSize: compressionResult.compressedSize,
+        originalSize: plaintextBytes.length,
+        compressedSize: compressionResult.compressed.length,
       },
       textEncoding,
     };
+    const aad = this.buildEnvelopeAad(
+      blob,
+      0,
+      compressionResult.compressed.length
+    );
+    const encrypted = new Uint8Array(
+      await this.crypto.encrypt(compressionResult.compressed, key, aad)
+    );
+    blob.data = base64Encode(encrypted);
+    blob.iv = base64Encode(encrypted.subarray(0, 12));
 
-    if (signature) {
-      blob.signature = signature;
+    if (this.enableSignatures) {
+      blob.signature = await this.signPayload(
+        this.buildSignaturePayload(aad, encrypted)
+      );
     }
-
-    if (ephemeralPublicKey) {
-      blob.ephemeralPublicKey = ephemeralPublicKey;
-    }
-
     return blob;
   }
 
@@ -1223,14 +1317,17 @@ export class VoidedE2EEClient {
   public async decrypt(blob: EncryptedBlob): Promise<string> {
     // Input validation
     Validator.validateEncryptedBlob(blob);
+    if (blob.keyId !== this.keyId) {
+      throw new CryptoError("Encrypted blob keyId does not match this client");
+    }
 
     try {
-      // Check if data is chunked
-      if (blob.chunkInfo?.isChunked && blob.chunks) {
-        return await this.decryptChunkedData(blob);
-      } else {
-        return await this.decryptNonChunkedData(blob);
-      }
+      return await this.keyManager.withKeyReadLease(async lease => {
+        if (blob.chunkInfo?.isChunked && blob.chunks) {
+          return this.decryptChunkedData(blob, lease);
+        }
+        return this.decryptNonChunkedData(blob, lease);
+      });
     } catch (error) {
       if (
         error instanceof ValidationError ||
@@ -1252,32 +1349,40 @@ export class VoidedE2EEClient {
    */
   public async open(blob: ProtectedBlob): Promise<string> {
     Validator.validateProtectedBlob(blob);
+    if (blob.keyId !== this.keyId) {
+      throw new CryptoError("Protected blob keyId does not match this client");
+    }
 
     try {
       const artifact = base64Decode(blob.artifact);
 
-      // Ensure we do not race with a concurrent rotation
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      await (this.keyManager as any).waitForRotationComplete?.();
-      const decryptionKey = await this.keyManager.getCurrentKey();
-
-      try {
-        const rawKey = await this.exportRawKeyBytes(decryptionKey);
-        const plaintext = await openArtifactBytes(artifact, rawKey);
-        return this.decodeProtectedText(plaintext, blob.textEncoding);
-      } catch (decryptError) {
-        const migrationState = await this.keyManager.getMigrationStatus();
-        if (migrationState?.isActive) {
-          const legacyKey = await this.keyManager.getLegacyKey();
-          if (legacyKey) {
-            const rawLegacyKey = await this.exportRawKeyBytes(legacyKey);
-            const plaintext = await openArtifactBytes(artifact, rawLegacyKey);
+      return await this.keyManager.withKeyReadLease(async lease => {
+        const decryptionKey = await lease.getCurrentKey();
+        try {
+          const rawKey = await this.exportRawKeyBytes(decryptionKey);
+          try {
+            const plaintext = await openArtifactBytes(artifact, rawKey);
             return this.decodeProtectedText(plaintext, blob.textEncoding);
+          } finally {
+            this.crypto.secureWipe(rawKey);
           }
+        } catch (decryptError) {
+          const migrationState = await lease.getMigrationStatus();
+          if (migrationState?.isActive) {
+            const legacyKey = await lease.getLegacyKey();
+            if (legacyKey) {
+              const rawLegacyKey = await this.exportRawKeyBytes(legacyKey);
+              try {
+                const plaintext = await openArtifactBytes(artifact, rawLegacyKey);
+                return this.decodeProtectedText(plaintext, blob.textEncoding);
+              } finally {
+                this.crypto.secureWipe(rawLegacyKey);
+              }
+            }
+          }
+          throw decryptError;
         }
-
-        throw decryptError;
-      }
+      });
     } catch (error) {
       if (
         error instanceof ValidationError ||
@@ -1301,7 +1406,7 @@ export class VoidedE2EEClient {
     try {
       const artifact = base64Decode(blob.artifact);
       const info = await inspectArtifactBytes(artifact);
-      return this.toProtectedBlobInfo(info, blob.keyId, blob.textEncoding);
+      return this.toProtectedBlobInfo(info, blob.keyId);
     } catch (error) {
       if (error instanceof ValidationError || error instanceof CryptoError) {
         throw error;
@@ -1313,270 +1418,169 @@ export class VoidedE2EEClient {
   }
 
   /**
-   * Decrypt chunked data by processing each chunk and reassembling - OPTIMIZED VERSION
+   * Decrypt chunked data without ever accepting a partial or mixed-key result.
    */
-  private async decryptChunkedData(blob: EncryptedBlob): Promise<string> {
+  private async decryptChunkedData(
+    blob: EncryptedBlob,
+    lease: KeyReadLease
+  ): Promise<string> {
     if (!blob.chunks || !blob.chunkInfo) {
-      throw new CryptoError(
-        "Invalid chunked data: missing chunks or chunk info"
-      );
+      throw new CryptoError("Invalid chunked data: missing chunks or chunk info");
     }
-
-    // Verify global signature if present
-    if (blob.signature && this.enableSignatures && this.cachedSigningKeyPair) {
-      const allChunkData = blob.chunks.map((chunk) => chunk.data).join("");
-      const globalData = this.textEncoder.encode(allChunkData);
-      const signatureData = base64Decode(blob.signature);
-
-      const isValid = await this.crypto.verifySignature(
-        globalData,
-        signatureData.buffer as ArrayBuffer,
-        this.cachedSigningKeyPair.publicKey
+    if (this.enableSignatures) {
+      const headerAad = this.buildEnvelopeAad(
+        blob,
+        -1,
+        blob.compression.compressedSize
       );
-
-      if (!isValid) {
-        throw new CryptoError(
-          "Invalid global signature - data may have been tampered with"
+      await this.verifyRequiredSignature(
+        this.buildSignaturePayload(headerAad),
+        blob.signature,
+        "envelope"
+      );
+      for (const chunk of blob.chunks) {
+        const encrypted = base64Decode(
+          chunk.data,
+          CLIENT_MAX_CHUNK_BYTES + 12 + 16
+        );
+        const aad = this.buildEnvelopeAad(
+          blob,
+          chunk.index,
+          chunk.plaintextSize
+        );
+        await this.verifyRequiredSignature(
+          this.buildSignaturePayload(aad, encrypted),
+          chunk.signature,
+          `chunk ${chunk.index}`
         );
       }
     }
 
-    // Sort chunks by index to ensure correct order
-    const sortedChunks = blob.chunks.sort((a, b) => a.index - b.index);
+    const currentKey = await lease.getCurrentKey();
+    let decryptedChunks: Uint8Array[];
+    try {
+      decryptedChunks = await this.decryptChunksWithKey(blob, currentKey);
+    } catch (currentError) {
+      const legacyKey = await lease.getLegacyKey();
+      if (!legacyKey) throw currentError;
+      decryptedChunks = await this.decryptChunksWithKey(blob, legacyKey);
+    }
 
-    // Ensure we do not race with a concurrent rotation
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    await (this.keyManager as any).waitForRotationComplete?.();
-    // Get decryption key once
-    const decryptionKey = await this.keyManager.getCurrentKey();
-
-    // Decrypt chunks in parallel for better performance
-    const decryptPromises = sortedChunks.map(async (chunk, i) => {
-      // Decode base64 chunk data
-      const encryptedData = base64Decode(chunk.data);
-      const iv = base64Decode(chunk.iv);
-
-      // Decrypt chunk directly to bytes
-      const decrypted = await this.crypto.decrypt(
-        encryptedData,
-        iv,
-        decryptionKey
-      );
-      return decrypted;
-    });
-
-    const decryptedChunks = await Promise.all(decryptPromises);
-
-    // Reassemble compressed bytes
     const totalCompressedSize = decryptedChunks.reduce(
       (sum, chunk) => sum + chunk.length,
       0
     );
+    if (totalCompressedSize !== blob.compression.compressedSize) {
+      throw new CryptoError(
+        "Chunk plaintext total does not match authenticated compression metadata"
+      );
+    }
+    assertWithinClientMemoryLimit(totalCompressedSize, "Chunk plaintext total");
     const compressedBytes = new Uint8Array(totalCompressedSize);
     let offset = 0;
-
     for (const chunk of decryptedChunks) {
       compressedBytes.set(chunk, offset);
       offset += chunk.length;
     }
-
-    // Decompress once
-    const decompressed = await decompress(
-      compressedBytes,
-      blob.compression.algorithm
-    );
-
-    // Use the stored textEncoding to decode properly
-    let decoded: string;
-    if (blob.textEncoding === "utf16le") {
-      decoded = this.utf16LEBytesToString(decompressed);
-    } else {
-      decoded = this.textDecoder.decode(decompressed);
-    }
-
-    return decoded;
+    return await this.decompressAndDecode(blob, compressedBytes);
   }
 
-  /**
-   * Decrypt a single chunk
-   */
-  private async decryptSingleChunk(
-    chunk: EncryptedChunk,
-    blob: EncryptedBlob
-  ): Promise<string> {
-    // Ensure we do not race with a concurrent rotation for key retrieval
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    await (this.keyManager as any).waitForRotationComplete?.();
-    let decryptionKey = await this.keyManager.getCurrentKey();
-
-    // Handle ephemeral key for forward secrecy
-    if (blob.ephemeralPublicKey && this.cachedAgreementKeyPair) {
-      const ephemeralPublicKey = await this.crypto.importPublicKey(
-        blob.ephemeralPublicKey,
-        "ECDH"
-      );
-      decryptionKey = await this.crypto.deriveSharedKey(
-        this.cachedAgreementKeyPair.privateKey,
-        ephemeralPublicKey
-      );
-    }
-
-    // Decode base64 chunk data
-    const encryptedData = base64Decode(chunk.data);
-    const iv = base64Decode(chunk.iv);
-
-    // Verify chunk signature if present
-    if (chunk.signature && this.enableSignatures && this.cachedSigningKeyPair) {
-      const signatureData = base64Decode(chunk.signature);
-      const isValid = await this.crypto.verifySignature(
-        encryptedData,
-        signatureData.buffer as ArrayBuffer,
-        this.cachedSigningKeyPair.publicKey
-      );
-
-      if (!isValid) {
-        throw new CryptoError(
-          `Invalid chunk signature at index ${chunk.index} - data may have been tampered with`
+  private async decryptChunksWithKey(
+    blob: EncryptedBlob,
+    key: CryptoKey
+  ): Promise<Uint8Array[]> {
+    return await mapWithConcurrency(
+      blob.chunks!,
+      CLIENT_CHUNK_CONCURRENCY,
+      async (chunk): Promise<Uint8Array> => {
+        const encrypted = base64Decode(
+          chunk.data,
+          CLIENT_MAX_CHUNK_BYTES + 12 + 16
         );
-      }
-    }
-
-    // Decrypt chunk
-    try {
-      const decrypted = await this.crypto.decrypt(
-        encryptedData,
-        iv,
-        decryptionKey
-      );
-      const decompressed = await decompress(
-        decrypted,
-        blob.compression.algorithm
-      );
-      const decoded = this.textDecoder.decode(decompressed);
-      return decoded;
-    } catch (decryptError) {
-      // If current key fails and we're in migration, try legacy key
-      const migrationState = await this.keyManager.getMigrationStatus();
-      if (migrationState?.isActive) {
-        const legacyKey = await this.keyManager.getLegacyKey();
-        if (legacyKey) {
-          const decrypted = await this.crypto.decrypt(
-            encryptedData,
-            iv,
-            legacyKey
+        const iv = base64Decode(chunk.iv, 12);
+        if (iv.length !== 12) throw new CryptoError("Invalid AES-GCM IV length");
+        const aad = this.buildEnvelopeAad(
+          blob,
+          chunk.index,
+          chunk.plaintextSize
+        );
+        const decrypted = await this.crypto.decrypt(encrypted, iv, key, aad);
+        if (decrypted.length !== chunk.plaintextSize) {
+          throw new CryptoError(
+            `Chunk ${chunk.index} size does not match authenticated metadata`
           );
-          const decompressed = await decompress(
-            decrypted,
-            blob.compression.algorithm
-          );
-          const decoded = this.textDecoder.decode(decompressed);
-          return decoded;
         }
+        return decrypted;
       }
-      throw decryptError;
-    }
+    );
   }
 
-  /**
-   * Decrypt non-chunked data (original method)
-   */
-  private async decryptNonChunkedData(blob: EncryptedBlob): Promise<string> {
+  private async decryptNonChunkedData(
+    blob: EncryptedBlob,
+    lease: KeyReadLease
+  ): Promise<string> {
     if (!blob.data || !blob.iv) {
       throw new CryptoError("Invalid non-chunked data: missing data or IV");
     }
-
-    let decryptionKey = await this.keyManager.getCurrentKey();
-
-    // Handle ephemeral key for forward secrecy
-    if (blob.ephemeralPublicKey && this.cachedAgreementKeyPair) {
-      const ephemeralPublicKey = await this.crypto.importPublicKey(
-        blob.ephemeralPublicKey,
-        "ECDH"
-      );
-      decryptionKey = await this.crypto.deriveSharedKey(
-        this.cachedAgreementKeyPair.privateKey,
-        ephemeralPublicKey
+    const encrypted = base64Decode(
+      blob.data,
+      CLIENT_MAX_IN_MEMORY_BYTES + 12 + 16
+    );
+    const iv = base64Decode(blob.iv, 12);
+    if (iv.length !== 12) throw new CryptoError("Invalid AES-GCM IV length");
+    const aad = this.buildEnvelopeAad(
+      blob,
+      0,
+      blob.compression.compressedSize
+    );
+    if (this.enableSignatures) {
+      await this.verifyRequiredSignature(
+        this.buildSignaturePayload(aad, encrypted),
+        blob.signature,
+        "envelope"
       );
     }
 
-    // Decode base64 data
-    const encryptedData = base64Decode(blob.data);
-    const iv = base64Decode(blob.iv);
-
-    // Verify signature if present
-    if (blob.signature && this.enableSignatures && this.cachedSigningKeyPair) {
-      const signatureData = base64Decode(blob.signature);
-      const isValid = await this.crypto.verifySignature(
-        encryptedData,
-        signatureData.buffer as ArrayBuffer,
-        this.cachedSigningKeyPair.publicKey
-      );
-
-      if (!isValid) {
-        throw new CryptoError(
-          "Invalid signature - data may have been tampered with"
-        );
-      }
-    }
-
-    // Try current key first
+    const currentKey = await lease.getCurrentKey();
+    let decrypted: Uint8Array;
     try {
-      const decrypted = await this.crypto.decrypt(
-        encryptedData,
-        iv,
-        decryptionKey
-      );
-      const decompressed = await decompress(
-        decrypted,
-        blob.compression.algorithm
-      );
-
-      // FIXED: Use the stored textEncoding to decode properly
-      let decoded: string;
-      if (blob.textEncoding === "utf16le") {
-        // Convert UTF-16LE bytes back to string
-        decoded = this.utf16LEBytesToString(decompressed);
-      } else {
-        // Default UTF-8 decoding
-        decoded = this.textDecoder.decode(decompressed);
-      }
-
-      this.logSurrogateAnalysis("dec:out", decoded);
-      return decoded;
-    } catch (decryptError) {
-      // If current key fails and we're in migration, try legacy key
-      const migrationState = await this.keyManager.getMigrationStatus();
-      if (migrationState?.isActive) {
-        const legacyKey = await this.keyManager.getLegacyKey();
-        if (legacyKey) {
-          const decrypted = await this.crypto.decrypt(
-            encryptedData,
-            iv,
-            legacyKey
-          );
-          const decompressed = await decompress(
-            decrypted,
-            blob.compression.algorithm
-          );
-
-          // FIXED: Use the stored textEncoding for legacy decryption too
-          let decoded: string;
-          if (blob.textEncoding === "utf16le") {
-            decoded = this.utf16LEBytesToString(decompressed);
-          } else {
-            decoded = this.textDecoder.decode(decompressed);
-          }
-
-          this.logSurrogateAnalysis("dec:out-legacy", decoded);
-          return decoded;
-        }
-      }
-      // If no legacy key or not in migration, re-throw the original error
-      throw decryptError;
+      decrypted = await this.crypto.decrypt(encrypted, iv, currentKey, aad);
+    } catch (currentError) {
+      const legacyKey = await lease.getLegacyKey();
+      if (!legacyKey) throw currentError;
+      decrypted = await this.crypto.decrypt(encrypted, iv, legacyKey, aad);
     }
+    if (decrypted.length !== blob.compression.compressedSize) {
+      throw new CryptoError(
+        "Plaintext size does not match authenticated compression metadata"
+      );
+    }
+    return await this.decompressAndDecode(blob, decrypted);
   }
 
-  // Add this helper method to the VoidedE2EEClient class:
+  private async decompressAndDecode(
+    blob: EncryptedBlob,
+    compressed: Uint8Array
+  ): Promise<string> {
+    const decompressed = await decompress(
+      compressed,
+      blob.compression.algorithm,
+      {
+        expectedOutputBytes: blob.compression.originalSize,
+        maxOutputBytes: CLIENT_MAX_IN_MEMORY_BYTES,
+        maxExpansionRatio: 512,
+      }
+    );
+    if (blob.textEncoding === "utf16le") {
+      if (decompressed.length % 2 !== 0) {
+        throw new CryptoError("Invalid authenticated UTF-16LE byte length");
+      }
+      return this.utf16LEBytesToString(decompressed);
+    }
+    return new TextDecoder("utf-8", { fatal: true }).decode(decompressed);
+  }
+
+  // UTF-16LE helpers preserve otherwise unpaired JavaScript surrogates.
   private utf16LEBytesToString(bytes: Uint8Array): string {
     let result = "";
     for (let i = 0; i < bytes.length; i += 2) {
@@ -1599,32 +1603,93 @@ export class VoidedE2EEClient {
     return out;
   }
 
+  private encodeAuthenticatedText(input: string): {
+    bytes: Uint8Array;
+    textEncoding: "utf8" | "utf16le";
+  } {
+    const textEncoding = this.hasUnpairedSurrogates(input)
+      ? "utf16le"
+      : "utf8";
+    const byteLength = textEncoding === "utf16le"
+      ? input.length * 2
+      : this.utf8ByteLength(input, CLIENT_MAX_IN_MEMORY_BYTES);
+    assertWithinClientMemoryLimit(byteLength, "Plaintext");
+    const bytes = textEncoding === "utf16le"
+      ? this.stringToUtf16LEBytes(input)
+      : this.textEncoder.encode(input);
+    if (bytes.length !== byteLength) {
+      throw new CryptoError("Text encoding length preflight mismatch");
+    }
+    return {
+      bytes,
+      textEncoding,
+    };
+  }
+
+  private utf8ByteLength(input: string, stopAfter: number): number {
+    let bytes = 0;
+    for (let index = 0; index < input.length; index++) {
+      const code = input.charCodeAt(index);
+      if (code <= 0x7f) {
+        bytes += 1;
+      } else if (code <= 0x7ff) {
+        bytes += 2;
+      } else if (code >= 0xd800 && code <= 0xdbff) {
+        bytes += 4;
+        index++;
+      } else {
+        bytes += 3;
+      }
+      if (bytes > stopAfter) return bytes;
+    }
+    return bytes;
+  }
+
   private encodeProtectableText(input: string): {
     bytes: Uint8Array;
     textEncoding: "utf8" | "utf16le";
   } {
-    if (this.hasUnpairedSurrogates(input)) {
-      return {
-        bytes: this.stringToUtf16LEBytes(input),
-        textEncoding: "utf16le",
-      };
-    }
-
+    const domain = this.textEncoder.encode("VOI-TEXT-1");
+    const { bytes, textEncoding } = this.encodeAuthenticatedText(input);
     return {
-      bytes: this.textEncoder.encode(input),
-      textEncoding: "utf8",
+      bytes: concatBytes(
+        domain,
+        Uint8Array.of(textEncoding === "utf16le" ? 1 : 0),
+        bytes
+      ),
+      textEncoding,
     };
   }
 
   private decodeProtectedText(
     bytes: Uint8Array,
-    textEncoding: "utf8" | "utf16le" | undefined
+    _textEncoding: "utf8" | "utf16le" | undefined
   ): string {
-    if (textEncoding === "utf16le") {
-      return this.utf16LEBytesToString(bytes);
+    const domain = this.textEncoder.encode("VOI-TEXT-1");
+    if (bytes.length < domain.length + 1) {
+      throw new CryptoError("Protected text envelope is missing");
     }
+    for (let i = 0; i < domain.length; i++) {
+      if (bytes[i] !== domain[i]) {
+        throw new CryptoError("Protected text envelope is invalid");
+      }
+    }
+    const encoding = bytes[domain.length];
+    const plaintext = bytes.subarray(domain.length + 1);
+    if (encoding === 1) {
+      if (plaintext.length % 2 !== 0) {
+        throw new CryptoError("Protected UTF-16LE payload has invalid length");
+      }
+      return this.utf16LEBytesToString(plaintext);
+    }
+    if (encoding === 0) {
+      return new TextDecoder("utf-8", { fatal: true }).decode(plaintext);
+    }
+    throw new CryptoError("Protected text envelope has an unknown encoding");
+  }
 
-    return this.textDecoder.decode(bytes);
+  private getInternalStorageKey(purpose: string): string {
+    return `${this.keyId}::voided:internal:${purpose}`;
   }
 
   private async exportRawKeyBytes(key: CryptoKey): Promise<Uint8Array> {
@@ -1658,8 +1723,7 @@ export class VoidedE2EEClient {
 
   private toProtectedBlobInfo(
     info: RuntimeProtectedArtifactInfo,
-    keyId: string,
-    textEncoding: "utf8" | "utf16le" | undefined
+    keyId: string
   ): ProtectedBlobInfo {
     return {
       keyId,
@@ -1677,7 +1741,6 @@ export class VoidedE2EEClient {
         chunkCount: info.shellChunkCount,
       },
       protectedSize: info.protectedSize,
-      textEncoding,
     };
   }
 
@@ -1686,8 +1749,10 @@ export class VoidedE2EEClient {
    */
   public async exportKey(): Promise<string> {
     try {
-      const key = await this.keyManager.getCurrentKey();
-      return await this.crypto.exportKey(key);
+      return await this.keyManager.withKeyReadLease(async lease => {
+        const key = await lease.getCurrentKey();
+        return this.crypto.exportKey(key);
+      });
     } catch (error) {
       throw new Error(
         `Key export failed: ${
@@ -1706,7 +1771,13 @@ export class VoidedE2EEClient {
 
     try {
       const key = await this.crypto.importKey(keyString);
-      await this.keyManager.setKey(key, 1); // Import as version 1
+      await this.keyManager.setKey(
+        key,
+        1,
+        {
+          afterCommit: () => this.storage.removeKey(this.getInternalStorageKey("password-kdf")),
+        }
+      );
     } catch (error) {
       if (error instanceof ValidationError || error instanceof KeyError) {
         throw error;
@@ -1729,13 +1800,20 @@ export class VoidedE2EEClient {
     const { force = true, migrate = false, cutoffTime = new Date() } = options;
 
     try {
+      let rotatedKey: string;
       if (force) {
-        return await this.keyManager.forceRotate();
+        rotatedKey = await this.keyManager.forceRotate(
+          () => this.storage.removeKey(this.getInternalStorageKey("password-kdf"))
+        );
       } else if (migrate) {
-        return await this.keyManager.startMigration(cutoffTime);
+        rotatedKey = await this.keyManager.startMigration(
+          cutoffTime,
+          () => this.storage.removeKey(this.getInternalStorageKey("password-kdf"))
+        );
       } else {
         throw new ValidationError("Invalid rotation options");
       }
+      return rotatedKey;
     } catch (error) {
       if (error instanceof ValidationError || error instanceof KeyError) {
         throw error;
@@ -1753,7 +1831,9 @@ export class VoidedE2EEClient {
    */
   public async deleteKey(): Promise<void> {
     try {
-      await this.keyManager.deleteKey();
+      await this.keyManager.deleteKey(
+        () => this.storage.removeKey(this.getInternalStorageKey("password-kdf"))
+      );
       this.clearCachedKeyPairs();
     } catch (error) {
       throw new Error(
@@ -1784,22 +1864,14 @@ export class VoidedE2EEClient {
    * Check if key exists
    */
   public async hasKey(): Promise<boolean> {
-    try {
-      return await this.keyManager.hasKey();
-    } catch (error) {
-      return false;
-    }
+    return await this.keyManager.hasKey();
   }
 
   /**
    * Get migration status
    */
   public async getMigrationStatus(): Promise<MigrationState | null> {
-    try {
-      return await this.keyManager.getMigrationStatus();
-    } catch (error) {
-      return null;
-    }
+    return await this.keyManager.getMigrationStatus();
   }
 
   /**
@@ -1821,11 +1893,7 @@ export class VoidedE2EEClient {
    * Get current key version
    */
   public async getCurrentKeyVersion(): Promise<number> {
-    try {
-      return await this.keyManager.getCurrentKeyVersion();
-    } catch (error) {
-      return 0;
-    }
+    return await this.keyManager.getCurrentKeyVersion();
   }
 
   /**
@@ -1837,19 +1905,15 @@ export class VoidedE2EEClient {
     cutoffTime: Date;
     createdAt: Date;
   } | null> {
-    try {
-      const status = await this.keyManager.getMigrationStatus();
-      if (!status) return null;
+    const status = await this.keyManager.getMigrationStatus();
+    if (!status) return null;
 
-      return {
-        oldKeyVersion: status.oldKeyVersion,
-        newKeyVersion: status.newKeyVersion,
-        cutoffTime: status.cutoffTime,
-        createdAt: status.createdAt,
-      };
-    } catch (error) {
-      return null;
-    }
+    return {
+      oldKeyVersion: status.oldKeyVersion,
+      newKeyVersion: status.newKeyVersion,
+      cutoffTime: status.cutoffTime,
+      createdAt: status.createdAt,
+    };
   }
 }
 
@@ -1907,8 +1971,12 @@ export async function rotateKey(): Promise<string> {
 // Enhanced convenience functions for advanced features
 export async function deriveKeyFromPassword(
   options: KeyDerivationOptions
-): Promise<void> {
+): Promise<PasswordKeyDerivationRecord> {
   return getDefaultClient().deriveKeyFromPassword(options);
+}
+
+export async function getPasswordKeyDerivationRecord(): Promise<PasswordKeyDerivationRecord | null> {
+  return getDefaultClient().getPasswordKeyDerivationRecord();
 }
 
 export async function getKeyFingerprint(): Promise<string> {
@@ -1933,4 +2001,8 @@ export {
 export { hashService } from "./hash-service";
 
 // Export additive key-sharing features
-export { KeySharing } from "./key-sharing";
+export {
+  KeySharing,
+  type KeySharingContext,
+  type KeySharingReplayStore,
+} from "./key-sharing";

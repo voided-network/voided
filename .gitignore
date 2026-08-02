@@ -6,10 +6,7 @@ crates/target/
 crates/voided-wasm/pkg/
 
 packages/enc-server/native/voided_node.node
-packages/enc-server/prebuilds/darwin-*/
-
 packages/e2ee-client/wasm/init.js
-packages/e2ee-client/wasm/voided_wasm*
 
 *.log
 *.zip

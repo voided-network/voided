@@ -5,6 +5,14 @@ use alloc::{format, string::String, vec, vec::Vec};
 use hmac::{Hmac, Mac};
 use sha2::{Digest, Sha256, Sha512};
 
+const SALTED_HASH_DOMAIN: &[u8] = b"voided:hash-with-salt:v2";
+
+/// Largest useful SHA-256 fingerprint truncation in bytes.
+pub const MAX_FINGERPRINT_BYTES: usize = 32;
+
+/// Largest accepted grouping for the human-readable fingerprint formatter.
+pub const MAX_FINGERPRINT_GROUP_SIZE: usize = 32;
+
 /// Supported hash algorithms
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum HashAlgorithm {
@@ -94,8 +102,14 @@ pub fn hash_hex(data: &[u8], algorithm: HashAlgorithm) -> String {
 
 /// Generate a hash with salt
 pub fn hash_with_salt(data: &[u8], salt: &[u8], algorithm: HashAlgorithm) -> Vec<u8> {
-    let mut combined = Vec::with_capacity(data.len() + salt.len());
+    // Length-prefix and domain-separate both fields. Concatenating data || salt
+    // makes distinct tuples such as ("a", "bc") and ("ab", "c") collide.
+    let mut combined =
+        Vec::with_capacity(SALTED_HASH_DOMAIN.len() + 16 + data.len().saturating_add(salt.len()));
+    combined.extend_from_slice(SALTED_HASH_DOMAIN);
+    combined.extend_from_slice(&(data.len() as u64).to_be_bytes());
     combined.extend_from_slice(data);
+    combined.extend_from_slice(&(salt.len() as u64).to_be_bytes());
     combined.extend_from_slice(salt);
     hash(&combined, algorithm)
 }
@@ -149,7 +163,7 @@ pub fn generate_hmac_parts(
             let mut mac = Hmac::<Sha256>::new_from_slice(key)
                 .map_err(|e| Error::HashFailed(e.to_string()))?;
             for part in parts {
-                mac.update(*part);
+                mac.update(part);
             }
             Ok(mac.finalize().into_bytes().to_vec())
         }
@@ -157,7 +171,7 @@ pub fn generate_hmac_parts(
             let mut mac = Hmac::<Sha512>::new_from_slice(key)
                 .map_err(|e| Error::HashFailed(e.to_string()))?;
             for part in parts {
-                mac.update(*part);
+                mac.update(part);
             }
             Ok(mac.finalize().into_bytes().to_vec())
         }
@@ -169,7 +183,7 @@ pub fn generate_hmac_sha256_parts(parts: &[&[u8]], key: &[u8]) -> Result<[u8; 32
     let mut mac =
         Hmac::<Sha256>::new_from_slice(key).map_err(|e| Error::HashFailed(e.to_string()))?;
     for part in parts {
-        mac.update(*part);
+        mac.update(part);
     }
     let mut output = [0u8; 32];
     output.copy_from_slice(&mac.finalize().into_bytes());
@@ -193,18 +207,24 @@ pub fn verify_hmac(
 }
 
 /// Hash data using PBKDF2-HMAC-SHA256 with high iterations
-pub fn hash_with_pbkdf2(data: &[u8], salt: &[u8], iterations: u32) -> Vec<u8> {
+pub fn hash_with_pbkdf2(data: &[u8], salt: &[u8], iterations: u32) -> Result<Vec<u8>> {
     use pbkdf2::pbkdf2_hmac;
 
+    crate::encryption::validate_pbkdf2_parameters(salt, iterations)?;
     let mut output = [0u8; 32];
     pbkdf2_hmac::<Sha256>(data, salt, iterations, &mut output);
-    output.to_vec()
+    Ok(output.to_vec())
 }
 
 /// Verify data against a PBKDF2 hash
-pub fn verify_pbkdf2(data: &[u8], expected_hash: &[u8], salt: &[u8], iterations: u32) -> bool {
-    let actual_hash = hash_with_pbkdf2(data, salt, iterations);
-    compare_hashes(&actual_hash, expected_hash)
+pub fn verify_pbkdf2(
+    data: &[u8],
+    expected_hash: &[u8],
+    salt: &[u8],
+    iterations: u32,
+) -> Result<bool> {
+    let actual_hash = hash_with_pbkdf2(data, salt, iterations)?;
+    Ok(compare_hashes(&actual_hash, expected_hash))
 }
 
 /// Generate a fingerprint (truncated hash)
@@ -212,14 +232,22 @@ pub fn verify_pbkdf2(data: &[u8], expected_hash: &[u8], salt: &[u8], iterations:
 pub fn generate_fingerprint(data: &[u8], length: usize) -> String {
     let hash = hash_hex(data, HashAlgorithm::Sha256);
     // Each byte is 2 hex chars, so we take length*2 hex chars
-    let hex_len = (length * 2).min(hash.len());
+    let hex_len = length.min(MAX_FINGERPRINT_BYTES) * 2;
     hash[..hex_len].to_string()
 }
 
-/// Generate safety numbers (Signal-style) for key verification
-pub fn generate_safety_numbers(data: &[u8], group_size: usize) -> String {
+/// Format a SHA-256 fingerprint for human comparison.
+///
+/// This is not the Signal Safety Number protocol and does not bind identities,
+/// devices, key order, or a session transcript.
+pub fn generate_safety_numbers(data: &[u8], group_size: usize) -> Result<String> {
+    if !(1..=MAX_FINGERPRINT_GROUP_SIZE).contains(&group_size) {
+        return Err(Error::InvalidConfiguration(format!(
+            "fingerprint group size must be between 1 and {MAX_FINGERPRINT_GROUP_SIZE}"
+        )));
+    }
     let hash_bytes = hash(data, HashAlgorithm::Sha256);
-    format_safety_numbers(&hash_bytes, group_size)
+    Ok(format_safety_numbers(&hash_bytes, group_size))
 }
 
 fn format_safety_numbers(hash_bytes: &[u8], group_size: usize) -> String {
@@ -346,6 +374,11 @@ mod tests {
         // Different salt should produce different hash
         let hash3 = hash_with_salt_hex(data, b"different_salt", HashAlgorithm::Sha256);
         assert_ne!(hash1, hash3);
+
+        assert_ne!(
+            hash_with_salt(b"a", b"bc", HashAlgorithm::Sha256),
+            hash_with_salt(b"ab", b"c", HashAlgorithm::Sha256)
+        );
     }
 
     #[test]
@@ -367,15 +400,16 @@ mod tests {
     #[test]
     fn test_pbkdf2() {
         let password = b"my_password";
-        let salt = b"my_salt";
-        let iterations = 1000;
+        let salt = b"16-byte-test-salt";
+        let iterations = crate::encryption::PBKDF2_MIN_ITERATIONS;
 
-        let hash1 = hash_with_pbkdf2(password, salt, iterations);
-        let hash2 = hash_with_pbkdf2(password, salt, iterations);
+        let hash1 = hash_with_pbkdf2(password, salt, iterations).unwrap();
+        let hash2 = hash_with_pbkdf2(password, salt, iterations).unwrap();
 
         assert_eq!(hash1, hash2);
-        assert!(verify_pbkdf2(password, &hash1, salt, iterations));
-        assert!(!verify_pbkdf2(b"wrong_password", &hash1, salt, iterations));
+        assert!(verify_pbkdf2(password, &hash1, salt, iterations).unwrap());
+        assert!(!verify_pbkdf2(b"wrong_password", &hash1, salt, iterations).unwrap());
+        assert!(hash_with_pbkdf2(password, salt, 0).is_err());
     }
 
     #[test]
@@ -403,9 +437,10 @@ mod tests {
     #[test]
     fn test_safety_numbers() {
         let data = b"public key data";
-        let numbers = generate_safety_numbers(data, 5);
+        let numbers = generate_safety_numbers(data, 5).unwrap();
         assert!(!numbers.is_empty());
         // Should contain groups of 3-digit numbers
         assert!(numbers.contains(' '));
+        assert!(generate_safety_numbers(data, 0).is_err());
     }
 }

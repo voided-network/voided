@@ -2,7 +2,6 @@ import {
     compress,
     decompress,
     analyzeCompression,
-    stringToUint8Array,
     uint8ArrayToString
 } from '../compression';
 
@@ -187,6 +186,12 @@ describe('Compression Stress Tests', () => {
             const algorithms: ('gzip' | 'brotli' | 'auto')[] = ['gzip', 'brotli', 'auto'];
 
             for (const algorithm of algorithms) {
+                if (algorithm === 'brotli') {
+                    await expect(compress(data, { algorithm })).rejects.toThrow(
+                        'requires the Rust WASM backend'
+                    );
+                    continue;
+                }
                 const result = await compress(data, { algorithm });
                 expect(['gzip', 'none']).toContain(result.algorithm);
 
@@ -260,7 +265,7 @@ describe('Compression Stress Tests', () => {
             const concurrentOperations = 5;
             const dataSize = 5000;
 
-            const operations = Array.from({ length: concurrentOperations }, async (_, i) => {
+            const operations = Array.from({ length: concurrentOperations }, async () => {
                 const data = generateTestData(dataSize, 'mixed');
                 const result = await compress(data);
                 const decompressed = await decompress(result.compressed, result.algorithm);

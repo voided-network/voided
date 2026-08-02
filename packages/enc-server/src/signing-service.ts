@@ -13,6 +13,12 @@ export const RECOMMENDED_ALGORITHMS = {
     legacy: 'rsa-pss-2048' as const // Enterprise/compliance
 };
 
+function assertSigningAlgorithm(value: unknown): asserts value is SigningAlgorithm {
+    if (value !== 'ed25519' && value !== 'ecdsa-p256' && value !== 'rsa-pss-2048') {
+        throw new TypeError(`Unsupported signing algorithm: ${String(value)}`);
+    }
+}
+
 /**
  * SigningService - Server-side signing and verification utilities
  */
@@ -22,6 +28,7 @@ export class SigningService {
      * Generate a signing key pair for the given algorithm
      */
     async generateKeyPair(algorithm: SigningAlgorithm): Promise<GeneratedKeyPair> {
+        assertSigningAlgorithm(algorithm);
         if (algorithm === 'ed25519') {
             const { publicKey, privateKey } = crypto.generateKeyPairSync('ed25519', {
                 publicKeyEncoding: { type: 'spki', format: 'pem' },
@@ -58,6 +65,7 @@ export class SigningService {
         algorithm: SigningAlgorithm,
         outputEncoding: BufferEncoding = 'base64'
     ): Promise<string> {
+        assertSigningAlgorithm(algorithm);
         const dataBuffer = Buffer.isBuffer(data) ? data : Buffer.from(data, 'utf8');
 
         if (algorithm === 'ed25519') {
@@ -112,6 +120,7 @@ export class SigningService {
         algorithm: SigningAlgorithm,
         inputEncoding: BufferEncoding = 'base64'
     ): Promise<boolean> {
+        assertSigningAlgorithm(algorithm);
         const dataBuffer = Buffer.isBuffer(data) ? data : Buffer.from(data, 'utf8');
         const sigBuffer = Buffer.isBuffer(signature) ? signature : Buffer.from(signature, inputEncoding);
 
@@ -177,9 +186,13 @@ export class SigningService {
     }
 
     /**
-     * Produce human-readable safety numbers for the public key fingerprint
+     * Format a SHA-256 public-key fingerprint into human-readable groups.
+     * This is not Signal's Safety Number protocol and does not bind identities.
      */
     getSafetyNumbers(publicKeyPem: string, groupSize: number = 5): string {
+        if (!Number.isSafeInteger(groupSize) || groupSize < 1 || groupSize > 32) {
+            throw new RangeError('groupSize must be an integer between 1 and 32.');
+        }
         const fp = this.getPublicKeyFingerprint(publicKeyPem);
         const nums = this.hexToNumbers(fp);
         return this.formatSafetyNumbers(nums, groupSize);
@@ -189,6 +202,7 @@ export class SigningService {
      * Advise on key strength by algorithm choice.
      */
     validateKeyStrength(algorithm: SigningAlgorithm): { secure: boolean; warnings: string[] } {
+        assertSigningAlgorithm(algorithm);
         const warnings: string[] = [];
         switch (algorithm) {
             case 'ed25519':

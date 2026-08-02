@@ -1,0 +1,14 @@
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Generated outputs and non-secret cryptographic identifiers"
+paths = [
+    '''(^|/)crates/target/''',
+    '''(^|/)packages/[^/]+/dist/''',
+    '''(^|/)tools/zig/''',
+]
+regexes = [
+    '''^xchacha20-poly1305$''',
+    '''^MAX_P256_SPKI_BYTES$''',
+]

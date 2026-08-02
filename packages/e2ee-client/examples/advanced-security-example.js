@@ -14,7 +14,7 @@ async function passwordBasedEncryption() {
     // Derive key from password instead of generating random key
     await client.deriveKeyFromPassword({
         password: 'my-super-secure-password',
-        iterations: 100000 // Default, can be customized
+        iterations: 600000 // Browser high-level default
     });
 
     const data = 'Secret data encrypted with password-derived key';
@@ -45,7 +45,7 @@ async function digitalSignatures() {
     console.log('Signature included:', !!encrypted.signature);
 
     const decrypted = await client.decrypt(encrypted);
-    console.log('✅ Signature verified and data decrypted');
+    console.log('✅ Signature verified and data decrypted:', decrypted === data);
 }
 
 // Example 3: Key Fingerprints for Identity Verification
@@ -148,9 +148,10 @@ async function signalLevelSecurity() {
 
     console.log('Setup complete:');
     console.log('- Password-derived encryption key ✅');
-    console.log('- Digital signature capability ✅');
-    console.log('- Forward secrecy enabled ✅');
-    console.log('- Identity verification ready ✅');
+    console.log('- Digital signature capability ✅', signingPublicKey.slice(0, 16) + '…');
+    console.log('- Forward secrecy enabled ✅', agreementPublicKey.slice(0, 16) + '…');
+    console.log('- Identity verification ready ✅', fingerprint.slice(0, 16) + '…');
+    console.log('- Safety numbers ready ✅', safetyNumbers.slice(0, 16) + '…');
 
     // 4. Encrypt with all features
     const data = 'Maximum security message with all features enabled';
@@ -213,4 +214,4 @@ export {
 // Run if this file is executed directly
 if (import.meta.url === `file://${process.argv[1]}`) {
     runAllExamples();
-} 
+}

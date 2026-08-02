@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Voided Browser Release Test</title>
+  </head>
+  <body>
+    <h1>Voided Browser Release Test</h1>
+    <pre id="results" data-status="running">Running…</pre>
+    <script type="module">
+      const output = document.querySelector('#results');
+      const equal = (left, right) =>
+        left.length === right.length &&
+        left.every((byte, index) => byte === right[index]);
+
+      try {
+        const module = await import('../dist/index.js');
+        module.configureWasmLoader({
+          glueUrl: new URL('../wasm/voided_wasm.js', import.meta.url),
+        });
+        await module.forceWasmBackend();
+
+        const key = await module.crypto.generateKey();
+        const plaintext = new TextEncoder().encode(
+          'Voided browser release audit '.repeat(64),
+        );
+        const aad = new TextEncoder().encode('slipner:browser-audit:v1');
+        const encrypted = await module.crypto.encryptWithAad(
+          plaintext,
+          key,
+          aad,
+          'xchacha20-poly1305',
+        );
+        const decrypted = await module.crypto.decryptWithAad(
+          encrypted,
+          key,
+          aad,
+        );
+
+        let aadMismatchRejected = false;
+        try {
+          await module.crypto.decryptWithAad(
+            encrypted,
+            key,
+            new TextEncoder().encode('slipner:wrong-context'),
+          );
+        } catch {
+          aadMismatchRejected = true;
+        }
+
+        const compressed = await module.crypto.compress(plaintext, 'brotli');
+        const decompressed = await module.decompressBounded(
+          compressed.compressed,
+          'brotli',
+          plaintext.length,
+        );
+        let boundRejected = false;
+        try {
+          await module.decompressBounded(
+            compressed.compressed,
+            'brotli',
+            plaintext.length - 1,
+          );
+        } catch {
+          boundRejected = true;
+        }
+
+        const protectedArtifact = await module.crypto.protect(plaintext, key, {
+          preset: 'concealed',
+          compressionAlgorithm: 'brotli',
+          encryptionAlgorithm: 'xchacha20-poly1305',
+          shellChunkSize: 1024,
+        });
+        const opened = await module.crypto.open(protectedArtifact.artifact, key);
+        const inspected = await module.crypto.inspectArtifact(
+          protectedArtifact.artifact,
+        );
+
+        const result = {
+          backend: await module.getCurrentBackend(),
+          wasmReady: module.isWasmReady(),
+          keyBytes: key.length,
+          aadRoundtrip: equal(decrypted, plaintext),
+          aadMismatchRejected,
+          boundedRoundtrip: equal(decompressed, plaintext),
+          boundRejected,
+          artifactRoundtrip: equal(opened, plaintext),
+          artifactVersion: inspected.version,
+          artifactBytes: protectedArtifact.artifact.length,
+        };
+        const passed =
+          result.backend === 'wasm' &&
+          result.wasmReady &&
+          result.keyBytes === 32 &&
+          result.aadRoundtrip &&
+          result.aadMismatchRejected &&
+          result.boundedRoundtrip &&
+          result.boundRejected &&
+          result.artifactRoundtrip &&
+          result.artifactVersion === 3;
+        if (!passed) throw new Error(`release assertions failed: ${JSON.stringify(result)}`);
+
+        output.dataset.status = 'passed';
+        output.textContent = JSON.stringify(result, null, 2);
+      } catch (error) {
+        output.dataset.status = 'failed';
+        output.textContent = error instanceof Error ? error.stack : String(error);
+      }
+    </script>
+  </body>
+</html>

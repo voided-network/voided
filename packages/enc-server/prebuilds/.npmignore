@@ -1,0 +1,12 @@
+# Generated for complete native release. Do not hand-edit.
+*
+!manifest.json
+!darwin-arm64/
+darwin-arm64/*
+!darwin-arm64/voided_node.node
+!linux-x64-gnu/
+linux-x64-gnu/*
+!linux-x64-gnu/voided_node.node
+!win32-x64-msvc/
+win32-x64-msvc/*
+!win32-x64-msvc/voided_node.node

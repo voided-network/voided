@@ -9,8 +9,8 @@ if (!global.crypto) {
 class MockIndexedDB {
     private data: Map<string, any> = new Map();
 
-    open(name: string, version?: number): MockIDBRequest {
-        return new MockIDBRequest(this.data);
+    open(_name: string, _version?: number): MockIDBRequest {
+        return new MockIDBRequest(this.data, undefined, true);
     }
 }
 
@@ -21,63 +21,82 @@ class MockIDBRequest {
     public readyState: number = 1; // DONE
     public onsuccess?: (event: any) => void;
     public onerror?: (event: any) => void;
+    public onupgradeneeded?: (event: any) => void;
 
-    constructor(data: Map<string, any>, result?: any) {
+    constructor(
+        data: Map<string, any>,
+        result?: any,
+        isOpenRequest = false,
+        onSettled?: () => void
+    ) {
         this.data = data;
-        this.result = result || {
-            objectStoreNames: ['keys', 'migrations'],
-            createObjectStore: (name: string) => new MockObjectStore(this.data),
-            transaction: (storeNames: string[]) => new MockTransaction(this.data, storeNames)
-        };
+        this.result = isOpenRequest ? {
+            objectStoreNames: {
+                contains: (name: string) => ['keys', 'migrations', 'keyPairs'].includes(name)
+            },
+            createObjectStore: (_name: string) => new MockObjectStore(this.data),
+            transaction: (storeNames: string[]) => new MockTransaction(this.data, storeNames),
+            close: () => undefined
+        } : result;
 
         // Simulate async behavior
         setTimeout(() => {
             if (this.onsuccess) {
                 this.onsuccess({ target: this });
             }
+            onSettled?.();
         }, 0);
     }
 }
 
 class MockObjectStore {
     private data: Map<string, any>;
+    private complete: () => void;
 
-    constructor(data: Map<string, any>) {
+    constructor(data: Map<string, any>, complete: () => void = () => undefined) {
         this.data = data;
+        this.complete = complete;
     }
 
     put(value: any, key?: string): MockIDBRequest {
-        if (key) {
-            this.data.set(key, value);
-        }
-        const request = new MockIDBRequest(this.data, undefined);
+        this.data.set(key ?? value.id, value);
+        const request = new MockIDBRequest(this.data, undefined, false, this.complete);
         return request;
     }
 
     get(key: string): MockIDBRequest {
         const result = this.data.get(key) || null;
-        const request = new MockIDBRequest(this.data, result);
+        const request = new MockIDBRequest(this.data, result, false, this.complete);
         return request;
     }
 
     delete(key: string): MockIDBRequest {
         this.data.delete(key);
-        const request = new MockIDBRequest(this.data, undefined);
+        const request = new MockIDBRequest(this.data, undefined, false, this.complete);
         return request;
     }
 }
 
 class MockTransaction {
     private data: Map<string, any>;
-    private storeNames: string[];
+    public error: any = null;
+    public db = { close: () => undefined };
+    public oncomplete?: (event: any) => void;
+    public onerror?: (event: any) => void;
+    public onabort?: (event: any) => void;
 
-    constructor(data: Map<string, any>, storeNames: string[]) {
+    constructor(data: Map<string, any>, _storeNames: string[]) {
         this.data = data;
-        this.storeNames = storeNames;
     }
 
-    objectStore(name: string): MockObjectStore {
-        return new MockObjectStore(this.data);
+    objectStore(_name: string): MockObjectStore {
+        return new MockObjectStore(this.data, () => {
+            setTimeout(() => this.oncomplete?.({ target: this }), 0);
+        });
+    }
+
+    abort(): void {
+        setTimeout(() => this.onabort?.({ target: this }), 0);
     }
 }
 
@@ -98,4 +117,4 @@ if (typeof global !== 'undefined' && !global.btoa) {
 
 if (typeof global !== 'undefined' && !global.atob) {
     global.atob = (str: string) => Buffer.from(str, 'base64').toString('binary');
-} 
+}

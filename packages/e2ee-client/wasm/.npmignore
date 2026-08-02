@@ -1,0 +1,8 @@
+# Generated only after the exact WASM artifact passes release verification.
+*
+!manifest.json
+!package.json
+!voided_wasm.js
+!voided_wasm.d.ts
+!voided_wasm_bg.wasm
+!voided_wasm_bg.wasm.d.ts

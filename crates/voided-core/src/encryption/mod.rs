@@ -1,6 +1,6 @@
 //! Encryption module providing AEAD encryption primitives.
 //!
-//! Supports AES-256-GCM (primary) and XChaCha20-Poly1305 (preferred when available).
+//! Supports XChaCha20-Poly1305 (the high-level default) and explicit AES-256-GCM.
 
 mod aes_gcm;
 mod key;
@@ -9,8 +9,9 @@ mod xchacha20;
 pub use aes_gcm::{decrypt_aes_gcm, encrypt_aes_gcm};
 pub use key::{
     derive_key_from_shared_secret, derive_key_hkdf, derive_key_hkdf_raw, derive_key_pbkdf2,
-    generate_key, generate_x25519_key_pair, x25519_shared_secret, Key, X25519KeyPair,
-    X25519_KEY_SIZE,
+    generate_key, generate_x25519_key_pair, validate_pbkdf2_parameters, x25519_shared_secret, Key,
+    X25519KeyPair, HKDF_SHA256_MAX_OUTPUT, PBKDF2_MAX_ITERATIONS, PBKDF2_MAX_SALT_SIZE,
+    PBKDF2_MIN_ITERATIONS, PBKDF2_MIN_SALT_SIZE, X25519_KEY_SIZE,
 };
 pub use xchacha20::{decrypt_xchacha20, encrypt_xchacha20};
 
@@ -128,6 +129,12 @@ impl EncryptionResult {
             });
         }
 
+        // Canonical v1 encoding requires the reserved byte to be zero. Accepting
+        // alternate encodings makes byte-level signatures and cache keys malleable.
+        if data[7] != 0 {
+            return Err(Error::InvalidFormat);
+        }
+
         // Minimum size check
         let min_size = 8 + nonce_len + 16; // header + nonce + tag
         if data.len() < min_size {
@@ -223,7 +230,7 @@ impl Drop for EncryptionResult {
 /// Encryption options
 #[derive(Debug, Clone, Default)]
 pub struct EncryptOptions {
-    /// Preferred algorithm (defaults to AES-256-GCM)
+    /// Preferred algorithm (defaults to XChaCha20-Poly1305)
     pub algorithm: Option<Algorithm>,
     /// Additional authenticated data
     pub aad: Option<Vec<u8>>,
@@ -231,7 +238,8 @@ pub struct EncryptOptions {
 
 /// Encrypt data using AEAD encryption.
 ///
-/// Prefers XChaCha20-Poly1305 if specified, otherwise uses AES-256-GCM.
+/// Uses XChaCha20-Poly1305 by default. AES-256-GCM is available only when
+/// explicitly selected; callers choosing it must prevent nonce reuse per key.
 ///
 /// # Arguments
 ///
@@ -248,7 +256,7 @@ pub fn encrypt(
     options: Option<EncryptOptions>,
 ) -> Result<EncryptionResult> {
     let opts = options.unwrap_or_default();
-    let algorithm = opts.algorithm.unwrap_or(Algorithm::Aes256Gcm);
+    let algorithm = opts.algorithm.unwrap_or(Algorithm::XChaCha20Poly1305);
     let aad = opts.aad.as_deref().unwrap_or(&[]);
 
     match algorithm {
@@ -325,6 +333,18 @@ mod tests {
         assert_eq!(encrypted.nonce, restored.nonce);
         assert_eq!(encrypted.ciphertext, restored.ciphertext);
         assert_eq!(encrypted.tag, restored.tag);
+    }
+
+    #[test]
+    fn test_binary_serialization_rejects_noncanonical_reserved_byte() {
+        let key = generate_key();
+        let encrypted = encrypt(b"canonical", &key, None).unwrap();
+        let mut bytes = encrypted.to_bytes();
+        bytes[7] = 1;
+        assert!(matches!(
+            EncryptionResult::from_bytes(&bytes),
+            Err(Error::InvalidFormat)
+        ));
     }
 
     #[test]

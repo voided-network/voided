@@ -32,7 +32,7 @@ async function exampleKeyRotationWithBackend() {
     console.log('1. Encrypting data with original key...');
     const originalData = 'sensitive user data';
     const encrypted = await client.encrypt(originalData);
-    console.log('   Data encrypted successfully\n');
+    console.log('   Data encrypted successfully:', encrypted.messageId, '\n');
 
     // 2. Start key rotation with migration
     console.log('2. Starting key rotation with migration...');
@@ -118,4 +118,4 @@ if (typeof window !== 'undefined') {
     // Node.js environment
     exampleKeyRotationWithBackend().catch(console.error);
     exampleForceRotation().catch(console.error);
-} 
+}

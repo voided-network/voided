@@ -343,11 +343,15 @@ Targeted builds:
 ```bash
 npm run build:node
 npm run build:wasm
-npm run build:cross
+npm run build:cross:mac
+npm run build:cross:linux
+npm run build:cross:windows
 ```
 
-Cross-platform native builds require Zig to be available locally, either
-through `VOIDED_ZIG_BIN` or an untracked `tools/zig/` directory.
+macOS and Linux release artifacts must be built on their native operating
+systems. Windows x64 artifacts may be built on Windows or with the pinned
+`cargo-xwin` workflow. Each command emits a signed-input manifest containing
+the source, artifact, and toolchain hashes used by the release verifier.
 
 ## Developer Manuals
 

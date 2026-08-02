@@ -1,0 +1,113 @@
+{
+  "schemaVersion": 1,
+  "package": "@voideddev/enc-server",
+  "packageVersion": "0.3.2",
+  "targets": {
+    "darwin-arm64": {
+      "file": "darwin-arm64/voided_node.node",
+      "sha256": "sha256:ffea9ce992b31388c464ace2e01ed676beb636e9ef38d4874d490b3050b895c7",
+      "size": 2264560,
+      "sourceDigest": "sha256:db0023828ad400055da1a7f5cc2ddee7afcdc693b1fbe75c9f2110a1415d816a",
+      "coreVersion": "0.2.3",
+      "bindingVersion": "0.2.1",
+      "buildId": "sha256:9ed407955affe4068d564c32a3da43e832399a990099e5f09ac3a74011ff6758",
+      "tools": {
+        "cargo": "cargo 1.94.0 (85eff7c80 2026-01-15)",
+        "cargoSha256": "sha256:9dada6167fb0bc26e44e23f09179ea15b4d9a8ec491fef1ac5a16484699540ac",
+        "rustc": "rustc 1.94.0 (4a4ef493e 2026-03-02)",
+        "rustcSha256": "sha256:9dada6167fb0bc26e44e23f09179ea15b4d9a8ec491fef1ac5a16484699540ac",
+        "node": "v25.6.1",
+        "nodeSha256": "sha256:37b13b63da3c59714eeabc9422575c7a7a44f0af45762d51e8094f6c94e60ff9",
+        "codesignSha256": "sha256:9755ad3afc25a3ce6f8c281425ff732a5819f0b973846b7641a11892a2081abc"
+      },
+      "buildEnvironment": {
+        "cargoIncremental": "0",
+        "locale": "C",
+        "offline": "true",
+        "pathRemapBuild": "/voided-build",
+        "pathRemapCargoHome": "/cargo-home",
+        "pathRemapRustupHome": "/rustup-home",
+        "pathRemapSource": "/voided-source",
+        "machOInstallName": "@rpath/voided_node.node",
+        "machOUuid": "sha256-v5",
+        "sourceDateEpoch": "0",
+        "timezone": "UTC",
+        "zeroArDate": "1"
+      },
+      "verification": {
+        "mode": "native-runtime"
+      }
+    },
+    "linux-x64-gnu": {
+      "file": "linux-x64-gnu/voided_node.node",
+      "sha256": "sha256:a646f1bd15674ef51471a28a4cee6bd4b58ec75ce48cc43c3bb8880a9de21aec",
+      "size": 2710240,
+      "sourceDigest": "sha256:db0023828ad400055da1a7f5cc2ddee7afcdc693b1fbe75c9f2110a1415d816a",
+      "coreVersion": "0.2.3",
+      "bindingVersion": "0.2.1",
+      "buildId": "sha256:512e5432cf365afb6e81546c96ba21375496dbea3ec4c3a3439098f9ff51e96f",
+      "tools": {
+        "cargo": "cargo 1.96.0 (30a34c682 2026-05-25)",
+        "cargoSha256": "sha256:4acc9acc76d5079515b46346a485974457b5a79893cfb01112423c89aeb5aa10",
+        "rustc": "rustc 1.96.0 (ac68faa20 2026-05-25)",
+        "rustcSha256": "sha256:4acc9acc76d5079515b46346a485974457b5a79893cfb01112423c89aeb5aa10",
+        "node": "v18.19.1",
+        "nodeSha256": "sha256:f3f93db342d5ac5bb61656d0599a603a73779e98befd9342171e550002725f4d"
+      },
+      "buildEnvironment": {
+        "cargoIncremental": "0",
+        "locale": "C",
+        "offline": "true",
+        "pathRemapBuild": "/voided-build",
+        "pathRemapCargoHome": "/cargo-home",
+        "pathRemapRustupHome": "/rustup-home",
+        "pathRemapSource": "/voided-source",
+        "machOInstallName": "not-applicable",
+        "machOUuid": "not-applicable",
+        "sourceDateEpoch": "0",
+        "timezone": "UTC",
+        "zeroArDate": "1"
+      },
+      "verification": {
+        "mode": "native-runtime"
+      }
+    },
+    "win32-x64-msvc": {
+      "file": "win32-x64-msvc/voided_node.node",
+      "sha256": "sha256:61784e155d5a00feaacc4575041a012c9535000437f774867156877fec10d300",
+      "size": 2771968,
+      "sourceDigest": "sha256:db0023828ad400055da1a7f5cc2ddee7afcdc693b1fbe75c9f2110a1415d816a",
+      "coreVersion": "0.2.3",
+      "bindingVersion": "0.2.1",
+      "buildId": "sha256:7eb0aeb904d0f3cc0e804023751b05999d86e223bbfd4f67896da3b278739255",
+      "tools": {
+        "cargo": "cargo 1.94.0 (85eff7c80 2026-01-15)",
+        "cargoSha256": "sha256:9dada6167fb0bc26e44e23f09179ea15b4d9a8ec491fef1ac5a16484699540ac",
+        "rustc": "rustc 1.94.0 (4a4ef493e 2026-03-02)",
+        "rustcSha256": "sha256:9dada6167fb0bc26e44e23f09179ea15b4d9a8ec491fef1ac5a16484699540ac",
+        "node": "v25.6.1",
+        "nodeSha256": "sha256:37b13b63da3c59714eeabc9422575c7a7a44f0af45762d51e8094f6c94e60ff9",
+        "cargoXwin": "cargo-xwin 0.23.0",
+        "cargoXwinSha256": "sha256:780b7127b1f6eed7b0e56d59983f8bfb2e6221f187f454c3c0f02993f214cefb"
+      },
+      "buildEnvironment": {
+        "cargoIncremental": "0",
+        "locale": "C",
+        "offline": "true",
+        "pathRemapBuild": "/voided-build",
+        "pathRemapCargoHome": "/cargo-home",
+        "pathRemapRustupHome": "/rustup-home",
+        "pathRemapSource": "/voided-source",
+        "machOInstallName": "not-applicable",
+        "machOUuid": "not-applicable",
+        "peCodeViewGuid": "sha256-v5",
+        "sourceDateEpoch": "0",
+        "timezone": "UTC",
+        "zeroArDate": "1"
+      },
+      "verification": {
+        "mode": "cross-compiled-static-pe"
+      }
+    }
+  }
+}

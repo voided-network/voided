@@ -49,14 +49,14 @@ Default backend-oriented build:
 
 ```toml
 [dependencies]
-voided-core = "0.2.0"
+voided-core = "0.2.3"
 ```
 
 Browser-oriented build:
 
 ```toml
 [dependencies]
-voided-core = { version = "0.2.0", default-features = false, features = ["browser"] }
+voided-core = { version = "0.2.3", default-features = false, features = ["browser"] }
 ```
 
 The default feature set is `backend`.
@@ -188,6 +188,14 @@ Provides:
 - Gzip
 - compression result metadata
 - helpers for compressed payload serialization
+- `decompress_bounded`, for streaming lossless decode under a caller-selected
+  absolute output ceiling
+
+`decompress_bounded` intentionally does not apply the legacy expansion-ratio
+heuristic. Use it when the surrounding format authenticates or independently
+validates an exact maximum size and highly compressible input is legitimate.
+The caller ceiling is mandatory and may not exceed the crate's 512 MiB global
+in-memory decompression limit.
 
 ### `voided_core::shell`
 
@@ -231,7 +239,8 @@ Provides:
 
 - Ed25519 helpers
 - P-256 helpers
-- RSA helpers
+- standard PKCS#8 private and SPKI public PEM for Ed25519 and P-256
+- RSA-PSS byte `0x03` is reserved for wire compatibility and is not implemented
 
 ## Quick Start
 
@@ -327,7 +336,9 @@ assert_eq!(restored, payload);
 - Use `fuse_bytes` when you already have the bytes you want inside the shell.
 - Use `protect` when you want the standard Voided v3 monolith artifact path.
 - Use `inspect_fused` or `inspect_artifact` when you want metadata without
-  opening the payload.
+  opening the payload. Their keyless metadata is unauthenticated and must not
+  drive authorization, quota, billing, allocation, or algorithm-policy choices;
+  only a successful open authenticates an artifact.
 - Use `repack_artifact` when you want to move an artifact between monolith presets
   without changing the underlying plaintext.
 
@@ -370,7 +381,7 @@ If you do not have a strong reason otherwise, start with `balanced`.
 
 ### `signing`
 
-- enables Ed25519, P-256, and RSA helpers
+- enables Ed25519 and P-256 helpers; RSA-PSS remains a reserved identifier only
 
 ### `wasm`
 

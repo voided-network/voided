@@ -8,6 +8,112 @@ try {
   // QR code not available, will use fallback
 }
 
+export function escapeKeyUiHtml(value: string): string {
+  return value.replace(/[&<>"']/g, (character) => {
+    switch (character) {
+      case "&":
+        return "&amp;";
+      case "<":
+        return "&lt;";
+      case ">":
+        return "&gt;";
+      case '"':
+        return "&quot;";
+      default:
+        return "&#39;";
+    }
+  });
+}
+
+function createUiElement<K extends keyof HTMLElementTagNameMap>(
+  tagName: K,
+  className: string,
+  component: string,
+  text?: string
+): HTMLElementTagNameMap[K] {
+  const element = document.createElement(tagName);
+  element.className = className;
+  element.setAttribute("data-voideddev-component", component);
+  if (text !== undefined) element.textContent = text;
+  return element;
+}
+
+function createActionButton(
+  className: string,
+  component: string,
+  action: string,
+  text: string,
+  ariaLabel?: string
+): HTMLButtonElement {
+  const button = createUiElement("button", className, component, text);
+  button.type = "button";
+  button.setAttribute("data-voideddev-action", action);
+  if (ariaLabel) button.setAttribute("aria-label", ariaLabel);
+  return button;
+}
+
+function appendLabeledText(
+  container: HTMLElement,
+  label: string,
+  value: string
+): void {
+  const strong = document.createElement("strong");
+  strong.textContent = label;
+  container.append(strong, document.createTextNode(` ${value}`));
+}
+
+function renderQrFallback(container: Element, headline: string): void {
+  const fallback = createUiElement(
+    "div",
+    "voideddev-qr-fallback",
+    "qr-fallback"
+  );
+  fallback.append(
+    createUiElement(
+      "div",
+      "voideddev-qr-fallback-icon",
+      "qr-fallback-icon",
+      "📱"
+    ),
+    createUiElement(
+      "div",
+      "voideddev-qr-fallback-text",
+      "qr-fallback-text",
+      headline
+    ),
+    createUiElement(
+      "div",
+      "voideddev-qr-fallback-subtext",
+      "qr-fallback-subtext",
+      "Use text copy instead"
+    )
+  );
+  container.replaceChildren(fallback);
+}
+
+const KEY_QR_PREFIX = "voideddev-KEY:";
+
+export function parseKeyQrPayload(payload: string): string {
+  if (!payload.startsWith(KEY_QR_PREFIX)) {
+    throw new Error("QR code is not a Voided encryption key");
+  }
+  const key = payload.slice(KEY_QR_PREFIX.length).trim();
+  if (!key) throw new Error("QR code contains an empty encryption key");
+  return key;
+}
+
+interface DetectedBarcode {
+  rawValue?: string;
+}
+
+interface QrBarcodeDetector {
+  detect(source: ImageBitmap): Promise<DetectedBarcode[]>;
+}
+
+type QrBarcodeDetectorConstructor = new (options: {
+  formats: string[];
+}) => QrBarcodeDetector;
+
 export interface KeyExportOptions {
   showQR?: boolean;
   showText?: boolean;
@@ -43,7 +149,8 @@ export interface KeyImportOptions {
   cancelButtonClassName?: string;
   closeButtonClassName?: string;
   warningClassName?: string;
-  showQRScan?: boolean; // Enable QR code scanning
+  /** Show the QR-scanning control. */
+  showQRScan?: boolean;
   onClose?: () => void;
   onSuccess?: () => void;
   onError?: (error: string) => void;
@@ -65,7 +172,7 @@ export class VoidedKeyExport {
     this.options = {
       showQR: true,
       showText: true,
-      showShare: true, // Enable Web Share API by default
+      showShare: true,
       title: "Backup Your Encryption Key",
       className: "voideddev-key-export",
       overlayClassName: "voideddev-overlay",
@@ -118,99 +225,129 @@ export class VoidedKeyExport {
     this.modal.className = this.options.modalClassName || "voideddev-modal";
     this.modal.setAttribute("data-voideddev-component", "key-export-modal");
 
-    // Modal content with semantic structure and data attributes
-    this.modal.innerHTML = `
-            <div class="voideddev-modal-header" data-voideddev-component="modal-header">
-                <h3 class="voideddev-modal-title" data-voideddev-component="modal-title">${
-                  this.options.title
-                }</h3>
-                <button class="${
-                  this.options.closeButtonClassName || "voideddev-close-button"
-                }" 
-                        data-voideddev-component="close-button"
-                        data-voideddev-action="close"
-                        aria-label="Close modal">×</button>
-            </div>
-            
-            <div class="${
-              this.options.keyIdClassName || "voideddev-key-id"
-            }" data-voideddev-component="key-id">
-                <strong>Key ID:</strong> <span data-voideddev-key-id="${keyId}">${keyId}</span>
-            </div>
-            
-            ${
-              this.options.showQR
-                ? `
-                <div class="${
-                  this.options.qrContainerClassName || "voideddev-qr-container"
-                }" 
-                     data-voideddev-component="qr-container"
-                     id="qr-code"></div>
-            `
-                : ""
-            }
-            
-            ${
-              this.options.showText
-                ? `
-                <div class="voideddev-key-section" data-voideddev-component="key-section">
-                    <label class="voideddev-key-label" data-voideddev-component="key-label">Encryption Key:</label>
-                    <textarea class="${
-                      this.options.textAreaClassName || "voideddev-key-textarea"
-                    }" 
-                              data-voideddev-component="key-textarea"
-                              readonly 
-                              data-voideddev-action="select-all"
-                              aria-label="Encryption key">${key}</textarea>
-                </div>
-                
-                <div class="voideddev-button-group" data-voideddev-component="button-group">
-                    <button class="${
-                      this.options.buttonClassName || "voideddev-button"
-                    } ${
-                    this.options.copyButtonClassName || "voideddev-copy-button"
-                  }" 
-                            data-voideddev-component="copy-button"
-                            data-voideddev-action="copy">
-                        Copy Key
-                    </button>
-                    <button class="${
-                      this.options.buttonClassName || "voideddev-button"
-                    } ${
-                    this.options.downloadButtonClassName ||
-                    "voideddev-download-button"
-                  }" 
-                            data-voideddev-component="download-button"
-                            data-voideddev-action="download">
-                        Download Key
-                    </button>
-                    ${
-                      this.options.showShare
-                        ? `
-                        <button class="${
-                          this.options.buttonClassName || "voideddev-button"
-                        } ${
-                            this.options.shareButtonClassName ||
-                            "voideddev-share-button"
-                          }" 
-                                data-voideddev-component="share-button"
-                                data-voideddev-action="share">
-                            📤 Share Key
-                        </button>
-                    `
-                        : ""
-                    }
-                </div>
-            `
-                : ""
-            }
-            
-            <div class="${
-              this.options.warningClassName || "voideddev-warning"
-            }" data-voideddev-component="warning">
-                <strong>Important:</strong> Keep this key safe. Anyone with this key can decrypt your data.
-            </div>
-        `;
+    const header = createUiElement(
+      "div",
+      "voideddev-modal-header",
+      "modal-header"
+    );
+    header.append(
+      createUiElement(
+        "h3",
+        "voideddev-modal-title",
+        "modal-title",
+        this.options.title || "Backup Your Encryption Key"
+      ),
+      createActionButton(
+        this.options.closeButtonClassName || "voideddev-close-button",
+        "close-button",
+        "close",
+        "×",
+        "Close modal"
+      )
+    );
+    this.modal.append(header);
+
+    const keyIdContainer = createUiElement(
+      "div",
+      this.options.keyIdClassName || "voideddev-key-id",
+      "key-id"
+    );
+    const keyIdLabel = document.createElement("strong");
+    keyIdLabel.textContent = "Key ID:";
+    const keyIdValue = document.createElement("span");
+    keyIdValue.setAttribute("data-voideddev-key-id", String(keyId));
+    keyIdValue.textContent = String(keyId);
+    keyIdContainer.append(
+      keyIdLabel,
+      document.createTextNode(" "),
+      keyIdValue
+    );
+    this.modal.append(keyIdContainer);
+
+    if (this.options.showQR) {
+      const qrContainer = createUiElement(
+        "div",
+        this.options.qrContainerClassName || "voideddev-qr-container",
+        "qr-container"
+      );
+      qrContainer.id = "qr-code";
+      this.modal.append(qrContainer);
+    }
+
+    if (this.options.showText) {
+      const keySection = createUiElement(
+        "div",
+        "voideddev-key-section",
+        "key-section"
+      );
+      const keyLabel = createUiElement(
+        "label",
+        "voideddev-key-label",
+        "key-label",
+        "Encryption Key:"
+      );
+      const keyTextArea = createUiElement(
+        "textarea",
+        this.options.textAreaClassName || "voideddev-key-textarea",
+        "key-textarea"
+      );
+      keyTextArea.readOnly = true;
+      keyTextArea.value = key;
+      keyTextArea.setAttribute("data-voideddev-action", "select-all");
+      keyTextArea.setAttribute("aria-label", "Encryption key");
+      keySection.append(keyLabel, keyTextArea);
+      this.modal.append(keySection);
+
+      const buttonGroup = createUiElement(
+        "div",
+        "voideddev-button-group",
+        "button-group"
+      );
+      const baseButtonClass = this.options.buttonClassName || "voideddev-button";
+      buttonGroup.append(
+        createActionButton(
+          `${baseButtonClass} ${
+            this.options.copyButtonClassName || "voideddev-copy-button"
+          }`,
+          "copy-button",
+          "copy",
+          "Copy Key"
+        ),
+        createActionButton(
+          `${baseButtonClass} ${
+            this.options.downloadButtonClassName || "voideddev-download-button"
+          }`,
+          "download-button",
+          "download",
+          "Download Key"
+        )
+      );
+      if (this.options.showShare) {
+        buttonGroup.append(
+          createActionButton(
+            `${baseButtonClass} ${
+              this.options.shareButtonClassName || "voideddev-share-button"
+            }`,
+            "share-button",
+            "share",
+            "📤 Share Key"
+          )
+        );
+      }
+      this.modal.append(buttonGroup);
+    }
+
+    const warning = createUiElement(
+      "div",
+      this.options.warningClassName || "voideddev-warning",
+      "warning"
+    );
+    appendLabeledText(
+      warning,
+      "Important:",
+      "Keep this key safe. Anyone with this key can decrypt your data."
+    );
+    this.modal.append(warning);
 
     // Add event listeners
     this.modal.addEventListener("close", () => this.hide());
@@ -310,7 +447,7 @@ export class VoidedKeyExport {
     );
     if (!qrContainer) return;
 
-    const qrText = `voideddev-KEY:${key}`;
+    const qrText = `${KEY_QR_PREFIX}${key}`;
     const qrSize = 200;
 
     try {
@@ -325,34 +462,26 @@ export class VoidedKeyExport {
           },
         });
 
-        qrContainer.innerHTML = `
-                    <div class="voideddev-qr-wrapper" data-voideddev-component="qr-wrapper">
-                        <img src="${qrDataUrl}" alt="QR Code" class="voideddev-qr-image" data-voideddev-component="qr-image">
-                        <div class="voideddev-qr-caption" data-voideddev-component="qr-caption">
-                            Scan with any QR code app
-                        </div>
-                    </div>
-                `;
+        const wrapper = document.createElement("div");
+        wrapper.className = "voideddev-qr-wrapper";
+        wrapper.setAttribute("data-voideddev-component", "qr-wrapper");
+        const image = document.createElement("img");
+        image.src = qrDataUrl;
+        image.alt = "QR Code";
+        image.className = "voideddev-qr-image";
+        image.setAttribute("data-voideddev-component", "qr-image");
+        const caption = document.createElement("div");
+        caption.className = "voideddev-qr-caption";
+        caption.setAttribute("data-voideddev-component", "qr-caption");
+        caption.textContent = "Scan with any QR code app";
+        wrapper.append(image, caption);
+        qrContainer.replaceChildren(wrapper);
       } else {
-        // Fallback to text representation
-        qrContainer.innerHTML = `
-                    <div class="voideddev-qr-fallback" data-voideddev-component="qr-fallback">
-                        <div class="voideddev-qr-fallback-icon" data-voideddev-component="qr-fallback-icon">📱</div>
-                        <div class="voideddev-qr-fallback-text" data-voideddev-component="qr-fallback-text">QR Code Unavailable</div>
-                        <div class="voideddev-qr-fallback-subtext" data-voideddev-component="qr-fallback-subtext">Use text copy instead</div>
-                    </div>
-                `;
+        renderQrFallback(qrContainer, "QR Code Unavailable");
       }
     } catch (error) {
       console.warn("Failed to generate QR code:", error);
-      // Fallback to text representation
-      qrContainer.innerHTML = `
-                <div class="voideddev-qr-fallback" data-voideddev-component="qr-fallback">
-                    <div class="voideddev-qr-fallback-icon" data-voideddev-component="qr-fallback-icon">📱</div>
-                    <div class="voideddev-qr-fallback-text" data-voideddev-component="qr-fallback-text">QR Code Error</div>
-                    <div class="voideddev-qr-fallback-subtext" data-voideddev-component="qr-fallback-subtext">Use text copy instead</div>
-                </div>
-            `;
+      renderQrFallback(qrContainer, "QR Code Error");
     }
   }
 
@@ -422,7 +551,7 @@ export class VoidedKeyImport {
       cancelButtonClassName: "voideddev-cancel-button",
       closeButtonClassName: "voideddev-close-button",
       warningClassName: "voideddev-warning",
-      showQRScan: true, // Enable QR scanning by default
+      showQRScan: true,
       ...options,
     };
   }
@@ -454,74 +583,98 @@ export class VoidedKeyImport {
     this.modal.className = this.options.modalClassName || "voideddev-modal";
     this.modal.setAttribute("data-voideddev-component", "key-import-modal");
 
-    // Modal content with semantic structure and data attributes
-    this.modal.innerHTML = `
-            <div class="voideddev-modal-header" data-voideddev-component="modal-header">
-                <h3 class="voideddev-modal-title" data-voideddev-component="modal-title">${
-                  this.options.title
-                }</h3>
-                <button class="${
-                  this.options.closeButtonClassName || "voideddev-close-button"
-                }" 
-                        data-voideddev-component="close-button"
-                        data-voideddev-action="close"
-                        aria-label="Close modal">×</button>
-            </div>
-            
-            <div class="voideddev-key-section" data-voideddev-component="key-section">
-                <label class="voideddev-key-label" data-voideddev-component="key-label">Paste your encryption key:</label>
-                <textarea class="${
-                  this.options.textAreaClassName || "voideddev-key-textarea"
-                }" 
-                          data-voideddev-component="key-textarea"
-                          id="key-input" 
-                          placeholder="Paste your key here..."
-                          aria-label="Encryption key input"></textarea>
-            </div>
-            
-            <div class="voideddev-button-group" data-voideddev-component="button-group">
-                <button class="${
-                  this.options.buttonClassName || "voideddev-button"
-                } ${
-      this.options.importButtonClassName || "voideddev-import-button"
-    }" 
-                        data-voideddev-component="import-button"
-                        data-voideddev-action="import">
-                    Import Key
-                </button>
-                ${
-                  this.options.showQRScan
-                    ? `
-                    <button class="${
-                      this.options.buttonClassName || "voideddev-button"
-                    } ${
-                        this.options.scanButtonClassName ||
-                        "voideddev-scan-button"
-                      }" 
-                            data-voideddev-component="scan-button"
-                            data-voideddev-action="scan">
-                        📷 Scan QR Code
-                    </button>
-                `
-                    : ""
-                }
-                <button class="${
-                  this.options.buttonClassName || "voideddev-button"
-                } ${
-      this.options.cancelButtonClassName || "voideddev-cancel-button"
-    }" 
-                        data-voideddev-component="cancel-button"
-                        data-voideddev-action="close">
-                    Cancel
-                </button>
-            </div>
-            
-            <div class="${
-              this.options.warningClassName || "voideddev-warning"
-            }" data-voideddev-component="warning">
-                <strong>Note:</strong> Importing a key will replace your current key. Make sure you have a backup of your current key.
-            </div>
-        `;
+    const header = createUiElement(
+      "div",
+      "voideddev-modal-header",
+      "modal-header"
+    );
+    header.append(
+      createUiElement(
+        "h3",
+        "voideddev-modal-title",
+        "modal-title",
+        this.options.title || "Import Encryption Key"
+      ),
+      createActionButton(
+        this.options.closeButtonClassName || "voideddev-close-button",
+        "close-button",
+        "close",
+        "×",
+        "Close modal"
+      )
+    );
+
+    const keySection = createUiElement(
+      "div",
+      "voideddev-key-section",
+      "key-section"
+    );
+    const keyLabel = createUiElement(
+      "label",
+      "voideddev-key-label",
+      "key-label",
+      "Paste your encryption key:"
+    );
+    const keyInput = createUiElement(
+      "textarea",
+      this.options.textAreaClassName || "voideddev-key-textarea",
+      "key-textarea"
+    );
+    keyInput.id = "key-input";
+    keyInput.placeholder = "Paste your key here...";
+    keyInput.setAttribute("aria-label", "Encryption key input");
+    keySection.append(keyLabel, keyInput);
+
+    const buttonGroup = createUiElement(
+      "div",
+      "voideddev-button-group",
+      "button-group"
+    );
+    const baseButtonClass = this.options.buttonClassName || "voideddev-button";
+    buttonGroup.append(
+      createActionButton(
+        `${baseButtonClass} ${
+          this.options.importButtonClassName || "voideddev-import-button"
+        }`,
+        "import-button",
+        "import",
+        "Import Key"
+      )
+    );
+    if (this.options.showQRScan) {
+      buttonGroup.append(
+        createActionButton(
+          `${baseButtonClass} ${
+            this.options.scanButtonClassName || "voideddev-scan-button"
+          }`,
+          "scan-button",
+          "scan",
+          "📷 Scan QR Code"
+        )
+      );
+    }
+    buttonGroup.append(
+      createActionButton(
+        `${baseButtonClass} ${
+          this.options.cancelButtonClassName || "voideddev-cancel-button"
+        }`,
+        "cancel-button",
+        "close",
+        "Cancel"
+      )
+    );
+
+    const warning = createUiElement(
+      "div",
+      this.options.warningClassName || "voideddev-warning",
+      "warning"
+    );
+    appendLabeledText(
+      warning,
+      "Note:",
+      "Importing a key will replace your current key. Make sure you have a backup of your current key."
+    );
+    this.modal.append(header, keySection, buttonGroup, warning);
 
     // Add event listeners
     this.modal.addEventListener("close", () => this.hide());
@@ -618,11 +771,63 @@ export class VoidedKeyImport {
   }
 
   private async scanQRCode(): Promise<void> {
-    // TODO: Implement QR code scanning
-    // This would typically use a library like jsQR or similar
-    alert(
-      "QR code scanning not yet implemented. Please paste the key manually."
+    const detectorConstructor = (
+      globalThis as typeof globalThis & {
+        BarcodeDetector?: QrBarcodeDetectorConstructor;
+      }
+    ).BarcodeDetector;
+    if (!detectorConstructor || typeof createImageBitmap !== "function") {
+      alert(
+        "QR scanning is not supported by this browser. Please paste the key manually."
+      );
+      return;
+    }
+
+    const fileInput = document.createElement("input");
+    fileInput.type = "file";
+    fileInput.accept = "image/*";
+    fileInput.setAttribute("capture", "environment");
+    fileInput.hidden = true;
+    document.body.appendChild(fileInput);
+
+    const cleanup = (): void => fileInput.remove();
+    fileInput.addEventListener("cancel", cleanup, { once: true });
+    fileInput.addEventListener(
+      "change",
+      async () => {
+        let image: ImageBitmap | undefined;
+        try {
+          const file = fileInput.files?.[0];
+          if (!file) return;
+          image = await createImageBitmap(file);
+          const detector = new detectorConstructor({ formats: ["qr_code"] });
+          const matches = await detector.detect(image);
+          const payload = matches.find(
+            (match) => typeof match.rawValue === "string"
+          )?.rawValue;
+          if (!payload) throw new Error("No QR code was found in that image");
+
+          const key = parseKeyQrPayload(payload);
+          const keyInput = this.modal?.querySelector(
+            '[data-voideddev-component="key-textarea"]'
+          ) as HTMLTextAreaElement | null;
+          if (!keyInput) throw new Error("The key import field is unavailable");
+          keyInput.value = key;
+          keyInput.dispatchEvent(new Event("input", { bubbles: true }));
+          keyInput.focus();
+        } catch (error) {
+          const message =
+            error instanceof Error ? error.message : "Failed to scan QR code";
+          if (this.options.onError) this.options.onError(message);
+          else alert(message);
+        } finally {
+          image?.close();
+          cleanup();
+        }
+      },
+      { once: true }
     );
+    fileInput.click();
   }
 }
 

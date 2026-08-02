@@ -1,0 +1,10 @@
+# Historical false positives from source code that constructs generated PEM
+# wrappers. These fingerprints refer to code strings, not embedded key data.
+38545d09d9ed1bfc9b504fa7be713daac10e5a90:crates/voided-core/src/signing/mod.rs:private-key:71
+38545d09d9ed1bfc9b504fa7be713daac10e5a90:crates/voided-core/src/signing/mod.rs:private-key:124
+38545d09d9ed1bfc9b504fa7be713daac10e5a90:crates/voided-core/src/signing/mod.rs:private-key:154
+38545d09d9ed1bfc9b504fa7be713daac10e5a90:crates/voided-core/src/signing/mod.rs:private-key:185
+5f1813b3c175440b67eeeae936a6e13def32a2d8:crates/voided-core/src/signing/mod.rs:private-key:71
+5f1813b3c175440b67eeeae936a6e13def32a2d8:crates/voided-core/src/signing/mod.rs:private-key:124
+5f1813b3c175440b67eeeae936a6e13def32a2d8:crates/voided-core/src/signing/mod.rs:private-key:154
+5f1813b3c175440b67eeeae936a6e13def32a2d8:crates/voided-core/src/signing/mod.rs:private-key:185

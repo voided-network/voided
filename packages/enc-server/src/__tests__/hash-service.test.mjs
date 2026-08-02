@@ -116,8 +116,8 @@ test('safetyNumbers produces formatted string', () => {
 test('PBKDF2 hash and verify', () => {
     const data = Buffer.from('password123', 'utf8');
     const salt = generateSalt();
-    const hashed = hashPbkdf2(data, salt, 10000);
-    const isValid = verifyPbkdf2(data, hashed, salt, 10000);
+    const hashed = hashPbkdf2(data, salt, 100000);
+    const isValid = verifyPbkdf2(data, hashed, salt, 100000);
     assert.strictEqual(isValid, true);
 });
 
@@ -125,8 +125,8 @@ test('PBKDF2 verify fails with wrong password', () => {
     const password = Buffer.from('correct-password', 'utf8');
     const wrongPassword = Buffer.from('wrong-password', 'utf8');
     const salt = generateSalt();
-    const hashed = hashPbkdf2(password, salt, 10000);
-    const isValid = verifyPbkdf2(wrongPassword, hashed, salt, 10000);
+    const hashed = hashPbkdf2(password, salt, 100000);
+    const isValid = verifyPbkdf2(wrongPassword, hashed, salt, 100000);
     assert.strictEqual(isValid, false);
 });
 
@@ -144,4 +144,3 @@ test('handles unicode input', () => {
 
 console.log(`\n${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);
-

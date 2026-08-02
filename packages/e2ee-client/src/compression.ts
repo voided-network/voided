@@ -1,6 +1,10 @@
 // Import compression libraries for browser environment
-import { gzipSync, gunzipSync, strToU8, strFromU8 } from 'fflate';
-import { assertWithinClientUploadLimit } from './limits';
+import { gzipSync, Gunzip, strToU8, strFromU8 } from 'fflate';
+import {
+    assertWithinClientMemoryLimit,
+    assertWithinClientUploadLimit,
+    CLIENT_MAX_IN_MEMORY_BYTES
+} from './limits';
 
 export interface CompressionResult {
     compressed: Uint8Array;
@@ -20,26 +24,23 @@ export interface CompressionOptions {
  * Check if gzip compression is available
  */
 function hasGzipSupport(): boolean {
-    return typeof gzipSync === 'function' && typeof gunzipSync === 'function';
+    return typeof gzipSync === 'function' && typeof Gunzip === 'function';
 }
 
 /**
- * The TypeScript fallback intentionally supports gzip and none only.
- * Brotli remains available through the Rust/WASM backend.
- */
-function hasBrotliSupport(): boolean {
-    return false;
-}
-
-/**
- * Normalize requested algorithms for the TypeScript fallback.
- * Explicit brotli requests degrade to gzip instead of loading extra browser-only
- * runtime glue. The higher-level WASM backend still exposes real brotli support.
+ * Normalize requested algorithms for the TypeScript fallback. Algorithm labels
+ * are protocol inputs: an explicit Brotli request must never silently become
+ * gzip.
  */
 function normalizeRequestedAlgorithm(
     algorithm: 'gzip' | 'brotli' | 'none' | 'auto'
 ): 'gzip' | 'none' | 'auto' {
-    if (algorithm === 'brotli') return 'gzip';
+    if (!['gzip', 'brotli', 'none', 'auto'].includes(algorithm)) {
+        throw new Error('Unsupported compression algorithm');
+    }
+    if (algorithm === 'brotli') {
+        throw new Error('Brotli compression requires the Rust WASM backend in e2ee-client');
+    }
     return algorithm;
 }
 
@@ -135,6 +136,7 @@ export async function compress(
     const input = typeof data === 'string' ? new TextEncoder().encode(data) : data;
     // Guard: enforce 32 GiB limit on any input processed
     assertWithinClientUploadLimit(input.length);
+    assertWithinClientMemoryLimit(input.length, 'Compression input');
     const originalSize = input.length;
 
     // Quick size check
@@ -197,10 +199,16 @@ export async function compress(
             };
         }
     } catch (error) {
-        //if (process.env.NODE_ENV !== 'test') console.warn('Compression failed:', error);
+        if (requestedAlgorithm !== 'auto') {
+            throw new Error(
+                `Explicit ${requestedAlgorithm} compression failed: ${
+                    error instanceof Error ? error.message : String(error)
+                }`
+            );
+        }
     }
 
-    // Return uncompressed if compression failed or didn't help
+    // Auto selection may safely choose or fall back to uncompressed data.
     return {
         compressed: input,
         algorithm: 'none',
@@ -215,15 +223,44 @@ export async function compress(
  */
 export async function decompress(
     compressedData: Uint8Array,
-    algorithm: 'gzip' | 'brotli' | 'none'
+    algorithm: 'gzip' | 'brotli' | 'none',
+    options: {
+        expectedOutputBytes?: number;
+        maxOutputBytes?: number;
+        maxExpansionRatio?: number;
+    } = {}
 ): Promise<Uint8Array> {
     // Guard: sanity check on compressed input size
     assertWithinClientUploadLimit(compressedData.length);
+    assertWithinClientMemoryLimit(compressedData.length, 'Compressed input');
+    const maxOutputBytes = Math.min(
+        options.maxOutputBytes ?? CLIENT_MAX_IN_MEMORY_BYTES,
+        CLIENT_MAX_IN_MEMORY_BYTES
+    );
+    const maxExpansionRatio = options.maxExpansionRatio ?? 4096;
+    if (!Number.isSafeInteger(maxOutputBytes) || maxOutputBytes < 0) {
+        throw new Error('Invalid decompression output limit');
+    }
+    if (!Number.isFinite(maxExpansionRatio) || maxExpansionRatio <= 0) {
+        throw new Error('Invalid decompression expansion ratio');
+    }
     if (algorithm === 'none') {
+        if (
+            compressedData.length > maxOutputBytes ||
+            (
+                options.expectedOutputBytes !== undefined &&
+                compressedData.length !== options.expectedOutputBytes
+            )
+        ) {
+            throw new Error('Uncompressed payload size does not match its authenticated metadata');
+        }
         return compressedData;
     }
 
     try {
+        if (compressedData.length === 0) {
+            throw new Error('Compressed payload cannot be empty');
+        }
         if (algorithm === 'brotli') {
             throw new Error('Brotli decompression requires the Rust WASM backend in e2ee-client');
         }
@@ -232,7 +269,48 @@ export async function decompress(
             throw new Error('Gzip decompression not available');
         }
 
-        return gunzipSync(compressedData);
+        const chunks: Uint8Array[] = [];
+        let total = 0;
+        const ratioLimit = Math.max(
+            1024,
+            Math.ceil(compressedData.length * maxExpansionRatio)
+        );
+        const effectiveLimit = Math.min(maxOutputBytes, ratioLimit);
+        const gunzip = new Gunzip((chunk) => {
+            total += chunk.length;
+            if (total > effectiveLimit) {
+                throw new Error('Decompressed payload exceeds configured output limits');
+            }
+            chunks.push(chunk);
+        });
+
+        const inputChunkSize = 64 * 1024;
+        for (
+            let inputOffset = 0;
+            inputOffset < compressedData.length;
+            inputOffset += inputChunkSize
+        ) {
+            const end = Math.min(inputOffset + inputChunkSize, compressedData.length);
+            gunzip.push(
+                compressedData.subarray(inputOffset, end),
+                end === compressedData.length
+            );
+        }
+
+        if (
+            options.expectedOutputBytes !== undefined &&
+            total !== options.expectedOutputBytes
+        ) {
+            throw new Error('Decompressed payload size does not match its authenticated metadata');
+        }
+
+        const output = new Uint8Array(total);
+        let outputOffset = 0;
+        for (const chunk of chunks) {
+            output.set(chunk, outputOffset);
+            outputOffset += chunk.length;
+        }
+        return output;
     } catch (error) {
         throw new Error(`Decompression failed: ${error instanceof Error ? error.message : String(error)}`);
     }

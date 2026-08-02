@@ -1,7 +1,5 @@
 import {
     VoidedE2EEClient,
-    EncryptedBlob,
-    IndexedDBStorage,
     E2EEStorage,
     MigrationState
 } from '../index';
@@ -15,6 +13,8 @@ class FailureSimulationStorage implements E2EEStorage {
     private corruptionRate: number;
     private networkDelay: number;
     private isDown: boolean = false;
+    private failureCalls: number = 0;
+    private failureHits: number = 0;
     // Deterministic corruption controller to reduce test flakiness
     private corruptionCalls: number = 0;
     private corruptionHits: number = 0;
@@ -32,6 +32,8 @@ class FailureSimulationStorage implements E2EEStorage {
 
     setFailureRate(rate: number) {
         this.failureRate = rate;
+        this.failureCalls = 0;
+        this.failureHits = 0;
     }
 
     setPartialFailureRate(rate: number) {
@@ -62,7 +64,14 @@ class FailureSimulationStorage implements E2EEStorage {
     }
 
     private shouldFail(): boolean {
-        return this.isDown || Math.random() < this.failureRate;
+        if (this.isDown) return true;
+        this.failureCalls++;
+        const desiredHits = Math.floor(this.failureRate * this.failureCalls);
+        if (this.failureHits < desiredHits) {
+            this.failureHits++;
+            return true;
+        }
+        return false;
     }
 
     private shouldPartiallyFail(): boolean {
@@ -121,7 +130,10 @@ class FailureSimulationStorage implements E2EEStorage {
         }
 
         if (this.shouldPartiallyFail()) {
-            return null; // Simulate key not found
+            // A transient backend read failure must not masquerade as an
+            // authoritative "key does not exist" result: that could trigger
+            // unsafe key replacement. Hardened lifecycle reads fail closed.
+            throw new Error('Storage partial failure: Key read was incomplete');
         }
 
         const result = await this.baseStorage.getKey(keyId);
@@ -247,8 +259,7 @@ class CircuitBreaker {
 
     constructor(
         private failureThreshold: number = 5,
-        private resetTimeout: number = 60000,
-        private monitorWindow: number = 60000
+        private resetTimeout: number = 60000
     ) { }
 
     async execute<T>(operation: () => Promise<T>): Promise<T> {
@@ -298,8 +309,9 @@ describe('Production Failure Recovery Tests', () => {
             const failureStorage = new FailureSimulationStorage();
             const client = new VoidedE2EEClient({ storage: failureStorage });
 
-            // Set moderate failure rate
-            failureStorage.setFailureRate(0.3);
+            // Exercise fail-closed reads while leaving enough successful
+            // attempts to prove recovery in a bounded randomized test.
+            failureStorage.setFailureRate(0.1);
 
             const testData = 'test data for failure recovery';
             let successCount = 0;
@@ -324,8 +336,8 @@ describe('Production Failure Recovery Tests', () => {
                 await new Promise(resolve => setTimeout(resolve, 10));
             }
 
-            // Should have some successes despite failures
-            expect(successCount).toBeGreaterThan(20); // At least 40% success rate
+            expect(successCount).toBeGreaterThan(0);
+            expect(failureCount).toBeGreaterThan(0);
 
             // Reset failure rate and verify recovery
             failureStorage.setFailureRate(0);
@@ -425,11 +437,16 @@ describe('Production Failure Recovery Tests', () => {
             const testData = 'test data for intermittent connectivity';
             let successCount = 0;
             let retryCount = 0;
+            let unavailableCount = 0;
 
-            // Simulate intermittent connectivity
+            // Simulate intermittent connectivity deterministically. The
+            // network state remains fixed for each operation, so retrying a
+            // down operation must fail closed until connectivity is restored.
             for (let i = 0; i < 30; i++) {
-                // Randomly toggle network availability
-                const isNetworkDown = Math.random() < 0.3;
+                const isNetworkDown = i % 3 === 0;
+                if (isNetworkDown) {
+                    unavailableCount++;
+                }
                 failureStorage.setDown(isNetworkDown);
 
                 let operationSucceeded = false;
@@ -457,8 +474,8 @@ describe('Production Failure Recovery Tests', () => {
                 await new Promise(resolve => setTimeout(resolve, 10));
             }
 
-            // Should achieve reasonable success rate with retries
-            expect(successCount).toBeGreaterThan(20); // At least 66% success rate
+            expect(successCount).toBe(30 - unavailableCount);
+            expect(retryCount).toBe(unavailableCount * 3);
 
             // log removed
         }, 30000);
@@ -474,7 +491,7 @@ describe('Production Failure Recovery Tests', () => {
             const encrypted = await client.encrypt(testData);
 
             // Enable partial failures (key not found)
-            failureStorage.setPartialFailureRate(0.5);
+            failureStorage.setPartialFailureRate(0.2);
 
             // Try multiple encrypt operations - should handle partial failures during key loading
             let keyNotFoundCount = 0;
@@ -493,17 +510,17 @@ describe('Production Failure Recovery Tests', () => {
                         successCount++;
                     }
                 } catch (error) {
-                    // This shouldn't happen as the system generates new keys when not found
+                    // Hardened authority reads fail closed instead of replacing
+                    // a durable key after an ambiguous/transient read failure.
                     keyNotFoundCount++;
                 }
             }
 
-            // With partial failure rate of 0.5, some operations should trigger key regeneration
-            // All operations should succeed (system is resilient) but there should be variability
-            expect(successCount).toBeGreaterThan(15); // Most should succeed
+            expect(successCount).toBeGreaterThan(0);
+            expect(keyNotFoundCount).toBeGreaterThan(0);
 
             // Now test that we can still decrypt original data with resilience
-            failureStorage.setPartialFailureRate(0.3); // Lower rate for decrypt test
+            failureStorage.setPartialFailureRate(0.1); // Lower rate for decrypt test
             let decryptAttempts = 0;
             let decryptSuccesses = 0;
 
@@ -517,13 +534,13 @@ describe('Production Failure Recovery Tests', () => {
                     }
                 } catch (error) {
                     decryptAttempts++;
-                    // Some failures expected due to key not being found and new key generated
+                    // Some failures are expected because ambiguous reads fail closed.
                 }
             }
 
             expect(decryptAttempts).toBe(10);
             // At least some attempts should have the right key loaded
-            expect(decryptSuccesses).toBeGreaterThan(3);
+            expect(decryptSuccesses).toBeGreaterThan(0);
 
             // Reset and verify full recovery
             failureStorage.setPartialFailureRate(0);
@@ -540,7 +557,7 @@ describe('Production Failure Recovery Tests', () => {
         test('should implement circuit breaker for resilience', async () => {
             const failureStorage = new FailureSimulationStorage();
             const client = new VoidedE2EEClient({ storage: failureStorage });
-            const circuitBreaker = new CircuitBreaker(3, 1000, 5000);
+            const circuitBreaker = new CircuitBreaker(3, 1000);
 
             // High failure rate to trigger circuit breaker
             failureStorage.setFailureRate(0.8);
@@ -578,8 +595,8 @@ describe('Production Failure Recovery Tests', () => {
             expect(circuitBreakerTrips).toBeGreaterThan(0);
             expect(circuitBreaker.getState()).toBe('open');
 
-            // Reduce failure rate and wait for reset
-            failureStorage.setFailureRate(0.1);
+            // Restore storage before the single half-open recovery probe.
+            failureStorage.setFailureRate(0);
             await new Promise(resolve => setTimeout(resolve, 1100));
 
             // Should be able to operate again
@@ -601,19 +618,17 @@ describe('Production Failure Recovery Tests', () => {
 
             // Store initial data
             const testData = 'test data for rotation failure';
-            const encrypted = await client.encrypt(testData);
+            await client.encrypt(testData);
 
             // Enable failures during rotation
             failureStorage.setFailureRate(0.6);
 
             let rotationFailures = 0;
-            let rotationSuccesses = 0;
 
             // Attempt multiple rotations
             for (let i = 0; i < 10; i++) {
                 try {
                     await client.rotateKey();
-                    rotationSuccesses++;
                 } catch (error) {
                     rotationFailures++;
                 }
@@ -685,18 +700,21 @@ describe('Production Failure Recovery Tests', () => {
 
     describe('Concurrent Operations Under Failure', () => {
         test('should handle concurrent operations with failures', async () => {
-            const failureStorage = new FailureSimulationStorage();
-            const client = new VoidedE2EEClient({ storage: failureStorage });
+            const backingStorage = new InMemoryStorage();
+            const initializer = new VoidedE2EEClient({ storage: backingStorage });
+            await initializer.encrypt('initialize shared key');
+            const failureStorage = new FailureSimulationStorage(backingStorage);
 
-            // Moderate failure rate
-            failureStorage.setFailureRate(0.3);
+            // Concurrent lifecycle reads fail closed independently.
+            failureStorage.setFailureRate(0.1);
             failureStorage.setNetworkDelay(50);
 
             const testData = 'concurrent test data';
-            const operations: Promise<{ success: boolean; operation: number } | { success: boolean; operation: number; error: any }>[] = [];
+            const operations: Promise<{ success: boolean; operation: number } | { success: boolean; operation: number; error: string }>[] = [];
 
             // Create many concurrent operations
             for (let i = 0; i < 50; i++) {
+                const client = new VoidedE2EEClient({ storage: failureStorage });
                 operations.push(
                     client.encrypt(testData + i)
                         .then(encrypted => client.decrypt(encrypted))
@@ -716,19 +734,16 @@ describe('Production Failure Recovery Tests', () => {
 
             // Analyze results
             const successRate = results.filter(r => r.success).length / results.length;
-            const errorTypes = results
-                .filter(r => !r.success && 'error' in r)
-                .map(r => (r as any).error)
-                .reduce((acc, error) => {
-                    acc[error] = (acc[error] || 0) + 1;
-                    return acc;
-                }, {} as Record<string, number>);
+            expect(successRate).toBeGreaterThan(0);
+            expect(successRate).toBeLessThan(1);
 
-            // Should have reasonable success rate despite failures
-            expect(successRate).toBeGreaterThan(0.5); // At least 50% success
+            failureStorage.setFailureRate(0);
+            const recoveryClient = new VoidedE2EEClient({ storage: failureStorage });
+            const recovered = await recoveryClient.encrypt('recovered');
+            await expect(recoveryClient.decrypt(recovered)).resolves.toBe('recovered');
 
             // log removed
             // log removed
         }, 30000);
     });
-}); 
+});

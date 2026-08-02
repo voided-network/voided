@@ -93,11 +93,11 @@ describe('Frontend Compression Tests', () => {
             expect(result.algorithm).toBe('gzip');
         });
 
-        test('should normalize explicit brotli requests to gzip in the TypeScript fallback', async () => {
+        test('should fail closed for explicit brotli without the Rust WASM backend', async () => {
             const data = generateTestData(500, 'repetitive');
-            const result = await compress(data, { algorithm: 'brotli' });
-
-            expect(result.algorithm).toBe('gzip');
+            await expect(compress(data, { algorithm: 'brotli' })).rejects.toThrow(
+                'requires the Rust WASM backend'
+            );
         });
 
         test('should respect none algorithm', async () => {
@@ -186,14 +186,14 @@ describe('Frontend Compression Tests', () => {
             expect(highLevel.compressionRatio).toBeLessThanOrEqual(lowLevel.compressionRatio);
         });
 
-        test('should normalize brotli compression levels to gzip in the TypeScript fallback', async () => {
+        test('should reject brotli compression levels without the Rust WASM backend', async () => {
             const data = generateTestData(1000, 'repetitive');
-            const lowLevel = await compress(data, { algorithm: 'brotli', compressionLevel: 1 });
-            const highLevel = await compress(data, { algorithm: 'brotli', compressionLevel: 9 });
-
-            expect(lowLevel.algorithm).toBe('gzip');
-            expect(highLevel.algorithm).toBe('gzip');
-            expect(highLevel.compressionRatio).toBeLessThanOrEqual(lowLevel.compressionRatio);
+            await expect(
+                compress(data, { algorithm: 'brotli', compressionLevel: 1 })
+            ).rejects.toThrow('requires the Rust WASM backend');
+            await expect(
+                compress(data, { algorithm: 'brotli', compressionLevel: 9 })
+            ).rejects.toThrow('requires the Rust WASM backend');
         });
     });
 
@@ -279,6 +279,12 @@ describe('Frontend Compression Tests', () => {
             ];
 
             for (const option of options) {
+                if (option.algorithm === 'brotli') {
+                    await expect(compress(data, option)).rejects.toThrow(
+                        'requires the Rust WASM backend'
+                    );
+                    continue;
+                }
                 const result = await compress(data, option);
                 const decompressed = await decompress(result.compressed, result.algorithm);
                 const decompressedString = uint8ArrayToString(decompressed);

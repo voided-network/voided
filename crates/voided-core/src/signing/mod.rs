@@ -1,4 +1,7 @@
-//! Digital signature module providing Ed25519, ECDSA, and RSA-PSS.
+//! Digital signature module providing Ed25519 and ECDSA (P-256).
+//!
+//! The RSA-PSS algorithm identifier (0x03) is reserved for wire compatibility but
+//! has no linked implementation; all RSA-PSS operations return errors.
 //!
 //! This module is only available with the `signing` feature flag.
 
@@ -14,7 +17,7 @@ pub enum SigningAlgorithm {
     Ed25519 = 0x01,
     /// ECDSA with P-256 curve (DER encoded, variable size)
     EcdsaP256 = 0x02,
-    /// RSA-PSS with 2048-bit key (256-byte signatures)
+    /// Reserved wire identifier. RSA-PSS is not a supported operation.
     RsaPss2048 = 0x03,
 }
 
@@ -37,15 +40,39 @@ impl SigningAlgorithm {
             SigningAlgorithm::RsaPss2048 => "rsa-pss-2048",
         }
     }
+
+    /// Whether this build implements key generation, signing, and verification.
+    pub fn is_supported(&self) -> bool {
+        matches!(
+            self,
+            SigningAlgorithm::Ed25519 | SigningAlgorithm::EcdsaP256
+        )
+    }
 }
 
 /// Generated key pair
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct KeyPair {
     /// Public key in PEM format
     pub public_key_pem: String,
     /// Private key in PEM format
     pub private_key_pem: String,
+}
+
+impl core::fmt::Debug for KeyPair {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("KeyPair")
+            .field("public_key_pem", &self.public_key_pem)
+            .field("private_key_pem", &"[REDACTED]")
+            .finish()
+    }
+}
+
+impl Drop for KeyPair {
+    fn drop(&mut self) {
+        use zeroize::Zeroize;
+        self.private_key_pem.zeroize();
+    }
 }
 
 /// Generate a signing key pair
@@ -60,28 +87,20 @@ pub fn generate_key_pair(algorithm: SigningAlgorithm) -> Result<KeyPair> {
 
 #[cfg(feature = "signing")]
 fn generate_ed25519_key_pair_pem() -> Result<KeyPair> {
+    use ed25519_dalek::pkcs8::{EncodePrivateKey, EncodePublicKey};
     use ed25519_dalek::SigningKey;
     use rand::rngs::OsRng;
 
     let signing_key = SigningKey::generate(&mut OsRng);
     let verifying_key = signing_key.verifying_key();
 
-    // Convert to PEM format (simplified - in production use proper PEM encoding)
-    let private_pem = format!(
-        "-----BEGIN PRIVATE KEY-----\n{}\n-----END PRIVATE KEY-----",
-        base64::Engine::encode(
-            &base64::engine::general_purpose::STANDARD,
-            signing_key.as_bytes()
-        )
-    );
-
-    let public_pem = format!(
-        "-----BEGIN PUBLIC KEY-----\n{}\n-----END PUBLIC KEY-----",
-        base64::Engine::encode(
-            &base64::engine::general_purpose::STANDARD,
-            verifying_key.as_bytes()
-        )
-    );
+    let private_pem = signing_key
+        .to_pkcs8_pem(Default::default())
+        .map_err(|e| Error::KeyGenerationFailed(e.to_string()))?
+        .to_string();
+    let public_pem = verifying_key
+        .to_public_key_pem(Default::default())
+        .map_err(|e| Error::KeyGenerationFailed(e.to_string()))?;
 
     Ok(KeyPair {
         public_key_pem: public_pem,
@@ -111,27 +130,19 @@ pub fn generate_ed25519_key_pair() -> Result<(Vec<u8>, Vec<u8>)> {
 #[cfg(feature = "signing")]
 fn generate_ecdsa_p256_key_pair() -> Result<KeyPair> {
     use p256::ecdsa::SigningKey;
+    use p256::pkcs8::{EncodePrivateKey, EncodePublicKey, LineEnding};
     use rand::rngs::OsRng;
 
     let signing_key = SigningKey::random(&mut OsRng);
     let verifying_key = signing_key.verifying_key();
 
-    // Simplified PEM encoding
-    let private_bytes = signing_key.to_bytes();
-    let public_bytes = verifying_key.to_encoded_point(false);
-
-    let private_pem = format!(
-        "-----BEGIN EC PRIVATE KEY-----\n{}\n-----END EC PRIVATE KEY-----",
-        base64::Engine::encode(&base64::engine::general_purpose::STANDARD, &private_bytes)
-    );
-
-    let public_pem = format!(
-        "-----BEGIN PUBLIC KEY-----\n{}\n-----END PUBLIC KEY-----",
-        base64::Engine::encode(
-            &base64::engine::general_purpose::STANDARD,
-            public_bytes.as_bytes()
-        )
-    );
+    let private_pem = signing_key
+        .to_pkcs8_pem(LineEnding::LF)
+        .map_err(|e| Error::KeyGenerationFailed(e.to_string()))?
+        .to_string();
+    let public_pem = verifying_key
+        .to_public_key_pem(LineEnding::LF)
+        .map_err(|e| Error::KeyGenerationFailed(e.to_string()))?;
 
     Ok(KeyPair {
         public_key_pem: public_pem,
@@ -139,31 +150,15 @@ fn generate_ecdsa_p256_key_pair() -> Result<KeyPair> {
     })
 }
 
+// RSA-PSS keygen is intentionally unimplemented: the byte 0x03 stays reserved for
+// wire compatibility, but no RSA implementation is linked. If RSA-PSS ever gains a
+// real consumer, back it with a constant-time implementation (ring/aws-lc-rs), not
+// the pure-Rust `rsa` crate (RUSTSEC-2023-0071, Marvin timing side channel).
 #[cfg(feature = "signing")]
 fn generate_rsa_pss_key_pair() -> Result<KeyPair> {
-    use rand::rngs::OsRng;
-    use rsa::{RsaPrivateKey, RsaPublicKey};
-
-    let bits = 2048;
-    let private_key = RsaPrivateKey::new(&mut OsRng, bits)
-        .map_err(|e| Error::KeyGenerationFailed(e.to_string()))?;
-    let _public_key = RsaPublicKey::from(&private_key);
-
-    // Simplified - in production use proper PKCS#8 encoding
-    let private_pem = format!(
-        "-----BEGIN RSA PRIVATE KEY-----\n{}\n-----END RSA PRIVATE KEY-----",
-        "... RSA PRIVATE KEY DATA ..."
-    );
-
-    let public_pem = format!(
-        "-----BEGIN RSA PUBLIC KEY-----\n{}\n-----END RSA PUBLIC KEY-----",
-        "... RSA PUBLIC KEY DATA ..."
-    );
-
-    Ok(KeyPair {
-        public_key_pem: public_pem,
-        private_key_pem: private_pem,
-    })
+    Err(Error::KeyGenerationFailed(
+        "RSA-PSS key generation is not implemented".to_string(),
+    ))
 }
 
 /// Sign data with a private key
@@ -178,29 +173,11 @@ pub fn sign(data: &[u8], private_key_pem: &str, algorithm: SigningAlgorithm) -> 
 
 #[cfg(feature = "signing")]
 fn sign_ed25519_pem(data: &[u8], private_key_pem: &str) -> Result<Vec<u8>> {
+    use ed25519_dalek::pkcs8::DecodePrivateKey;
     use ed25519_dalek::{Signer, SigningKey};
 
-    // Extract base64 from PEM
-    let pem_content = private_key_pem
-        .strip_prefix("-----BEGIN PRIVATE KEY-----\n")
-        .and_then(|s| s.strip_suffix("\n-----END PRIVATE KEY-----"))
-        .ok_or_else(|| Error::InvalidKeyFormat("Invalid PEM format".to_string()))?;
-
-    let key_bytes =
-        base64::Engine::decode(&base64::engine::general_purpose::STANDARD, pem_content)?;
-
-    if key_bytes.len() != 32 {
-        return Err(Error::InvalidKeyLength {
-            expected: 32,
-            actual: key_bytes.len(),
-        });
-    }
-
-    let signing_key = SigningKey::from_bytes(
-        &key_bytes
-            .try_into()
-            .map_err(|_| Error::InvalidKeyFormat("Failed to convert key bytes".to_string()))?,
-    );
+    let signing_key = SigningKey::from_pkcs8_pem(private_key_pem)
+        .map_err(|e| Error::InvalidKeyFormat(e.to_string()))?;
 
     let signature = signing_key.sign(data);
     Ok(signature.to_bytes().to_vec())
@@ -236,15 +213,21 @@ pub fn sign_ed25519(data: &[u8], private_key: &[u8]) -> Result<Vec<u8>> {
 }
 
 #[cfg(feature = "signing")]
-fn sign_ecdsa_p256(_data: &[u8], _private_key_pem: &str) -> Result<Vec<u8>> {
-    // TODO: Implement proper ECDSA signing with PEM parsing
-    Err(Error::SigningFailed("Not yet implemented".to_string()))
+fn sign_ecdsa_p256(data: &[u8], private_key_pem: &str) -> Result<Vec<u8>> {
+    use p256::ecdsa::{signature::Signer, Signature, SigningKey};
+    use p256::pkcs8::DecodePrivateKey;
+
+    let signing_key = SigningKey::from_pkcs8_pem(private_key_pem)
+        .map_err(|e| Error::InvalidKeyFormat(e.to_string()))?;
+    let signature: Signature = signing_key.sign(data);
+    Ok(signature.to_der().as_bytes().to_vec())
 }
 
 #[cfg(feature = "signing")]
 fn sign_rsa_pss(_data: &[u8], _private_key_pem: &str) -> Result<Vec<u8>> {
-    // TODO: Implement proper RSA-PSS signing with PEM parsing
-    Err(Error::SigningFailed("Not yet implemented".to_string()))
+    Err(Error::SigningFailed(
+        "RSA-PSS is a reserved identifier and is not supported".to_string(),
+    ))
 }
 
 /// Verify a signature
@@ -264,23 +247,8 @@ pub fn verify(
 
 #[cfg(feature = "signing")]
 fn verify_ed25519_pem(data: &[u8], signature: &[u8], public_key_pem: &str) -> Result<bool> {
+    use ed25519_dalek::pkcs8::DecodePublicKey;
     use ed25519_dalek::{Signature, VerifyingKey};
-
-    // Extract base64 from PEM
-    let pem_content = public_key_pem
-        .strip_prefix("-----BEGIN PUBLIC KEY-----\n")
-        .and_then(|s| s.strip_suffix("\n-----END PUBLIC KEY-----"))
-        .ok_or_else(|| Error::InvalidKeyFormat("Invalid PEM format".to_string()))?;
-
-    let key_bytes =
-        base64::Engine::decode(&base64::engine::general_purpose::STANDARD, pem_content)?;
-
-    if key_bytes.len() != 32 {
-        return Err(Error::InvalidKeyLength {
-            expected: 32,
-            actual: key_bytes.len(),
-        });
-    }
 
     if signature.len() != 64 {
         return Err(Error::InvalidKeyLength {
@@ -289,12 +257,8 @@ fn verify_ed25519_pem(data: &[u8], signature: &[u8], public_key_pem: &str) -> Re
         });
     }
 
-    let verifying_key = VerifyingKey::from_bytes(
-        &key_bytes
-            .try_into()
-            .map_err(|_| Error::InvalidKeyFormat("Failed to convert key bytes".to_string()))?,
-    )
-    .map_err(|_| Error::InvalidKeyFormat("Invalid public key".to_string()))?;
+    let verifying_key = VerifyingKey::from_public_key_pem(public_key_pem)
+        .map_err(|e| Error::InvalidKeyFormat(e.to_string()))?;
 
     let sig =
         Signature::from_bytes(&signature.try_into().map_err(|_| {
@@ -353,15 +317,25 @@ pub fn verify_ed25519(data: &[u8], signature: &[u8], public_key: &[u8]) -> Resul
 }
 
 #[cfg(feature = "signing")]
-fn verify_ecdsa_p256(_data: &[u8], _signature: &[u8], _public_key_pem: &str) -> Result<bool> {
-    // TODO: Implement proper ECDSA verification with PEM parsing
-    Err(Error::SignatureVerificationFailed)
+fn verify_ecdsa_p256(data: &[u8], signature: &[u8], public_key_pem: &str) -> Result<bool> {
+    use p256::ecdsa::{signature::Verifier, Signature, VerifyingKey};
+    use p256::pkcs8::DecodePublicKey;
+
+    let verifying_key = VerifyingKey::from_public_key_pem(public_key_pem)
+        .map_err(|e| Error::InvalidKeyFormat(e.to_string()))?;
+    let signature =
+        Signature::from_der(signature).map_err(|_| Error::SignatureVerificationFailed)?;
+    verifying_key
+        .verify(data, &signature)
+        .map(|_| true)
+        .map_err(|_| Error::SignatureVerificationFailed)
 }
 
 #[cfg(feature = "signing")]
 fn verify_rsa_pss(_data: &[u8], _signature: &[u8], _public_key_pem: &str) -> Result<bool> {
-    // TODO: Implement proper RSA-PSS verification with PEM parsing
-    Err(Error::SignatureVerificationFailed)
+    Err(Error::SigningFailed(
+        "RSA-PSS is a reserved identifier and is not supported".to_string(),
+    ))
 }
 
 #[cfg(test)]
@@ -390,5 +364,46 @@ mod tests {
         assert_eq!(SigningAlgorithm::Ed25519.name(), "ed25519");
         assert_eq!(SigningAlgorithm::EcdsaP256.name(), "ecdsa-p256");
         assert_eq!(SigningAlgorithm::RsaPss2048.name(), "rsa-pss-2048");
+        assert!(SigningAlgorithm::Ed25519.is_supported());
+        assert!(SigningAlgorithm::EcdsaP256.is_supported());
+        assert!(!SigningAlgorithm::RsaPss2048.is_supported());
+    }
+
+    #[test]
+    fn test_standard_pem_roundtrips_and_signatures() {
+        use ed25519_dalek::pkcs8::{
+            DecodePrivateKey as EdDecodePrivateKey, DecodePublicKey as EdDecodePublicKey,
+        };
+        let message = b"standard signing envelope";
+        for algorithm in [SigningAlgorithm::Ed25519, SigningAlgorithm::EcdsaP256] {
+            let pair = generate_key_pair(algorithm).unwrap();
+            assert!(pair
+                .private_key_pem
+                .starts_with("-----BEGIN PRIVATE KEY-----")); // gitleaks:allow -- PEM marker only
+            assert!(pair
+                .public_key_pem
+                .starts_with("-----BEGIN PUBLIC KEY-----"));
+            let debug = format!("{pair:?}");
+            assert!(debug.contains("[REDACTED]"));
+            assert!(!debug.contains(&pair.private_key_pem));
+
+            match algorithm {
+                SigningAlgorithm::Ed25519 => {
+                    ed25519_dalek::SigningKey::from_pkcs8_pem(&pair.private_key_pem).unwrap();
+                    ed25519_dalek::VerifyingKey::from_public_key_pem(&pair.public_key_pem).unwrap();
+                }
+                SigningAlgorithm::EcdsaP256 => {
+                    p256::ecdsa::SigningKey::from_pkcs8_pem(&pair.private_key_pem).unwrap();
+                    p256::ecdsa::VerifyingKey::from_public_key_pem(&pair.public_key_pem).unwrap();
+                }
+                SigningAlgorithm::RsaPss2048 => unreachable!(),
+            }
+
+            let signature = sign(message, &pair.private_key_pem, algorithm).unwrap();
+            assert!(verify(message, &signature, &pair.public_key_pem, algorithm).unwrap());
+            assert!(verify(b"tampered", &signature, &pair.public_key_pem, algorithm).is_err());
+        }
+
+        assert!(generate_key_pair(SigningAlgorithm::RsaPss2048).is_err());
     }
 }

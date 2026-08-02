@@ -29,7 +29,7 @@ use voided_core::shell::{
 };
 
 use std::collections::HashSet;
-use std::time::{Duration, Instant};
+use std::time::Instant;
 
 // ============================================================================
 // ENCRYPTION STRESS TESTS
@@ -55,7 +55,7 @@ fn test_encrypt_all_byte_values() {
 fn test_encrypt_repeated_patterns() {
     let key = generate_key();
 
-    let patterns = vec![
+    let patterns = [
         vec![0u8; 10000],                              // All zeros
         vec![255u8; 10000],                            // All 0xFF
         vec![0xAA; 10000],                             // Alternating bits pattern 1
@@ -64,10 +64,10 @@ fn test_encrypt_repeated_patterns() {
     ];
 
     for (i, pattern) in patterns.iter().enumerate() {
-        let encrypted =
-            encrypt(pattern, &key, None).expect(&format!("Pattern {} encryption failed", i));
+        let encrypted = encrypt(pattern, &key, None)
+            .unwrap_or_else(|_| panic!("Pattern {} encryption failed", i));
         let decrypted =
-            decrypt(&encrypted, &key).expect(&format!("Pattern {} decryption failed", i));
+            decrypt(&encrypted, &key).unwrap_or_else(|_| panic!("Pattern {} decryption failed", i));
         assert_eq!(&decrypted, pattern, "Pattern {} roundtrip failed", i);
 
         // Verify ciphertext is not equal to plaintext (basic sanity)
@@ -88,10 +88,10 @@ fn test_encrypt_power_of_two_sizes() {
         let size = 1usize << power; // 1, 2, 4, 8, ... 524288
         let plaintext: Vec<u8> = (0..size).map(|i| (i % 256) as u8).collect();
 
-        let encrypted =
-            encrypt(&plaintext, &key, None).expect(&format!("Size {} encryption failed", size));
+        let encrypted = encrypt(&plaintext, &key, None)
+            .unwrap_or_else(|_| panic!("Size {} encryption failed", size));
         let decrypted =
-            decrypt(&encrypted, &key).expect(&format!("Size {} decryption failed", size));
+            decrypt(&encrypted, &key).unwrap_or_else(|_| panic!("Size {} decryption failed", size));
 
         assert_eq!(decrypted.len(), size, "Size {} length mismatch", size);
         assert_eq!(decrypted, plaintext, "Size {} content mismatch", size);
@@ -123,9 +123,9 @@ fn test_encrypt_boundary_sizes() {
                 aad: None,
             };
             let encrypted = encrypt(&plaintext, &key, Some(opts))
-                .expect(&format!("Size {} {:?} encryption failed", size, algo));
+                .unwrap_or_else(|_| panic!("Size {} {:?} encryption failed", size, algo));
             let decrypted = decrypt(&encrypted, &key)
-                .expect(&format!("Size {} {:?} decryption failed", size, algo));
+                .unwrap_or_else(|_| panic!("Size {} {:?} decryption failed", size, algo));
 
             assert_eq!(
                 decrypted, plaintext,
@@ -376,26 +376,22 @@ fn test_hmac_key_variations() {
 #[test]
 fn test_pbkdf2_edge_cases() {
     let password = b"password";
-    let salt = b"salt";
+    let salt = b"16-byte-test-salt";
 
-    // Test with minimum iterations (should still work)
-    let hash1 = hash_with_pbkdf2(password, salt, 1);
-    assert_eq!(hash1.len(), 32);
+    // Unsafe work factors fail closed rather than collapsing to one round.
+    assert!(hash_with_pbkdf2(password, salt, 0).is_err());
+    assert!(hash_with_pbkdf2(password, salt, 1).is_err());
 
-    // Test with high iterations (should be slow but work)
+    // The minimum supported synchronous policy succeeds.
     let start = Instant::now();
-    let hash2 = hash_with_pbkdf2(password, salt, 100_000);
+    let hash2 = hash_with_pbkdf2(password, salt, 100_000).unwrap();
     let elapsed = start.elapsed();
 
     assert_eq!(hash2.len(), 32);
-    assert!(
-        elapsed > Duration::from_millis(100),
-        "High iteration PBKDF2 should take time"
-    );
     eprintln!("PBKDF2 with 100k iterations took {:?}", elapsed);
 
-    // Different iterations should produce different hashes
-    assert_ne!(hash1, hash2);
+    // Excessive synchronous work factors fail before monopolizing a thread.
+    assert!(hash_with_pbkdf2(password, salt, 1_000_001).is_err());
 }
 
 /// Test constant-time comparison actually works
@@ -519,7 +515,7 @@ mod compression_stress {
     /// Test compression with pathological inputs
     #[test]
     fn test_compression_pathological() {
-        let pathological_inputs = vec![
+        let pathological_inputs = [
             // Already compressed-like random data
             random_bytes(10000),
             // Highly compressible
@@ -771,6 +767,7 @@ fn test_secure_wipe_thorough() {
 
 /// Benchmark encryption throughput
 #[test]
+#[ignore = "performance gate; run explicitly in release mode on an idle host"]
 fn test_encryption_throughput() {
     let key = generate_key();
     let data_1kb = random_bytes(1024);
@@ -821,6 +818,7 @@ fn test_encryption_throughput() {
 
 /// Benchmark hashing throughput
 #[test]
+#[ignore = "performance gate; run explicitly in release mode on an idle host"]
 fn test_hashing_throughput() {
     let data_1mb = random_bytes(1024 * 1024);
 

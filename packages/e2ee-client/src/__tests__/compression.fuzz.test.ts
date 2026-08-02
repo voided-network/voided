@@ -2,7 +2,6 @@ import {
     compress,
     decompress,
     analyzeCompression,
-    stringToUint8Array,
     uint8ArrayToString
 } from '../compression';
 

@@ -15,7 +15,13 @@ pub const NONCE_SIZE: usize = 12;
 /// Tag size for AES-256-GCM (128 bits)
 pub const TAG_SIZE: usize = 16;
 
-/// Encrypt data using AES-256-GCM
+/// Encrypt data using AES-256-GCM.
+///
+/// This low-level function is stateless and cannot count invocations across
+/// processes. Callers must prevent nonce reuse and rotate a key before
+/// 2^32 encryptions. Prefer XChaCha20-Poly1305 for distributed or very
+/// high-volume systems where global per-key invocation accounting is not
+/// reliable.
 ///
 /// # Arguments
 ///

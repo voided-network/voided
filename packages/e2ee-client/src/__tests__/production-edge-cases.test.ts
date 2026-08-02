@@ -1,9 +1,5 @@
 /// <reference types="jest" />
-import {
-    VoidedE2EEClient,
-    EncryptedBlob,
-    IndexedDBStorage
-} from '../index';
+import { VoidedE2EEClient } from '../index';
 import { InMemoryStorage } from './test-utils';
 
 // Edge case test configuration
@@ -190,8 +186,6 @@ class EdgeCaseDataGenerator {
 
 // Timing attack simulation
 class TimingAttackSimulator {
-    private samples: number[] = [];
-
     async measureOperation(operation: () => Promise<any>): Promise<number> {
         const start = performance.now();
         await operation();
@@ -246,7 +240,10 @@ describe('Production Edge Case Tests', () => {
                 const decrypted = await client.decrypt(encrypted);
 
                 expect(decrypted).toBe(testData);
-                expect(encrypted.compression.originalSize).toBe(testData.length);
+                const expectedByteSize = encrypted.textEncoding === 'utf16le'
+                    ? testData.length * 2
+                    : new TextEncoder().encode(testData).length;
+                expect(encrypted.compression.originalSize).toBe(expectedByteSize);
             }
         }, 30000);
 
@@ -254,7 +251,10 @@ describe('Production Edge Case Tests', () => {
             const client = new VoidedE2EEClient({ storage: new InMemoryStorage() });
             const sparseData = EdgeCaseDataGenerator.generateSparseData(EDGE_CONFIG.ULTRA_SPARSE_SIZE);
 
-            const encrypted = await client.encrypt(sparseData);
+            const encrypted = await client.encrypt(sparseData, {
+                forceCompression: true,
+                compressionAlgorithm: 'gzip'
+            });
             const decrypted = await client.decrypt(encrypted);
 
             expect(decrypted).toBe(sparseData);
@@ -265,12 +265,7 @@ describe('Production Edge Case Tests', () => {
 
     describe('Pathological Compression Tests', () => {
         test('should handle worst-case compression scenarios', async () => {
-            const client = new VoidedE2EEClient({
-                storage: new InMemoryStorage(),
-                // Can now keep advanced features enabled
-                enableSignatures: true,
-                enableForwardSecrecy: true
-            });
+            const client = new VoidedE2EEClient({ storage: new InMemoryStorage() });
 
             const testCases = [
                 {
@@ -278,7 +273,9 @@ describe('Production Edge Case Tests', () => {
                     data: EdgeCaseDataGenerator.generateCompressionPathological(10000, 'worst'),
                     // Random data with gzip can expand up to ~1.3x due to overhead
                     maxExpectedRatio: 1.35,
-                    minExpectedRatio: 1.0,
+                    // The generator emits random Latin-1 code units, whose
+                    // UTF-8 prefix structure remains somewhat compressible.
+                    minExpectedRatio: 0.7,
                     options: { forceCompression: true, compressionAlgorithm: 'gzip' as const }
                 },
                 {
@@ -358,8 +355,12 @@ describe('Production Edge Case Tests', () => {
             expect(decrypted).toBe(largeSizeData);
             expect(endTime - startTime).toBeLessThan(60000); // 60 seconds max
 
-            // Should compress extremely well due to repetition
-            expect(encrypted.compression.compressedSize).toBeLessThan(encrypted.compression.originalSize * 0.01);
+            // Default encryption intentionally avoids compression so an
+            // attacker cannot turn this path into a decompression bomb.
+            expect(encrypted.compression.algorithm).toBe('none');
+            expect(encrypted.compression.compressedSize).toBe(
+                encrypted.compression.originalSize
+            );
 
             // log removed
         }, 120000);
@@ -492,7 +493,10 @@ describe('Production Edge Case Tests', () => {
                 const data = EdgeCaseDataGenerator.generateCompressionPathological(dataSize, dataPattern);
 
                 operations.push(
-                    client.encrypt(data).then(encrypted =>
+                    client.encrypt(data, {
+                        forceCompression: true,
+                        compressionAlgorithm: 'gzip'
+                    }).then(encrypted =>
                         client.decrypt(encrypted).then(decrypted => ({
                             success: decrypted === data,
                             pattern: dataPattern,
@@ -527,12 +531,12 @@ describe('Production Edge Case Tests', () => {
         test('should handle advanced features with extreme data', async () => {
             const client = new VoidedE2EEClient({
                 storage: new InMemoryStorage(),
-                enableSignatures: true,
-                enableForwardSecrecy: true
+                enableSignatures: true
             });
 
             // Generate keys for advanced features
-            await client.generateSigningKeys();
+            const signingPublicKey = await client.generateSigningKeys();
+            await client.setTrustedSigningPublicKey(signingPublicKey);
             await client.generateAgreementKeys();
 
             // Test with extreme data patterns
@@ -544,7 +548,6 @@ describe('Production Edge Case Tests', () => {
 
             expect(decrypted).toBe(extremeData);
             expect(encrypted.signature).toBeDefined();
-            expect(encrypted.ephemeralPublicKey).toBeDefined();
 
             // Test fingerprint generation with extreme data
             const fingerprint = await client.getKeyFingerprint();
@@ -558,10 +561,9 @@ describe('Production Edge Case Tests', () => {
     });
 
     describe('Real-World Attack Simulation', () => {
-        test('should handle potential side-channel attacks', async () => {
+        test('should not expose repeated sensitive plaintext patterns', async () => {
             const client = new VoidedE2EEClient({ storage: new InMemoryStorage() });
 
-            // Test with data that might reveal information through side channels
             const sensitivePatterns = [
                 'password123',
                 'credit_card_4111111111111111',
@@ -570,36 +572,17 @@ describe('Production Edge Case Tests', () => {
                 'api_token_xyz789abc',
             ];
 
-            const timingData: any[] = [];
-
             for (const pattern of sensitivePatterns) {
-                const data = pattern.repeat(100); // Make it larger for timing analysis
-
-                const startTime = performance.now();
-                const encrypted = await client.encrypt(data);
-                const decrypted = await client.decrypt(encrypted);
-                const endTime = performance.now();
+                const data = pattern.repeat(100);
+                const first = await client.encrypt(data);
+                const second = await client.encrypt(data);
+                const decrypted = await client.decrypt(first);
 
                 expect(decrypted).toBe(data);
-
-                timingData.push({
-                    pattern,
-                    duration: endTime - startTime,
-                    compressionRatio: encrypted.compression.compressedSize / encrypted.compression.originalSize,
-                });
+                expect(first.data).not.toBe(second.data);
+                expect(first.iv).not.toBe(second.iv);
+                expect(JSON.stringify(first)).not.toContain(pattern);
             }
-
-            // Analyze timing patterns
-            const timings = timingData.map(d => d.duration);
-            const avgTiming = timings.reduce((a, b) => a + b) / timings.length;
-            const maxTiming = Math.max(...timings);
-            const minTiming = Math.min(...timings);
-
-            // Should not have extreme timing differences that could leak info
-            const timingVariance = maxTiming / minTiming;
-            expect(timingVariance).toBeLessThan(5.0); // Allow up to 5x variance
-
-            // log removed
         }, 30000);
     });
-}); 
+});

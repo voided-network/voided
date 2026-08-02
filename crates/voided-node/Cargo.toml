@@ -1,6 +1,6 @@
 [package]
 name = "voided-node"
-version = "0.2.0"
+version = "0.2.1"
 edition = "2021"
 authors = ["Voided Team"]
 description = "Node.js native binding for voided-core encryption library"
@@ -11,7 +11,7 @@ repository = "https://github.com/voided-network/voided"
 crate-type = ["cdylib"]
 
 [dependencies]
-voided-core = { version = "0.2.0", path = "../voided-core", features = ["backend"] }
+voided-core = { version = "0.2.3", path = "../voided-core", features = ["backend"] }
 napi = { version = "2.14", features = ["napi9", "serde-json"] }
 napi-derive = "2.14"
 serde = { version = "1.0", features = ["derive"] }

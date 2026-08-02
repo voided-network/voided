@@ -6,6 +6,7 @@ import { existsSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { createRequire } from 'module';
+import { verifyPackagedNativeArtifact } from './provenance.js';
 
 // Types matching the Rust binding exports
 export interface EncryptionResult {
@@ -157,7 +158,7 @@ function getPlatformIdentifier(): string {
   return platformMap[`${platform}-${arch}`] || `${platform}-${arch}`;
 }
 
-// Try to load native module from multiple locations
+// Load only a package artifact whose digest and provenance manifest agree.
 function loadNativeModule(): NativeModule {
   const platformId = getPlatformIdentifier();
   const currentDir = getCurrentDir();
@@ -170,66 +171,26 @@ function loadNativeModule(): NativeModule {
     packageRoot = join(packageRoot, '..');
   }
   
-  // Find the workspace root by looking for crates folder
-  let workspaceRoot = packageRoot;
-  for (let i = 0; i < 10; i++) {
-    const cratesPath = join(workspaceRoot, 'crates');
-    if (existsSync(cratesPath)) break;
-    workspaceRoot = join(workspaceRoot, '..');
+  const { modulePath, manifest } = verifyPackagedNativeArtifact(
+    packageRoot,
+    platformId,
+  );
+  let mod: NativeModule;
+  try {
+    mod = nodeRequire(modulePath) as NativeModule;
+  } catch (error) {
+    throw new Error(
+      `[voided-native] Verified native addon failed to load for ${platformId}: ${
+        error instanceof Error ? error.message : String(error)
+      }`,
+    );
   }
-  
-  const possiblePaths = [
-    // 1. PUBLISHED PACKAGE: prebuilds/{platform}/voided_node.node
-    join(packageRoot, 'prebuilds', platformId, 'voided_node.node'),
-    // 2. PUBLISHED PACKAGE: native/voided_node.node (fallback)
-    join(packageRoot, 'native', 'voided_node.node'),
-    // 3. DEVELOPMENT: crates build output
-    join(workspaceRoot, 'target', 'release', 'voided_node.node'),
-    join(workspaceRoot, 'crates', 'target', 'release', 'voided_node.node'),
-    join(workspaceRoot, 'crates', 'voided-node', 'voided_node.node'),
-    // 4. DEVELOPMENT: debug builds
-    join(workspaceRoot, 'target', 'debug', 'voided_node.node'),
-    join(workspaceRoot, 'crates', 'target', 'debug', 'voided_node.node'),
-    // 5. Relative to current directory
-    join(currentDir, 'voided_node.node'),
-    join(currentDir, '..', 'native', 'voided_node.node'),
-  ];
-  
-  const errors: string[] = [];
-  
-  for (const modulePath of possiblePaths) {
-    if (existsSync(modulePath)) {
-      try {
-        const mod = nodeRequire(modulePath);
-        console.log(`[voided-native] Loaded native module from: ${modulePath}`);
-        return mod as NativeModule;
-      } catch (err) {
-        const errMsg = err instanceof Error ? err.message : String(err);
-        errors.push(`${modulePath}: ${errMsg}`);
-      }
-    }
+  if (mod.VERSION !== manifest.coreVersion) {
+    throw new Error(
+      `[voided-native] Native core version ${mod.VERSION} does not match verified manifest ${manifest.coreVersion}`,
+    );
   }
-  
-  // Build error message with both missing paths and load errors
-  const missingPaths = possiblePaths.filter(p => !existsSync(p));
-  
-  let errorMessage = `[voided-native] Native module not found for platform: ${platformId}\n\n`;
-  
-  if (errors.length > 0) {
-    errorMessage += `Files found but failed to load:\n${errors.map(e => `  - ${e}`).join('\n')}\n\n`;
-  }
-  
-  if (missingPaths.length > 0) {
-    errorMessage += `Paths not found:\n${missingPaths.slice(0, 5).map(p => `  - ${p}`).join('\n')}\n\n`;
-  }
-  
-  errorMessage += `This package includes prebuilt binaries. If your platform is missing,\n` +
-    `you may need to build from source:\n\n` +
-    `  1. Install Rust: https://rustup.rs\n` +
-    `  2. Build: cd crates && cargo build --release -p voided-node\n` +
-    `  3. Copy the .node file to: prebuilds/${platformId}/voided_node.node`;
-  
-  throw new Error(errorMessage);
+  return mod;
 }
 
 // Lazy initialization

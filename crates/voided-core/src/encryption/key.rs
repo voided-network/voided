@@ -35,14 +35,30 @@ impl Key {
     /// Export key as Base64 string
     pub fn to_base64(&self) -> String {
         use base64::{engine::general_purpose::STANDARD, Engine};
-        STANDARD.encode(&self.0)
+        STANDARD.encode(self.0)
     }
 
     /// Import key from Base64 string
     pub fn from_base64(encoded: &str) -> Result<Self> {
         use base64::{engine::general_purpose::STANDARD, Engine};
-        let bytes = STANDARD.decode(encoded)?;
-        Self::from_bytes(&bytes)
+        // A 32-byte key has exactly 44 padded Base64 characters. Reject before
+        // decoding so an attacker-controlled string cannot drive a large
+        // temporary allocation merely to fail the key-length check.
+        if encoded.len() != 44 || !encoded.ends_with('=') {
+            return Err(Error::InvalidKeyFormat(
+                "AES-256 key must use canonical padded Base64".to_string(),
+            ));
+        }
+        let mut bytes = STANDARD.decode(encoded)?;
+        let result = if STANDARD.encode(&bytes) != encoded {
+            Err(Error::InvalidKeyFormat(
+                "AES-256 key must use canonical padded Base64".to_string(),
+            ))
+        } else {
+            Self::from_bytes(&bytes)
+        };
+        bytes.zeroize();
+        result
     }
 }
 
@@ -62,6 +78,24 @@ impl core::fmt::Debug for Key {
 
 /// X25519 key size in bytes.
 pub const X25519_KEY_SIZE: usize = 32;
+
+/// Maximum HKDF-SHA256 output permitted by RFC 5869 (255 * HashLen).
+pub const HKDF_SHA256_MAX_OUTPUT: usize = 255 * 32;
+
+/// Minimum PBKDF2-HMAC-SHA256 work factor accepted by the high-level API.
+pub const PBKDF2_MIN_ITERATIONS: u32 = 100_000;
+
+/// Maximum synchronous PBKDF2 work factor accepted by Voided.
+///
+/// Higher work factors should run in an application-owned worker so untrusted
+/// input cannot monopolize a native/WASM execution thread.
+pub const PBKDF2_MAX_ITERATIONS: u32 = 1_000_000;
+
+/// Minimum salt size accepted by password-based derivation.
+pub const PBKDF2_MIN_SALT_SIZE: usize = 16;
+
+/// Maximum salt size accepted by password-based derivation.
+pub const PBKDF2_MAX_SALT_SIZE: usize = 1024;
 
 /// X25519 key pair used for Diffie-Hellman key exchange.
 #[derive(Clone, Zeroize, ZeroizeOnDrop)]
@@ -119,6 +153,11 @@ pub fn derive_key_hkdf_raw(
             "HKDF output length must be > 0".to_string(),
         ));
     }
+    if length > HKDF_SHA256_MAX_OUTPUT {
+        return Err(Error::KeyDerivationFailed(format!(
+            "HKDF-SHA256 output length must be at most {HKDF_SHA256_MAX_OUTPUT} bytes"
+        )));
+    }
 
     let hk = Hkdf::<Sha256>::new(salt, input_key_material);
     let mut okm = vec![0u8; length];
@@ -144,10 +183,27 @@ pub fn derive_key_pbkdf2(password: &[u8], salt: &[u8], iterations: u32) -> Resul
     use pbkdf2::pbkdf2_hmac;
     use sha2::Sha256;
 
+    validate_pbkdf2_parameters(salt, iterations)?;
+
     let mut key = [0u8; 32];
     pbkdf2_hmac::<Sha256>(password, salt, iterations, &mut key);
 
     Ok(Key(key))
+}
+
+/// Validate the bounded policy used by Voided's synchronous PBKDF2 APIs.
+pub fn validate_pbkdf2_parameters(salt: &[u8], iterations: u32) -> Result<()> {
+    if !(PBKDF2_MIN_SALT_SIZE..=PBKDF2_MAX_SALT_SIZE).contains(&salt.len()) {
+        return Err(Error::InvalidConfiguration(format!(
+            "PBKDF2 salt must be between {PBKDF2_MIN_SALT_SIZE} and {PBKDF2_MAX_SALT_SIZE} bytes"
+        )));
+    }
+    if !(PBKDF2_MIN_ITERATIONS..=PBKDF2_MAX_ITERATIONS).contains(&iterations) {
+        return Err(Error::InvalidConfiguration(format!(
+            "PBKDF2 iterations must be between {PBKDF2_MIN_ITERATIONS} and {PBKDF2_MAX_ITERATIONS}"
+        )));
+    }
+    Ok(())
 }
 
 /// Generate an X25519 key pair.
@@ -214,8 +270,19 @@ pub fn x25519_shared_secret(
     Ok(shared_secret)
 }
 
-/// Derive an AES key from raw X25519 shared secret.
+/// Derive a 256-bit AEAD key from a raw X25519 shared secret.
 pub fn derive_key_from_shared_secret(shared_secret: &[u8], salt: &str, info: &str) -> Result<Key> {
+    if shared_secret.len() != X25519_KEY_SIZE {
+        return Err(Error::InvalidKeyLength {
+            expected: X25519_KEY_SIZE,
+            actual: shared_secret.len(),
+        });
+    }
+    if shared_secret.iter().fold(0u8, |acc, byte| acc | byte) == 0 {
+        return Err(Error::KeyDerivationFailed(
+            "shared secret must not be all zero".to_string(),
+        ));
+    }
     derive_key_hkdf(shared_secret, Some(salt.as_bytes()), info.as_bytes())
 }
 
@@ -253,10 +320,18 @@ mod tests {
     }
 
     #[test]
+    fn test_key_base64_rejects_noncanonical_and_wrong_length_encodings() {
+        assert!(Key::from_base64("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAB=").is_err());
+        assert!(Key::from_base64("AA==").is_err());
+        assert!(Key::from_base64("not base64").is_err());
+        assert!(Key::from_base64(&"A".repeat(1024 * 1024)).is_err());
+    }
+
+    #[test]
     fn test_pbkdf2_derivation() {
         let password = b"test password";
         let salt = b"random salt here";
-        let iterations = 1000; // Lower for tests
+        let iterations = PBKDF2_MIN_ITERATIONS;
 
         let key1 = derive_key_pbkdf2(password, salt, iterations).unwrap();
         let key2 = derive_key_pbkdf2(password, salt, iterations).unwrap();
@@ -297,6 +372,25 @@ mod tests {
         .unwrap();
 
         assert_eq!(okm, expected);
+    }
+
+    #[test]
+    fn test_hkdf_rejects_oversized_output_before_allocation() {
+        let error =
+            derive_key_hkdf_raw(b"ikm", None, b"info", HKDF_SHA256_MAX_OUTPUT + 1).unwrap_err();
+        assert!(matches!(error, Error::KeyDerivationFailed(_)));
+    }
+
+    #[test]
+    fn test_pbkdf2_rejects_unsafe_parameters() {
+        assert!(derive_key_pbkdf2(b"password", &[0u8; 16], 0).is_err());
+        assert!(derive_key_pbkdf2(b"password", &[0u8; 16], PBKDF2_MAX_ITERATIONS + 1).is_err());
+        assert!(derive_key_pbkdf2(
+            b"password",
+            &[0u8; PBKDF2_MIN_SALT_SIZE - 1],
+            PBKDF2_MIN_ITERATIONS
+        )
+        .is_err());
     }
 
     #[test]
@@ -347,5 +441,12 @@ mod tests {
             derive_key_from_shared_secret(&shared, "voided-transfer-v1", "key-transfer").unwrap();
 
         assert_eq!(key1.as_bytes(), key2.as_bytes());
+    }
+
+    #[test]
+    fn test_derive_key_from_shared_secret_rejects_invalid_material() {
+        assert!(derive_key_from_shared_secret(&[0u8; 32], "salt", "info").is_err());
+        assert!(derive_key_from_shared_secret(&[1u8; 31], "salt", "info").is_err());
+        assert!(derive_key_from_shared_secret(&[1u8; 33], "salt", "info").is_err());
     }
 }
