@@ -10,7 +10,9 @@ export interface OpBenchmarkResult {
 }
 
 export async function benchmarkCompression(text: string, iterations = 50): Promise<OpBenchmarkResult[]> {
-    const algos: Array<'gzip' | 'brotli' | 'none' | 'auto'> = ['gzip', 'brotli', 'auto'];
+    // This helper measures the TypeScript fallback directly. Brotli is covered
+    // by the dedicated Rust/WASM benchmarks and must not be requested here.
+    const algos: Array<'gzip' | 'none' | 'auto'> = ['gzip', 'auto', 'none'];
     const data = text;
     const results: OpBenchmarkResult[] = [];
     for (const algo of algos) {
@@ -29,7 +31,7 @@ export async function benchmarkCompression(text: string, iterations = 50): Promi
 
 export async function benchmarkEncryption(text: string, iterations = 50): Promise<OpBenchmarkResult[]> {
     const client = new VoidedE2EEClient();
-    const algos: Array<'gzip' | 'brotli' | 'none' | 'auto'> = ['auto', 'gzip', 'brotli', 'none'];
+    const algos: Array<'gzip' | 'none' | 'auto'> = ['auto', 'gzip', 'none'];
     const results: OpBenchmarkResult[] = [];
     for (const algo of algos) {
         // warmup

@@ -1,4 +1,4 @@
-//! Fused shell primitives and whole-monolith protect/open flows for Voided v3.
+//! Fuse primitives and whole-monolith protect/open flows for Voided 1.0.
 
 use alloc::{format, string::String, vec, vec::Vec};
 
@@ -167,7 +167,7 @@ pub struct FusedShellInfo {
     pub chunk_size: u32,
     /// Chunk count implied by the payload length.
     pub chunk_count: usize,
-    /// Obfuscated payload bytes.
+    /// Shaped payload bytes.
     pub payload_size: usize,
     /// Total envelope bytes.
     pub shell_size: usize,
@@ -370,7 +370,7 @@ impl Default for ProtectOptions {
 }
 
 #[cfg(feature = "compression")]
-/// Keyless metadata for a Voided v3 monolith protected artifact.
+/// Keyless metadata for a current VOF3 monolith protected artifact.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ProtectedArtifactInfo {
     /// Artifact version.
@@ -724,7 +724,7 @@ pub fn inspect_fused(data: &[u8]) -> Result<FusedShellInfo> {
 }
 
 #[cfg(feature = "compression")]
-/// Run the Voided v3 whole-monolith full flow.
+/// Run the Voided 1.0 whole-monolith full flow.
 pub fn protect(
     plaintext: &[u8],
     master_key: &Key,
@@ -735,13 +735,13 @@ pub fn protect(
 }
 
 #[cfg(feature = "compression")]
-/// Open a serialized Voided v3 whole-monolith artifact.
+/// Open a serialized current VOF3 whole-monolith artifact.
 pub fn open(artifact: &[u8], master_key: &Key) -> Result<Vec<u8>> {
     whole_monolith_v0_open(artifact, master_key)
 }
 
 #[cfg(feature = "compression")]
-/// Open either the current v3 artifact or an explicit legacy VOF2 rotation artifact.
+/// Open either the current VOF3 artifact or an explicit legacy VOF2 rotation artifact.
 pub fn open_rotation_artifact(artifact: &[u8], master_key: &Key) -> Result<Vec<u8>> {
     if artifact_starts_with_protected_magic(artifact) {
         open_legacy_protected_artifact(artifact, master_key)
@@ -811,13 +811,13 @@ fn open_legacy_protected_artifact(artifact: &[u8], master_key: &Key) -> Result<V
 }
 
 #[cfg(feature = "compression")]
-/// Inspect a current Voided v3 artifact without decrypting it.
+/// Inspect a current VOF3 artifact without decrypting it.
 pub fn inspect_artifact(artifact: &[u8]) -> Result<ProtectedArtifactInfo> {
     whole_monolith_v0_inspect_artifact(artifact)
 }
 
 #[cfg(feature = "compression")]
-/// Inspect either the current v3 artifact or an explicit legacy VOF2 rotation artifact.
+/// Inspect either the current VOF3 artifact or an explicit legacy VOF2 rotation artifact.
 pub fn inspect_rotation_artifact(artifact: &[u8]) -> Result<ProtectedArtifactInfo> {
     if artifact_starts_with_protected_magic(artifact) {
         parse_protected_artifact_header(artifact)?.info(artifact.len())
@@ -827,7 +827,7 @@ pub fn inspect_rotation_artifact(artifact: &[u8]) -> Result<ProtectedArtifactInf
 }
 
 #[cfg(feature = "compression")]
-/// Repack a current v3 monolith artifact under a new full-flow configuration.
+/// Repack a current VOF3 monolith artifact under a new full-flow configuration.
 pub fn repack_artifact(
     artifact: &[u8],
     master_key: &Key,
@@ -3025,7 +3025,7 @@ mod tests {
     #[test]
     fn protect_open_roundtrip_for_all_presets() {
         let master = fixed_key();
-        let payload = b"voided v3 fused flow protects this payload cleanly".repeat(1024);
+        let payload = b"voided 1.0 Fuse flow protects this payload cleanly".repeat(1024);
 
         for preset in [
             FusedPreset::Compact,

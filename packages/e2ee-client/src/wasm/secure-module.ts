@@ -3,6 +3,7 @@ import type {
   FusedShellInfo,
   ProtectedArtifactInfo,
   ProtectResult,
+  RecoveryDeckSetup,
   WasmModule,
 } from './loader';
 import {
@@ -85,6 +86,44 @@ function validateKeyPair(
   return value as ReturnType<
     NonNullable<WasmModule['generate_x25519_key_pair']>
   >;
+}
+
+const RECOVERY_CARD_IDS = new Set([
+  'AS', '2S', '3S', '4S', '5S', '6S', '7S', '8S', '9S', '10S', 'JS', 'QS', 'KS',
+  'AH', '2H', '3H', '4H', '5H', '6H', '7H', '8H', '9H', '10H', 'JH', 'QH', 'KH',
+  'AD', '2D', '3D', '4D', '5D', '6D', '7D', '8D', '9D', '10D', 'JD', 'QD', 'KD',
+  'AC', '2C', '3C', '4C', '5C', '6C', '7C', '8C', '9C', '10C', 'JC', 'QC', 'KC',
+]);
+
+function assertRecoveryDeck(value: unknown, label: string): asserts value is string[] {
+  if (!Array.isArray(value) || value.length !== 52) {
+    throw new Error(`[voided-wasm] ${label} must contain exactly 52 cards`);
+  }
+  const seen = new Set<string>();
+  for (let index = 0; index < value.length; index++) {
+    const card = value[index];
+    if (typeof card !== 'string' || !RECOVERY_CARD_IDS.has(card)) {
+      throw new Error(`[voided-wasm] ${label} has an unknown card at position ${index}`);
+    }
+    if (seen.has(card)) {
+      throw new Error(`[voided-wasm] ${label} has a duplicate card at position ${index}`);
+    }
+    seen.add(card);
+  }
+}
+
+function validateRecoveryDeckSetup(value: unknown): RecoveryDeckSetup {
+  if (!value || typeof value !== 'object') {
+    throw new Error('[voided-wasm] recovery deck setup must be an object');
+  }
+  const setup = value as Record<string, unknown>;
+  assertRecoveryDeck(setup.deck, 'generated recovery deck');
+  const rootWrapper = setup.rootWrapper ?? setup.root_wrapper;
+  assertExactBytes(rootWrapper, 'recovery root wrapper result', 80);
+  return {
+    deck: setup.deck,
+    rootWrapper: rootWrapper as Uint8Array,
+  };
 }
 
 function validateProtectOptions(
@@ -360,6 +399,92 @@ export function secureWasmModule(raw: WasmModule): WasmModule {
         () => raw.derive_key_pbkdf2(password, salt, iterations),
         (value) => validateBytesResult(value, 'PBKDF2 key result', 32, 32),
       ),
+    generate_recovery_deck: raw.generate_recovery_deck
+      ? () =>
+          callAfterPreflight(
+            () => undefined,
+            () => raw.generate_recovery_deck!(),
+            (value) => {
+              assertRecoveryDeck(value, 'generated recovery deck');
+              return value;
+            },
+          )
+      : undefined,
+    validate_recovery_deck: raw.validate_recovery_deck
+      ? (deck) => {
+          try {
+            assertRecoveryDeck(deck, 'recovery deck');
+          } catch {
+            return false;
+          }
+          return assertBoolean(
+            raw.validate_recovery_deck!(deck),
+            'recovery deck validation result',
+          );
+        }
+      : undefined,
+    encode_recovery_deck: raw.encode_recovery_deck
+      ? (deck) =>
+          callAfterPreflight(
+            () => assertRecoveryDeck(deck, 'recovery deck'),
+            () => raw.encode_recovery_deck!(deck),
+            (value) =>
+              validateBytesResult(value, 'recovery deck encoding', 29, 29),
+          )
+      : undefined,
+    derive_recovery_key: raw.derive_recovery_key
+      ? (deck) =>
+          callAfterPreflight(
+            () => assertRecoveryDeck(deck, 'recovery deck'),
+            () => raw.derive_recovery_key!(deck),
+            (value) =>
+              validateBytesResult(value, 'derived Recovery Key', 32, 32),
+          )
+      : undefined,
+    wrap_root_with_recovery_key: raw.wrap_root_with_recovery_key
+      ? (rootKey, recoveryKey) =>
+          callAfterPreflight(
+            () => {
+              assertExactBytes(rootKey, 'stable root key', 32);
+              assertExactBytes(recoveryKey, 'Recovery Key', 32);
+            },
+            () => raw.wrap_root_with_recovery_key!(rootKey, recoveryKey),
+            (value) =>
+              validateBytesResult(value, 'recovery root wrapper', 80, 80),
+          )
+      : undefined,
+    unwrap_root_with_recovery_key: raw.unwrap_root_with_recovery_key
+      ? (rootWrapper, recoveryKey) =>
+          callAfterPreflight(
+            () => {
+              assertExactBytes(rootWrapper, 'recovery root wrapper', 80);
+              assertExactBytes(recoveryKey, 'Recovery Key', 32);
+            },
+            () =>
+              raw.unwrap_root_with_recovery_key!(rootWrapper, recoveryKey),
+            (value) =>
+              validateBytesResult(value, 'unwrapped stable root key', 32, 32),
+          )
+      : undefined,
+    create_recovery_deck: raw.create_recovery_deck
+      ? (rootKey) =>
+          callAfterPreflight(
+            () => assertExactBytes(rootKey, 'stable root key', 32),
+            () => raw.create_recovery_deck!(rootKey),
+            validateRecoveryDeckSetup,
+          )
+      : undefined,
+    rotate_recovery_deck: raw.rotate_recovery_deck
+      ? (rootWrapper, oldDeck) =>
+          callAfterPreflight(
+            () => {
+              assertExactBytes(rootWrapper, 'recovery root wrapper', 80);
+              assertRecoveryDeck(oldDeck, 'old recovery deck');
+            },
+            () => raw.rotate_recovery_deck!(rootWrapper, oldDeck),
+            validateRecoveryDeckSetup,
+          )
+      : undefined,
     generate_x25519_key_pair: raw.generate_x25519_key_pair
       ? (seed) =>
           callAfterPreflight(

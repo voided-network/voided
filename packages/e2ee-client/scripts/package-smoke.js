@@ -47,6 +47,8 @@ try {
     'examples/key-export-import-example.html',
     'examples/customizable-key-ui-example.html',
     'examples/simple-key-ui.js',
+    'examples/key-ui-styles.css',
+    'examples/recovery-deck-ui-example.html',
     'wasm/manifest.json',
     'wasm/voided_wasm.js',
     'wasm/voided_wasm_bg.wasm',
@@ -69,6 +71,7 @@ try {
     'examples/key-export-import-example.html',
     'examples/customizable-key-ui-example.html',
     'examples/simple-key-ui.js',
+    'examples/recovery-deck-ui-example.html',
   ]) {
     const text = readFileSync(join(packedRoot, example), 'utf8');
     if (!text.includes('../dist/index.js') || text.includes('../dist/index.mjs')) {
@@ -87,10 +90,12 @@ try {
   );
   const script = `
     import { readFile } from 'node:fs/promises';
+    import { createRequire } from 'node:module';
     import { pathToFileURL, fileURLToPath } from 'node:url';
     import { brotliCompressSync } from 'node:zlib';
 
     const packedRoot = ${JSON.stringify(packedRoot)};
+    const require = createRequire(import.meta.url);
     const nativeFetch = globalThis.fetch;
     // Exercise the browser loader under Node while preserving the Web Crypto
     // surface required by getrandom inside the compiled WASM.
@@ -118,10 +123,29 @@ try {
       'CryptoService',
       'cryptoService',
       'decompressBounded',
+      'VoidedRecoveryDeckUI',
+      'createRecoveryDeckUI',
+      'moveRecoveryDeckUICard',
+      'RECOVERY_DECK_UI_CARD_IDS',
+      'RECOVERY_DECK_DEFAULT_CSS',
+      'generateRecoveryDeck',
+      'validateRecoveryDeck',
+      'encodeRecoveryDeck',
+      'deriveRecoveryKey',
+      'wrapRootWithRecoveryKey',
+      'unwrapRootWithRecoveryKey',
+      'createRecoveryDeck',
+      'rotateRecoveryDeck',
     ]) {
       if (!(exportName in publicRoot)) {
         throw new Error('packed root API omitted intentional export ' + exportName);
       }
+    }
+    if (
+      publicRoot.RECOVERY_DECK_UI_CARD_IDS.length !== 52 ||
+      new Set(publicRoot.RECOVERY_DECK_UI_CARD_IDS).size !== 52
+    ) {
+      throw new Error('packed Recovery Deck UI omitted the canonical card set');
     }
     const wasm = await loader.initWasm();
     const configuredLoader = await import(
@@ -181,6 +205,139 @@ try {
     if (new TextDecoder().decode(publicOpened) !== 'packed e2ee-client smoke') {
       throw new Error('packed public raw API round-trip failed');
     }
+    const canonicalDeck = [...publicRoot.RECOVERY_DECK_UI_CARD_IDS];
+    if (!(await publicBackend.validateRecoveryDeck(canonicalDeck))) {
+      throw new Error('packed Recovery Deck rejected the canonical card set');
+    }
+    if (
+      await publicBackend.validateRecoveryDeck(
+        [...canonicalDeck.slice(0, 51), canonicalDeck[0]],
+      )
+    ) {
+      throw new Error('packed Recovery Deck accepted a duplicate card');
+    }
+    const canonicalRank = await publicBackend.encodeRecoveryDeck(canonicalDeck);
+    if (canonicalRank.length !== 29 || canonicalRank.some((byte) => byte !== 0)) {
+      throw new Error('packed Recovery Deck changed the permanent rank vector');
+    }
+    const canonicalRecoveryKey = await publicBackend.deriveRecoveryKey(canonicalDeck);
+    if (
+      Buffer.from(canonicalRecoveryKey).toString('hex') !==
+      '7d819b1d9cb4a0346a7e03a505e9bc6ef738518aa91ce99b04a866e436efd95c'
+    ) {
+      throw new Error('packed Recovery Deck changed the permanent key vector');
+    }
+    const cjsRoot = require(packedRoot + '/dist/index.cjs');
+    for (const exportName of [
+      'VoidedRecoveryDeckUI',
+      'generateRecoveryDeck',
+      'deriveRecoveryKey',
+      'rotateRecoveryDeck',
+    ]) {
+      if (!(exportName in cjsRoot)) {
+        throw new Error('packed CommonJS root omitted ' + exportName);
+      }
+    }
+    cjsRoot.configureWasmLoader({ glueUrl: configuredGlueUrl });
+    await cjsRoot.forceWasmBackend();
+    const cjsRecoveryKey = await cjsRoot.deriveRecoveryKey(canonicalDeck);
+    if (
+      Buffer.from(cjsRecoveryKey).toString('hex') !==
+      '7d819b1d9cb4a0346a7e03a505e9bc6ef738518aa91ce99b04a866e436efd95c'
+    ) {
+      throw new Error('packed CommonJS Recovery Deck changed the key vector');
+    }
+    const recoveryRoot = new Uint8Array(32).fill(0x5a);
+    const directRecoveryWrapper = await publicBackend.wrapRootWithRecoveryKey(
+      recoveryRoot,
+      canonicalRecoveryKey,
+      cjsRecoveryKey,
+    );
+    const directRecoveryOpened = await publicBackend.unwrapRootWithRecoveryKey(
+      directRecoveryWrapper,
+      canonicalRecoveryKey,
+    );
+    if (
+      directRecoveryWrapper.length !== 80 ||
+      !Buffer.from(directRecoveryOpened).equals(Buffer.from(recoveryRoot))
+    ) {
+      throw new Error('packed Recovery Deck root wrapping failed');
+    }
+    const wrongDeck = [...canonicalDeck];
+    [wrongDeck[0], wrongDeck[1]] = [wrongDeck[1], wrongDeck[0]];
+    const wrongRecoveryKey = await publicBackend.deriveRecoveryKey(wrongDeck);
+    let wrongDeckRejected = false;
+    try {
+      await publicBackend.unwrapRootWithRecoveryKey(
+        directRecoveryWrapper,
+        wrongRecoveryKey,
+      );
+    } catch {
+      wrongDeckRejected = true;
+    }
+    if (!wrongDeckRejected) {
+      throw new Error('packed Recovery Deck accepted the wrong deck');
+    }
+    const recoverySetup = await publicBackend.createRecoveryDeck(recoveryRoot);
+    const setupRecoveryKey = await publicBackend.deriveRecoveryKey(recoverySetup.deck);
+    const setupRecoveryOpened = await publicBackend.unwrapRootWithRecoveryKey(
+      recoverySetup.rootWrapper,
+      setupRecoveryKey,
+    );
+    if (
+      !(await publicBackend.validateRecoveryDeck(recoverySetup.deck)) ||
+      recoverySetup.rootWrapper.length !== 80 ||
+      !Buffer.from(setupRecoveryOpened).equals(Buffer.from(recoveryRoot))
+    ) {
+      throw new Error('packed Recovery Deck setup failed');
+    }
+    const rotatedRecovery = await publicBackend.rotateRecoveryDeck(
+      recoverySetup.rootWrapper,
+      recoverySetup.deck,
+    );
+    const rotatedRecoveryKey = await publicBackend.deriveRecoveryKey(
+      rotatedRecovery.deck,
+    );
+    const rotatedRecoveryOpened = await publicBackend.unwrapRootWithRecoveryKey(
+      rotatedRecovery.rootWrapper,
+      rotatedRecoveryKey,
+    );
+    if (
+      !(await publicBackend.validateRecoveryDeck(rotatedRecovery.deck)) ||
+      !Buffer.from(rotatedRecoveryOpened).equals(Buffer.from(recoveryRoot))
+    ) {
+      throw new Error('packed Recovery Deck rotation changed the stable root');
+    }
+    let oldDeckRejected = false;
+    try {
+      await publicBackend.unwrapRootWithRecoveryKey(
+        rotatedRecovery.rootWrapper,
+        setupRecoveryKey,
+      );
+    } catch {
+      oldDeckRejected = true;
+    }
+    if (!oldDeckRejected) {
+      throw new Error('packed Recovery Deck rotation accepted the old deck');
+    }
+    for (const bytes of [
+      canonicalRank,
+      canonicalRecoveryKey,
+      recoveryRoot,
+      directRecoveryWrapper,
+      directRecoveryOpened,
+      wrongRecoveryKey,
+      recoverySetup.rootWrapper,
+      setupRecoveryKey,
+      setupRecoveryOpened,
+      rotatedRecovery.rootWrapper,
+      rotatedRecoveryKey,
+      rotatedRecoveryOpened,
+    ]) {
+      bytes.fill(0);
+    }
+    recoverySetup.deck.fill('');
+    rotatedRecovery.deck.fill('');
     const compressionInput = new Uint8Array(4096).fill(0x41);
     const compressed = wasm.compress(compressionInput, 'gzip', 6);
     if (!(compressed.compressed instanceof Uint8Array)) {

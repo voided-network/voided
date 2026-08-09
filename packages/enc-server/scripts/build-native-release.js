@@ -389,9 +389,19 @@ try {
     '/usr/sbin',
     '/sbin',
   ];
+  // macOS reports tmpdir() beneath /var, while rustc canonicalizes source
+  // paths through the /private/var alias. Remap both spellings so panic and
+  // debug locations cannot retain mkdtemp's random suffix and make otherwise
+  // identical cross-compiled PE artifacts differ between builds.
+  const snapshotRoots = [
+    ...new Set([snapshotWorkspaceRoot, realpathSync(snapshotWorkspaceRoot)]),
+  ];
+  const buildRoots = [...new Set([scratch, realpathSync(scratch)])];
   const remapFlags = [
-    `--remap-path-prefix=${snapshotWorkspaceRoot}=/voided-source`,
-    `--remap-path-prefix=${scratch}=/voided-build`,
+    ...snapshotRoots.map(
+      (root) => `--remap-path-prefix=${root}=/voided-source`,
+    ),
+    ...buildRoots.map((root) => `--remap-path-prefix=${root}=/voided-build`),
     `--remap-path-prefix=${cargoHome}=/cargo-home`,
     `--remap-path-prefix=${rustupHome}=/rustup-home`,
   ];

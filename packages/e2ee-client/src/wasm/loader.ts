@@ -62,6 +62,13 @@ export interface ProtectResult extends ProtectedArtifactInfo {
   artifact: Uint8Array;
 }
 
+export interface RecoveryDeckSetup {
+  /** Ordered canonical card IDs. This array is secret key material. */
+  deck: string[];
+  /** Opaque authenticated root wrapper. This is the only persistable value. */
+  rootWrapper: Uint8Array;
+}
+
 // WASM module interface
 export interface WasmModule {
   version(): string;
@@ -87,6 +94,14 @@ export interface WasmModule {
   derive_key_hkdf(ikm: Uint8Array, salt: Uint8Array | null, info: Uint8Array): Uint8Array;
   derive_key_hkdf_raw?(ikm: Uint8Array, salt: Uint8Array | null, info: Uint8Array, length: number): Uint8Array;
   derive_key_pbkdf2(password: Uint8Array, salt: Uint8Array, iterations: number): Uint8Array;
+  generate_recovery_deck?(): string[];
+  validate_recovery_deck?(deck: string[]): boolean;
+  encode_recovery_deck?(deck: string[]): Uint8Array;
+  derive_recovery_key?(deck: string[]): Uint8Array;
+  wrap_root_with_recovery_key?(rootKey: Uint8Array, recoveryKey: Uint8Array): Uint8Array;
+  unwrap_root_with_recovery_key?(rootWrapper: Uint8Array, recoveryKey: Uint8Array): Uint8Array;
+  create_recovery_deck?(rootKey: Uint8Array): RecoveryDeckSetup;
+  rotate_recovery_deck?(rootWrapper: Uint8Array, oldDeck: string[]): RecoveryDeckSetup;
   generate_x25519_key_pair?(seed?: Uint8Array | null): { public_key: Uint8Array; private_key: Uint8Array } | { publicKey: Uint8Array; privateKey: Uint8Array };
   x25519_shared_secret?(ourPrivateKey: Uint8Array, theirPublicKey: Uint8Array): Uint8Array;
   derive_key_from_shared_secret?(sharedSecret: Uint8Array, salt: string, info: string): Uint8Array;
@@ -355,6 +370,13 @@ function normalizeProtectResult(result: any): ProtectResult {
   };
 }
 
+function normalizeRecoveryDeckSetup(result: any): RecoveryDeckSetup {
+  return {
+    deck: result.deck,
+    rootWrapper: result.rootWrapper ?? result.root_wrapper,
+  };
+}
+
 function normalizeWasmModule(mod: RawWasmModule): WasmModule {
   const version = getExportFn<() => string>(mod, ["version", "VERSION"]);
   const generateKey = getExportFn<() => Uint8Array>(mod, ["generate_key", "generateKey"]);
@@ -446,6 +468,14 @@ function normalizeWasmModule(mod: RawWasmModule): WasmModule {
   const generateX25519 = mod.generate_x25519_key_pair || mod.generateX25519KeyPair;
   const x25519SharedSecret = mod.x25519_shared_secret || mod.x25519SharedSecret;
   const deriveFromSharedSecret = mod.derive_key_from_shared_secret || mod.deriveKeyFromSharedSecret;
+  const generateRecoveryDeck = mod.generate_recovery_deck || mod.generateRecoveryDeck;
+  const validateRecoveryDeck = mod.validate_recovery_deck || mod.validateRecoveryDeck;
+  const encodeRecoveryDeck = mod.encode_recovery_deck || mod.encodeRecoveryDeck;
+  const deriveRecoveryKey = mod.derive_recovery_key || mod.deriveRecoveryKey;
+  const wrapRootWithRecoveryKey = mod.wrap_root_with_recovery_key || mod.wrapRootWithRecoveryKey;
+  const unwrapRootWithRecoveryKey = mod.unwrap_root_with_recovery_key || mod.unwrapRootWithRecoveryKey;
+  const createRecoveryDeck = mod.create_recovery_deck || mod.createRecoveryDeck;
+  const rotateRecoveryDeck = mod.rotate_recovery_deck || mod.rotateRecoveryDeck;
 
   return {
     version: () => version(),
@@ -462,6 +492,31 @@ function normalizeWasmModule(mod: RawWasmModule): WasmModule {
       ? (ikm, salt, info, length) => deriveHkdfRaw(ikm, salt, info, length)
       : undefined,
     derive_key_pbkdf2: (password, salt, iterations) => derivePbkdf2(password, salt, iterations),
+    generate_recovery_deck: generateRecoveryDeck
+      ? () => generateRecoveryDeck()
+      : undefined,
+    validate_recovery_deck: validateRecoveryDeck
+      ? (deck) => validateRecoveryDeck(deck)
+      : undefined,
+    encode_recovery_deck: encodeRecoveryDeck
+      ? (deck) => encodeRecoveryDeck(deck)
+      : undefined,
+    derive_recovery_key: deriveRecoveryKey
+      ? (deck) => deriveRecoveryKey(deck)
+      : undefined,
+    wrap_root_with_recovery_key: wrapRootWithRecoveryKey
+      ? (rootKey, recoveryKey) => wrapRootWithRecoveryKey(rootKey, recoveryKey)
+      : undefined,
+    unwrap_root_with_recovery_key: unwrapRootWithRecoveryKey
+      ? (rootWrapper, recoveryKey) => unwrapRootWithRecoveryKey(rootWrapper, recoveryKey)
+      : undefined,
+    create_recovery_deck: createRecoveryDeck
+      ? (rootKey) => normalizeRecoveryDeckSetup(createRecoveryDeck(rootKey))
+      : undefined,
+    rotate_recovery_deck: rotateRecoveryDeck
+      ? (rootWrapper, oldDeck) =>
+          normalizeRecoveryDeckSetup(rotateRecoveryDeck(rootWrapper, oldDeck))
+      : undefined,
     generate_x25519_key_pair: generateX25519
       ? (seed) => generateX25519(seed ?? null)
       : undefined,

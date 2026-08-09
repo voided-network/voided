@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 /**
- * Full v3 monolith artifact lifecycle demo.
+ * Full Voided 1.0 Fuse artifact lifecycle demo.
  *
  * Build the workspace first:
  *   npm run build

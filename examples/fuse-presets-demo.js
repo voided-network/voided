@@ -1,14 +1,13 @@
 #!/usr/bin/env node
 
 /**
- * Historical filename kept for repo continuity.
- * This demo now compares fused presets instead of old temperature-based maps.
+ * Compare the stable Voided 1.0 Fuse presets.
  *
  * Build the workspace first:
  *   npm run build
  *
  * Then run:
- *   node examples/temperature-demo.js
+ *   node examples/fuse-presets-demo.js
  */
 
 const pkg = await import("../packages/enc-server/dist/index.js");
@@ -19,8 +18,8 @@ const key = generateKey();
 const payload = Buffer.from(
   JSON.stringify(
     {
-      project: "voided-v2",
-      summary: "Preset-driven monolith artifacts replace the old legacy shell story.",
+      project: "voided-1.0",
+      summary: "Preset-driven Fuse artifacts with one stable public surface.",
       repeated: "artifact-profile-data".repeat(2048),
     },
     null,
@@ -28,7 +27,7 @@ const payload = Buffer.from(
   ),
 );
 
-console.log("Voided fused preset comparison\n");
+console.log("Voided Fuse preset comparison\n");
 console.log(`Plaintext bytes: ${payload.length}\n`);
 
 for (const preset of ["compact", "balanced", "concealed"]) {
@@ -47,4 +46,4 @@ for (const preset of ["compact", "balanced", "concealed"]) {
   console.log("");
 }
 
-console.log("Presets replace the old temperature/map tuning story in Voided v3.");
+console.log("Voided 1.0 uses compact, balanced, and concealed Fuse presets.");

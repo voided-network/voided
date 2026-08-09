@@ -39,6 +39,7 @@ extern crate alloc;
 pub mod encryption;
 pub mod formats;
 pub mod hash;
+pub mod recovery_deck;
 pub mod shell;
 pub mod util;
 

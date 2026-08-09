@@ -21,7 +21,6 @@ export interface Metric {
   expansionRatio: number;
   computeUnits: number;
   algorithm: string;
-  temperature: number;
   durationMs: number;
   memoryMb?: number;
 }

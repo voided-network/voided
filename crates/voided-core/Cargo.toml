@@ -1,6 +1,6 @@
 [package]
 name = "voided-core"
-version = "0.2.3"
+version = "1.0.0"
 edition = "2021"
 authors = ["Voided Team"]
 description = "Core cryptographic primitives for the Voided encryption library"
@@ -87,4 +87,3 @@ hex-literal = "0.4"
 # harness = false
 
 # Profile settings are defined in workspace root (crates/Cargo.toml)
-

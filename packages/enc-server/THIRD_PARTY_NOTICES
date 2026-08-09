@@ -1786,8 +1786,8 @@ SOFTWARE.
 MIT License (MIT)
 
 Used by:
-- voided-core 0.2.3 — https://github.com/voided-network/voided
-- voided-wasm 0.2.2 — https://github.com/voided-network/voided
+- voided-core 1.0.0 — https://github.com/voided-network/voided
+- voided-wasm 1.0.0 — https://github.com/voided-network/voided
 
 MIT License
 
@@ -1816,7 +1816,7 @@ SOFTWARE.
 MIT License (MIT)
 
 Used by:
-- voided-node 0.2.1 — https://github.com/voided-network/voided
+- voided-node 1.0.0 — https://github.com/voided-network/voided
 - brotli-decompressor 2.5.1 — https://github.com/dropbox/rust-brotli-decompressor
 - brotli 3.5.0 — https://github.com/dropbox/rust-brotli
 - napi-derive-backend 1.0.75 — https://github.com/napi-rs/napi-rs

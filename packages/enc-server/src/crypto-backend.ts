@@ -5,7 +5,13 @@
  * No TypeScript fallbacks - if Rust isn't available, it throws.
  */
 
-import { getNative, type NativeModule } from './native/index.js';
+import {
+  getNative,
+  type NativeModule,
+  type RecoveryDeckSetup,
+} from './native/index.js';
+
+export type { RecoveryDeckSetup } from './native/index.js';
 
 // Get native module - throws if not available
 let _native: NativeModule | null = null;
@@ -85,6 +91,59 @@ export function deriveKeyPbkdf2(
     throw new RangeError('PBKDF2 salt must be between 16 and 1024 bytes.');
   }
   return native().deriveKeyPbkdf2(password, salt, iterations);
+}
+
+// ============================================================================
+// RECOVERY DECK
+// ============================================================================
+
+/** Generate a fresh CSPRNG-shuffled standard 52-card recovery deck. */
+export function generateRecoveryDeck(): string[] {
+  return native().generateRecoveryDeck();
+}
+
+/** Check for exactly 52 known canonical IDs with no missing or duplicate card. */
+export function validateRecoveryDeck(deck: string[]): boolean {
+  return native().validateRecoveryDeck(deck);
+}
+
+/** Encode a valid deck as the protocol's fixed 29-byte permutation rank. */
+export function encodeRecoveryDeck(deck: string[]): Buffer {
+  return native().encodeRecoveryDeck(deck);
+}
+
+/** Derive the deterministic 32-byte Recovery Key. Never persist the result. */
+export function deriveRecoveryKey(deck: string[]): Buffer {
+  return native().deriveRecoveryKey(deck);
+}
+
+/** Wrap an unchanged stable root key. Only the returned wrapper may be persisted. */
+export function wrapRootWithRecoveryKey(
+  rootKey: Buffer,
+  recoveryKey: Buffer
+): Buffer {
+  return native().wrapRootWithRecoveryKey(rootKey, recoveryKey);
+}
+
+/** Unwrap a stable root key with a reconstructed Recovery Key. */
+export function unwrapRootWithRecoveryKey(
+  rootWrapper: Buffer,
+  recoveryKey: Buffer
+): Buffer {
+  return native().unwrapRootWithRecoveryKey(rootWrapper, recoveryKey);
+}
+
+/** Generate a fresh deck and wrapper for an existing stable root key. */
+export function createRecoveryDeck(rootKey: Buffer): RecoveryDeckSetup {
+  return native().createRecoveryDeck(rootKey);
+}
+
+/** Rewrap the same stable root under a wholly fresh random deck. */
+export function rotateRecoveryDeck(
+  rootWrapper: Buffer,
+  oldDeck: string[]
+): RecoveryDeckSetup {
+  return native().rotateRecoveryDeck(rootWrapper, oldDeck);
 }
 
 // ============================================================================

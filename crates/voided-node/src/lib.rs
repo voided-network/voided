@@ -8,6 +8,7 @@
 use napi::bindgen_prelude::*;
 use napi_derive::napi;
 use serde::{Deserialize, Serialize};
+use zeroize::Zeroize;
 
 // Re-export version
 #[napi]
@@ -125,6 +126,15 @@ pub struct X25519KeyPair {
     pub private_key: Buffer,
 }
 
+/// Fresh recovery deck plus the only value suitable for persistence.
+#[napi(object)]
+pub struct RecoveryDeckSetup {
+    /// Ordered canonical card IDs. This array is the recovery secret.
+    pub deck: Vec<String>,
+    /// Authenticated wrapper around the unchanged stable root key.
+    pub root_wrapper: Buffer,
+}
+
 /// Generate a random 256-bit encryption key
 #[napi]
 pub fn generate_key() -> Buffer {
@@ -240,6 +250,110 @@ pub fn derive_key_pbkdf2(password: Buffer, salt: Buffer, iterations: u32) -> Res
             .map_err(|e| Error::from_reason(e.to_string()))?;
 
     Ok(Buffer::from(key.as_bytes().to_vec()))
+}
+
+// ============================================================================
+// Recovery Deck
+// ============================================================================
+
+/// Generate a fresh standard 52-card recovery deck using the OS CSPRNG.
+#[napi]
+pub fn generate_recovery_deck() -> Vec<String> {
+    voided_core::recovery_deck::generate_recovery_deck()
+        .card_ids()
+        .map(str::to_string)
+        .collect()
+}
+
+/// Return whether card IDs form one exact valid 52-card permutation.
+#[napi]
+pub fn validate_recovery_deck(deck: Vec<String>) -> bool {
+    parse_recovery_deck(deck).is_ok()
+}
+
+/// Encode a valid recovery deck as its canonical 29-byte permutation rank.
+#[napi]
+pub fn encode_recovery_deck(deck: Vec<String>) -> Result<Buffer> {
+    let deck = parse_recovery_deck(deck)?;
+    Ok(Buffer::from(
+        voided_core::recovery_deck::encode_recovery_deck(&deck).to_vec(),
+    ))
+}
+
+/// Deterministically derive the 32-byte Recovery Key for a valid deck.
+#[napi]
+pub fn derive_recovery_key(deck: Vec<String>) -> Result<Buffer> {
+    let deck = parse_recovery_deck(deck)?;
+    let key = voided_core::recovery_deck::derive_recovery_key(&deck)
+        .map_err(|error| invalid_input(error.to_string()))?;
+    Ok(Buffer::from(key.as_bytes().to_vec()))
+}
+
+/// Wrap a stable 32-byte root with a derived Recovery Key.
+#[napi]
+pub fn wrap_root_with_recovery_key(root_key: Buffer, recovery_key: Buffer) -> Result<Buffer> {
+    let root_key = parse_core_key(root_key.as_ref())?;
+    let recovery_key = parse_core_key(recovery_key.as_ref())?;
+    let wrapper = voided_core::recovery_deck::wrap_root_with_recovery_key(&root_key, &recovery_key)
+        .map_err(|error| invalid_input(error.to_string()))?;
+    Ok(Buffer::from(wrapper))
+}
+
+/// Recover a stable 32-byte root from an authenticated recovery wrapper.
+#[napi]
+pub fn unwrap_root_with_recovery_key(root_wrapper: Buffer, recovery_key: Buffer) -> Result<Buffer> {
+    let recovery_key = parse_core_key(recovery_key.as_ref())?;
+    let root_key = voided_core::recovery_deck::unwrap_root_with_recovery_key(
+        root_wrapper.as_ref(),
+        &recovery_key,
+    )
+    .map_err(|error| invalid_input(error.to_string()))?;
+    Ok(Buffer::from(root_key.as_bytes().to_vec()))
+}
+
+/// Generate a fresh deck and authenticated wrapper for an existing stable root.
+#[napi]
+pub fn create_recovery_deck(root_key: Buffer) -> Result<RecoveryDeckSetup> {
+    let root_key = parse_core_key(root_key.as_ref())?;
+    let setup = voided_core::recovery_deck::create_recovery_deck(&root_key)
+        .map_err(|error| invalid_input(error.to_string()))?;
+    Ok(recovery_setup_to_napi(setup))
+}
+
+/// Replace a deck by rewrapping the same stable root under a fresh random deck.
+#[napi]
+pub fn rotate_recovery_deck(
+    old_root_wrapper: Buffer,
+    old_deck: Vec<String>,
+) -> Result<RecoveryDeckSetup> {
+    let old_deck = parse_recovery_deck(old_deck)?;
+    let setup =
+        voided_core::recovery_deck::rotate_recovery_deck(old_root_wrapper.as_ref(), &old_deck)
+            .map_err(|error| invalid_input(error.to_string()))?;
+    Ok(recovery_setup_to_napi(setup))
+}
+
+fn parse_recovery_deck(
+    mut card_ids: Vec<String>,
+) -> Result<voided_core::recovery_deck::RecoveryDeck> {
+    let result = voided_core::recovery_deck::RecoveryDeck::from_card_ids(&card_ids)
+        .map_err(|error| invalid_input(error.to_string()));
+    card_ids.zeroize();
+    result
+}
+
+fn parse_core_key(bytes: &[u8]) -> Result<voided_core::encryption::Key> {
+    voided_core::encryption::Key::from_bytes(bytes)
+        .map_err(|error| invalid_input(error.to_string()))
+}
+
+fn recovery_setup_to_napi(
+    setup: voided_core::recovery_deck::RecoveryDeckSetup,
+) -> RecoveryDeckSetup {
+    RecoveryDeckSetup {
+        deck: setup.deck.card_ids().map(str::to_string).collect(),
+        root_wrapper: Buffer::from(setup.root_wrapper),
+    }
 }
 
 /// Generate X25519 key pair.
@@ -625,7 +739,7 @@ pub fn inspect_fused(data: Buffer) -> Result<FusedShellInfo> {
     shell_info_from_core(info)
 }
 
-/// Protect bytes with the Voided v3 whole-monolith full flow.
+/// Protect bytes with the Voided 1.0 whole-monolith full flow.
 #[napi]
 pub fn protect(
     data: Buffer,
@@ -659,7 +773,7 @@ pub fn protect(
     protect_result_from_core(result)
 }
 
-/// Open a Voided v3 whole-monolith artifact.
+/// Open a current VOF3 whole-monolith artifact.
 #[napi(js_name = "open")]
 pub fn open_artifact(artifact: Buffer, key: Buffer) -> Result<Buffer> {
     let key = parse_key(key)?;
@@ -668,7 +782,7 @@ pub fn open_artifact(artifact: Buffer, key: Buffer) -> Result<Buffer> {
     Ok(Buffer::from(bytes))
 }
 
-/// Open either a current v3 artifact or an explicit legacy VOF2 rotation artifact.
+/// Open either a current VOF3 artifact or an explicit legacy VOF2 rotation artifact.
 #[napi(js_name = "openRotationArtifact")]
 pub fn open_rotation_artifact(artifact: Buffer, key: Buffer) -> Result<Buffer> {
     let key = parse_key(key)?;
@@ -677,7 +791,7 @@ pub fn open_rotation_artifact(artifact: Buffer, key: Buffer) -> Result<Buffer> {
     Ok(Buffer::from(bytes))
 }
 
-/// Inspect a Voided v3 whole-monolith artifact without a key.
+/// Inspect a current VOF3 whole-monolith artifact without a key.
 #[napi]
 pub fn inspect_artifact(artifact: Buffer) -> Result<ProtectedArtifactInfo> {
     validate_inspect_size(artifact.len())?;
@@ -686,7 +800,7 @@ pub fn inspect_artifact(artifact: Buffer) -> Result<ProtectedArtifactInfo> {
     artifact_info_from_core(info)
 }
 
-/// Inspect either a current v3 artifact or an explicit legacy VOF2 rotation artifact.
+/// Inspect either a current VOF3 artifact or an explicit legacy VOF2 rotation artifact.
 #[napi(js_name = "inspectRotationArtifact")]
 pub fn inspect_rotation_artifact(artifact: Buffer) -> Result<ProtectedArtifactInfo> {
     validate_inspect_size(artifact.len())?;
@@ -695,7 +809,7 @@ pub fn inspect_rotation_artifact(artifact: Buffer) -> Result<ProtectedArtifactIn
     artifact_info_from_core(info)
 }
 
-/// Repack a current v3 monolith artifact under a new full-flow configuration.
+/// Repack a current VOF3 monolith artifact under a new full-flow configuration.
 #[napi]
 pub fn repack_artifact(
     artifact: Buffer,

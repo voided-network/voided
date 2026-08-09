@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Voided Recovery Deck browser test</title>
+    <style>
+      :root { color-scheme: dark; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+      body { max-width: 900px; margin: 48px auto; padding: 0 24px; background: #0b0d10; color: #e7ecef; }
+      h1 { font: 600 28px/1.2 system-ui, sans-serif; }
+      .meta { color: #9ba7ae; margin-bottom: 24px; }
+      #status { font-weight: 700; margin: 20px 0; }
+      #status.pass { color: #62df8d; }
+      #status.fail { color: #ff6f79; }
+      pre { padding: 20px; border: 1px solid #303740; border-radius: 8px; background: #11151a; line-height: 1.7; white-space: pre-wrap; }
+    </style>
+  </head>
+  <body>
+    <h1>Voided Recovery Deck — real browser/WASM test</h1>
+    <p class="meta">Secret values are never printed or persisted by this harness.</p>
+    <div id="status">RUNNING</div>
+    <pre id="log" aria-live="polite"></pre>
+    <script type="module">
+      import {
+        createRecoveryDeck,
+        deriveRecoveryKey,
+        encodeRecoveryDeck,
+        forceWasmBackend,
+        generateRecoveryDeck,
+        getCurrentBackend,
+        rotateRecoveryDeck,
+        unwrapRootWithRecoveryKey,
+        validateRecoveryDeck,
+        wrapRootWithRecoveryKey,
+      } from '/dist/index.js';
+
+      const status = document.querySelector('#status');
+      const output = document.querySelector('#log');
+      const report = [];
+
+      function log(message) {
+        output.textContent += `${message}\n`;
+      }
+
+      function assert(condition, message) {
+        if (!condition) throw new Error(message);
+        report.push(message);
+        log(`PASS  ${message}`);
+      }
+
+      async function rejects(operation, message) {
+        let rejected = false;
+        try {
+          await operation();
+        } catch {
+          rejected = true;
+        }
+        assert(rejected, message);
+      }
+
+      function equalBytes(left, right) {
+        return left.length === right.length && left.every((byte, index) => byte === right[index]);
+      }
+
+      function toHex(bytes) {
+        return Array.from(bytes, byte => byte.toString(16).padStart(2, '0')).join('');
+      }
+
+      const canonicalDeck = [
+        'AS', '2S', '3S', '4S', '5S', '6S', '7S', '8S', '9S', '10S', 'JS', 'QS', 'KS',
+        'AH', '2H', '3H', '4H', '5H', '6H', '7H', '8H', '9H', '10H', 'JH', 'QH', 'KH',
+        'AD', '2D', '3D', '4D', '5D', '6D', '7D', '8D', '9D', '10D', 'JD', 'QD', 'KD',
+        'AC', '2C', '3C', '4C', '5C', '6C', '7C', '8C', '9C', '10C', 'JC', 'QC', 'KC',
+      ];
+
+      try {
+        const localStorageBefore = Object.keys(localStorage).sort();
+        const databaseNamesBefore = 'databases' in indexedDB
+          ? (await indexedDB.databases()).map(database => database.name).filter(Boolean).sort()
+          : [];
+
+        await forceWasmBackend();
+        assert(await getCurrentBackend() === 'wasm', 'public package selected the real WASM backend');
+        assert(await validateRecoveryDeck(canonicalDeck), 'canonical 52-card set validates');
+        assert(!(await validateRecoveryDeck(canonicalDeck.slice(0, 51))), 'missing card is rejected');
+        assert(!(await validateRecoveryDeck([...canonicalDeck.slice(0, 51), 'AS'])), 'duplicate card is rejected');
+        assert(!(await validateRecoveryDeck(['A♠', ...canonicalDeck.slice(1)])), 'UI/localized card string is rejected');
+
+        const rank = await encodeRecoveryDeck(canonicalDeck);
+        assert(rank.length === 29 && rank.every(byte => byte === 0), 'canonical deck encodes to the permanent 29-byte zero rank');
+        rank.fill(0);
+
+        const vectorKey = await deriveRecoveryKey(canonicalDeck);
+        assert(
+          toHex(vectorKey) === '7d819b1d9cb4a0346a7e03a505e9bc6ef738518aa91ce99b04a866e436efd95c',
+          'canonical deck derives the permanent Recovery Key vector',
+        );
+
+        const generated = await generateRecoveryDeck();
+        assert(await validateRecoveryDeck(generated), 'CSPRNG-generated deck is a valid permutation');
+        assert(new Set(generated).size === 52, 'CSPRNG-generated deck contains every card exactly once');
+
+        const root = crypto.getRandomValues(new Uint8Array(32));
+        const directWrapper = await wrapRootWithRecoveryKey(root, vectorKey);
+        assert(directWrapper.length === 80, 'root wrapper has the canonical 80-byte format');
+        const directRecovered = await unwrapRootWithRecoveryKey(directWrapper, vectorKey);
+        assert(equalBytes(directRecovered, root), 'public wrap/unwrap roundtrip preserves the stable root');
+
+        const wrongDeck = [...canonicalDeck];
+        [wrongDeck[0], wrongDeck[1]] = [wrongDeck[1], wrongDeck[0]];
+        const wrongKey = await deriveRecoveryKey(wrongDeck);
+        await rejects(
+          () => unwrapRootWithRecoveryKey(directWrapper, wrongKey),
+          'wrong deck cannot unwrap the root',
+        );
+        const tamperedWrapper = directWrapper.slice();
+        tamperedWrapper[40] ^= 1;
+        await rejects(
+          () => unwrapRootWithRecoveryKey(tamperedWrapper, vectorKey),
+          'tampered wrapper fails authentication',
+        );
+
+        const setup = await createRecoveryDeck(root);
+        assert(await validateRecoveryDeck(setup.deck), 'createRecoveryDeck returns a valid fresh deck');
+        assert(setup.rootWrapper.length === 80, 'createRecoveryDeck returns only the persistable wrapper beside the transient deck');
+        const setupKey = await deriveRecoveryKey(setup.deck);
+        const setupRecovered = await unwrapRootWithRecoveryKey(setup.rootWrapper, setupKey);
+        assert(equalBytes(setupRecovered, root), 'fresh setup deck recovers the original stable root');
+
+        const rotated = await rotateRecoveryDeck(setup.rootWrapper, setup.deck);
+        assert(await validateRecoveryDeck(rotated.deck), 'rotation returns a valid fresh random deck');
+        const rotatedKey = await deriveRecoveryKey(rotated.deck);
+        const rotatedRecovered = await unwrapRootWithRecoveryKey(rotated.rootWrapper, rotatedKey);
+        assert(equalBytes(rotatedRecovered, root), 'rotation preserves the stable root exactly');
+        await rejects(
+          () => unwrapRootWithRecoveryKey(rotated.rootWrapper, setupKey),
+          'old deck cannot open the replacement wrapper',
+        );
+
+        const localStorageAfter = Object.keys(localStorage).sort();
+        const databaseNamesAfter = 'databases' in indexedDB
+          ? (await indexedDB.databases()).map(database => database.name).filter(Boolean).sort()
+          : [];
+        assert(
+          JSON.stringify(localStorageAfter) === JSON.stringify(localStorageBefore),
+          'Recovery Deck flow writes nothing to localStorage',
+        );
+        assert(
+          JSON.stringify(databaseNamesAfter) === JSON.stringify(databaseNamesBefore),
+          'Recovery Deck flow creates no IndexedDB persistence',
+        );
+
+        vectorKey.fill(0);
+        wrongKey.fill(0);
+        setupKey.fill(0);
+        rotatedKey.fill(0);
+        directRecovered.fill(0);
+        setupRecovered.fill(0);
+        rotatedRecovered.fill(0);
+        root.fill(0);
+
+        status.textContent = `PASS — ${report.length}/${report.length} checks`;
+        status.className = 'pass';
+        document.body.dataset.result = 'pass';
+        document.body.dataset.checks = String(report.length);
+      } catch (error) {
+        status.textContent = 'FAIL';
+        status.className = 'fail';
+        log(`FAIL  ${error instanceof Error ? error.message : String(error)}`);
+        document.body.dataset.result = 'fail';
+      }
+    </script>
+  </body>
+</html>

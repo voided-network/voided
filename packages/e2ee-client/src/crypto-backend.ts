@@ -8,9 +8,15 @@
  * while providing potential performance benefits when available.
  */
 
-import { isWasmReady, getWasm, initWasm, type WasmModule } from './wasm/loader';
+import {
+  isWasmReady,
+  getWasm,
+  initWasm,
+  type RecoveryDeckSetup,
+  type WasmModule,
+} from './wasm/loader';
 export { configureWasmLoader } from './wasm/loader';
-export type { WasmLoaderOptions } from './wasm/loader';
+export type { RecoveryDeckSetup, WasmLoaderOptions } from './wasm/loader';
 import { CryptoService, HashService } from './crypto-service';
 import * as tsCompression from './compression';
 import { inspectCanonicalBase64 } from './base64-validation';
@@ -637,6 +643,92 @@ export async function deriveKeyPbkdf2(
 }
 
 // ============================================================================
+// RECOVERY DECK
+// ============================================================================
+
+function recoveryDeckWasm<K extends keyof WasmModule>(
+  method: K,
+): NonNullable<WasmModule[K]> {
+  const implementation = _wasm?.[method];
+  if (typeof implementation !== 'function') {
+    throw new Error(
+      'Recovery Deck requires a Voided WASM artifact that includes the recovery protocol',
+    );
+  }
+  return implementation as NonNullable<WasmModule[K]>;
+}
+
+async function requireRecoveryDeckBackend(): Promise<void> {
+  if (!(await useWasmBackend())) {
+    throw new Error(
+      'Recovery Deck is implemented by Voided Rust/WASM and is unavailable in the TypeScript fallback',
+    );
+  }
+}
+
+/** Generate a fresh CSPRNG-shuffled standard 52-card recovery deck. */
+export async function generateRecoveryDeck(): Promise<string[]> {
+  await requireRecoveryDeckBackend();
+  return recoveryDeckWasm('generate_recovery_deck')();
+}
+
+/** Check for exactly 52 known canonical IDs with no missing or duplicate card. */
+export async function validateRecoveryDeck(deck: string[]): Promise<boolean> {
+  await requireRecoveryDeckBackend();
+  return recoveryDeckWasm('validate_recovery_deck')(deck);
+}
+
+/** Encode a valid deck as the protocol's fixed 29-byte permutation rank. */
+export async function encodeRecoveryDeck(deck: string[]): Promise<Uint8Array> {
+  await requireRecoveryDeckBackend();
+  return recoveryDeckWasm('encode_recovery_deck')(deck);
+}
+
+/** Derive the deterministic 32-byte Recovery Key. Never persist the result. */
+export async function deriveRecoveryKey(deck: string[]): Promise<Uint8Array> {
+  await requireRecoveryDeckBackend();
+  return recoveryDeckWasm('derive_recovery_key')(deck);
+}
+
+/** Wrap an unchanged stable root key. Only the returned wrapper may be persisted. */
+export async function wrapRootWithRecoveryKey(
+  rootKey: Uint8Array,
+  recoveryKey: Uint8Array,
+): Promise<Uint8Array> {
+  await requireRecoveryDeckBackend();
+  return recoveryDeckWasm('wrap_root_with_recovery_key')(rootKey, recoveryKey);
+}
+
+/** Unwrap a stable root key with a reconstructed Recovery Key. */
+export async function unwrapRootWithRecoveryKey(
+  rootWrapper: Uint8Array,
+  recoveryKey: Uint8Array,
+): Promise<Uint8Array> {
+  await requireRecoveryDeckBackend();
+  return recoveryDeckWasm('unwrap_root_with_recovery_key')(
+    rootWrapper,
+    recoveryKey,
+  );
+}
+
+/** Generate a fresh deck and wrapper for an existing stable root key. */
+export async function createRecoveryDeck(
+  rootKey: Uint8Array,
+): Promise<RecoveryDeckSetup> {
+  await requireRecoveryDeckBackend();
+  return recoveryDeckWasm('create_recovery_deck')(rootKey);
+}
+
+/** Rewrap the same stable root under a wholly fresh random deck. */
+export async function rotateRecoveryDeck(
+  rootWrapper: Uint8Array,
+  oldDeck: string[],
+): Promise<RecoveryDeckSetup> {
+  await requireRecoveryDeckBackend();
+  return recoveryDeckWasm('rotate_recovery_deck')(rootWrapper, oldDeck);
+}
+
+// ============================================================================
 // HASHING FUNCTIONS
 // ============================================================================
 
@@ -872,7 +964,7 @@ export async function decompressBounded(
 
 function fusedWasmOnlyError(): Error {
   return new Error(
-    'Voided v3 shell and monolith artifact APIs currently require the Rust WASM backend in e2ee-client'
+    'Voided 1.0 Fuse and monolith artifact APIs require the Rust WASM backend in e2ee-client'
   );
 }
 

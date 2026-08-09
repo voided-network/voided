@@ -1,6 +1,6 @@
 {
   "name": "@voideddev/e2ee-client",
-  "version": "0.4.4",
+  "version": "1.0.0",
   "description": "Browser-based E2EE client library for keys, crypto, v3 monolith artifacts, compression, and local storage adapters.",
   "type": "module",
   "main": "dist/index.cjs",
@@ -76,6 +76,8 @@
     "examples/key-export-import-example.html",
     "examples/customizable-key-ui-example.html",
     "examples/simple-key-ui.js",
+    "examples/key-ui-styles.css",
+    "examples/recovery-deck-ui-example.html",
     "LICENSE",
     "THIRD_PARTY_NOTICES"
   ],

@@ -92,7 +92,7 @@ describe('GB-Scale Production Tests', () => {
             const startTime = performance.now();
             updateMemoryPeak();
 
-            const encrypted = await client.encrypt(data);
+            const encrypted = await client.encrypt(data, { compressionAlgorithm: 'gzip' });
             updateMemoryPeak();
 
             const decrypted = await client.decrypt(encrypted);
@@ -248,13 +248,14 @@ describe('GB-Scale Production Tests', () => {
         test('should handle 100 concurrent 1MB operations', async () => {
             const client = new VoidedE2EEClient({ storage: new InMemoryStorage() });
             const operationSize = 1024 * 1024; // 1MB per operation
+            const data = generateGBScaleData(operationSize, 'mixed');
 
+            // Keep fixture generation outside the timed region so this measures
+            // concurrent encryption/decryption rather than synthetic-data creation.
             const startTime = performance.now();
             updateMemoryPeak();
 
             const operations = Array.from({ length: GB_SCALE_CONFIG.HIGH_CONCURRENCY }, async (_, i) => {
-                const data = generateGBScaleData(operationSize, 'mixed');
-
                 try {
                     const encrypted = await client.encrypt(data);
                     updateMemoryPeak();

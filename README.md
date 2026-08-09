@@ -7,9 +7,9 @@ The current library surface is organized around three layers:
 
 1. primitive cryptography
 2. fused shell primitives for callers that already own their inner bytes
-3. v3 whole-monolith protected artifacts for the normal product path
+3. whole-monolith protected artifacts for the normal product path
 
-The default full flow in Voided v3 is:
+The default full flow in Voided 1.0 is:
 
 1. compression
 2. encryption
@@ -20,6 +20,7 @@ The default full flow in Voided v3 is:
 - [What Voided Includes](#what-voided-includes)
 - [Choose Your Entry Point](#choose-your-entry-point)
 - [Core Concepts](#core-concepts)
+- [Recovery Deck](#recovery-deck)
 - [What Fused Means](#what-fused-means)
 - [Command Map](#command-map)
 - [Fused Presets](#fused-presets)
@@ -28,7 +29,6 @@ The default full flow in Voided v3 is:
 - [Examples](#examples)
 - [Development Workflow](#development-workflow)
 - [Testing](#testing)
-- [v1 Boundary](#v1-boundary)
 - [License](#license)
 
 ## What Voided Includes
@@ -47,7 +47,11 @@ top of it:
   - the Node.js package over `voided-node`
 - `@voideddev/e2ee-client`
   - the browser package over `voided-wasm`, with TypeScript fallback for parts
-    of the older browser API
+    of the primitive browser API
+
+All three primary surfaces also expose the same deterministic Recovery Deck
+protocol for wrapping a stable root key. The deck and derived Recovery Key are
+transient secrets; only the authenticated root wrapper is persistable.
 
 ## Choose Your Entry Point
 
@@ -55,10 +59,10 @@ Use the package that matches the environment and level of control you want:
 
 - `voided-core`
   - use this when you want direct Rust access to primitives, shell helpers, or
-    v3 monolith artifacts
+    monolith artifacts
 - `@voideddev/enc-server`
   - use this in Node.js when you want native Rust-backed hashing, encryption,
-    compression, and v3 monolith artifact handling
+    compression, and monolith artifact handling
 - `@voideddev/e2ee-client`
   - use this in browser runtimes when you want stateful client-side encryption,
     key storage, and browser-facing protected artifact helpers
@@ -81,8 +85,7 @@ only need one step of the stack.
 ### Fused Shell
 
 The fused shell is the outer envelope layer. It lets you shape bytes into a
-stable, inspectable shell format without asking callers to keep the old map-era
-surface alive.
+stable, inspectable, preset-driven shell format.
 
 Use fused shell primitives when:
 
@@ -92,7 +95,7 @@ Use fused shell primitives when:
 
 ### Full-Flow Monolith Artifact
 
-The full-flow helpers are the normal Voided v3 product surface:
+The full-flow helpers are the normal Voided 1.0 product surface:
 
 - `protect`
 - `open`
@@ -111,22 +114,36 @@ Both shell and full-flow artifacts can be inspected without opening them:
 That makes it easier to reason about preset, sizes, and envelope structure
 without immediately decrypting the payload.
 
+## Recovery Deck
+
+Recovery Deck is a stateless recovery credential built from one uniformly
+shuffled standard 52-card deck. The permanent protocol maps the exact card
+order to a 29-byte permutation rank and then derives a 32-byte Recovery Key
+through domain-separated HKDF-SHA256.
+
+The Recovery Key wraps an existing stable root. Rotation generates a completely
+new CSPRNG deck and rewraps that same root without changing application keys or
+re-encrypting user data. Never persist or log the ordered deck, permutation
+rank, or derived Recovery Key; persist only the opaque authenticated wrapper.
+
+The browser package includes a neutral framework-free deck component that can
+open as a modal or mount inline. Products remain responsible for their own
+physical-backup and reconstruction experience.
+
 ## What Fused Means
 
-The fused shell is not a second encryption algorithm and it is not the old map
-system under a new name. It remains available as a lower-level primitive for
-callers that already own the bytes they want to shell.
+The fused shell is not a second encryption algorithm. It is the stable outer
+envelope primitive for callers that already own the bytes they want to shell.
 
-The v3 product path is the whole-monolith protected artifact. It still runs the
-safe sequence of compression, encryption, and shell shaping, but the shell state
-is derived from the full artifact plan instead of treating each step as an
-isolated piece.
+The Voided 1.0 product path is the whole-monolith protected artifact. It runs
+the safe sequence of compression, encryption, and shell shaping, with shell
+state derived from the complete artifact plan.
 
 In the standard Voided protected flow, the bytes going into the shell are:
 
 1. optionally compressed
 2. encrypted with an AEAD
-3. shaped by the v3 whole-monolith shell
+3. shaped by the whole-monolith shell
 
 What the shell adds on top of the encrypted payload:
 
@@ -139,18 +156,18 @@ What the shell adds on top of the encrypted payload:
 The shell does not replace encryption. It sits outside encryption and gives the
 encrypted payload a first-class artifact shape.
 
-Current protected artifacts use the v3 whole-monolith path. Normal `protect`,
-`open`, `inspectArtifact`, and `repackArtifact` are current-v3-only. Legacy v1
-and v2 protected artifacts are handled only through the explicit rotation
-helpers.
+Normal `protect`, `open`, `inspectArtifact`, and `repackArtifact` use the current
+VOF3 whole-monolith wire format. Package version 1.0 and wire-format version 3
+are deliberately independent: the package is the first stable public release,
+while the existing authenticated byte format remains frozen.
 
 If you already have the bytes you want inside the shell, use shell primitives.
 If you want Voided to do the whole flow for you, use full-flow helpers.
 
 ## Raw Benchmarking
 
-The old capped benchmark scoreboard has been replaced by `voided-bench`.
-It does not emit a fake `security = 100` score, and it does not collapse
+`voided-bench` reports raw measurements. It does not emit a fake
+`security = 100` score, and it does not collapse
 security, speed, size, and artifact shape into one pretend-universal number.
 
 Run the synthetic corpus:
@@ -186,11 +203,9 @@ Benchmark model:
 - Natural bounded measurements, like input-bit delta percentage, stay
   percentages. Everything else stays in its native unit.
 
-Important comparison note: `voided-fuse-shell-current` is the raw shell
-primitive only. It is useful for measuring shell overhead, but it is not the old
-full `protect` path. The old product baseline is the former full-flow fused
-protect path: compress, encrypt, then wrap the encrypted payload in the fused
-protected envelope.
+`voided-fuse-shell-current` measures the raw shell primitive only. It is useful
+for measuring shell overhead, while `voided-protect-current` measures the full
+compression, encryption, and Fuse artifact path.
 
 Fresh synthetic run from this checkout:
 
@@ -202,7 +217,6 @@ Corpus: `synthetic` | fixtures: `11` | input bytes: `1,885,227` | samples:
 | candidate | roundtrip failures | tamper accepts / trials | wrong-key accepts / trials |
 |---|---:|---:|---:|
 | `voided-protect-current` | 0 | 0 / 33 | 0 / 11 |
-| `voided-protect-old-fused-v2` | 0 | 0 / 33 | 0 / 11 |
 | `voided-c1e-current` | 0 | 0 / 33 | 0 / 11 |
 | `voided-fuse-shell-current` | 0 | 0 / 33 | 0 / 11 |
 | `xchacha20-poly1305-raw` | 0 | 0 / 33 | 0 / 11 |
@@ -215,7 +229,6 @@ Corpus: `synthetic` | fixtures: `11` | input bytes: `1,885,227` | samples:
 | candidate | known Voided magic prefix hits / trials |
 |---|---:|
 | `voided-protect-current` | 0 / 11 |
-| `voided-protect-old-fused-v2` | 11 / 11 |
 | `voided-c1e-current` | 11 / 11 |
 | `voided-fuse-shell-current` | 11 / 11 |
 | `xchacha20-poly1305-raw` | 0 / 11 |
@@ -228,7 +241,6 @@ Corpus: `synthetic` | fixtures: `11` | input bytes: `1,885,227` | samples:
 | candidate | output bytes | byte delta | output/input | overhead % | median enc MiB/s | median dec MiB/s | weighted enc MiB/s | weighted dec MiB/s |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|
 | `voided-protect-current` | 1,377,062 | -508,165 | 0.730449 | -26.955109 | 74.573 | 11.548 | 77.567 | 77.974 |
-| `voided-protect-old-fused-v2` | 1,377,284 | -507,943 | 0.730567 | -26.943334 | 58.862 | 14.607 | 65.339 | 76.514 |
 | `voided-c1e-current` | 1,376,389 | -508,838 | 0.730092 | -26.990808 | 89.597 | 47.656 | 133.632 | 257.163 |
 | `voided-fuse-shell-current` | 1,886,119 | 892 | 1.000473 | 0.047315 | 135.248 | 108.649 | 137.639 | 110.820 |
 | `xchacha20-poly1305-raw` | 1,885,667 | 440 | 1.000233 | 0.023339 | 315.601 | 316.285 | 316.533 | 309.034 |
@@ -241,25 +253,12 @@ Corpus: `synthetic` | fixtures: `11` | input bytes: `1,885,227` | samples:
 | candidate | entropy bits/byte | entropy gap | chi-square/df | serial corr | mean bit bias % | max byte freq % | same-input drift % | input-bit delta % | delta minus drift % | input delta len mean |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
 | `voided-protect-current` | 7.999869 | 0.000131 | 0.980411 | 0.000409 | 0.031308 | 0.402596 | 41.708743 | 45.308849 | 3.600106 | 6.000 |
-| `voided-protect-old-fused-v2` | 7.999868 | 0.000132 | 0.988865 | -0.000078 | 0.025857 | 0.406380 | 41.428279 | 44.051412 | 2.623133 | 6.000 |
 | `voided-c1e-current` | 7.999871 | 0.000129 | 0.964162 | -0.000183 | 0.048515 | 0.406862 | 48.136698 | 49.651558 | 1.514860 | 6.000 |
 | `voided-fuse-shell-current` | 7.999898 | 0.000102 | 1.044534 | -0.000696 | 0.026350 | 0.404640 | 0.000000 | 22.833510 | 22.833510 | 0.182 |
 | `xchacha20-poly1305-raw` | 7.999893 | 0.000107 | 1.091969 | 0.000145 | 0.032078 | 0.405957 | 0.000000 | 2.583258 | 2.583258 | 0.091 |
 | `aes-256-gcm-raw` | 7.999892 | 0.000108 | 1.110937 | -0.000797 | 0.038464 | 0.403175 | 0.000000 | 4.282732 | 4.282732 | 0.091 |
 | `gzip+xchacha20-poly1305` | 7.999856 | 0.000144 | 1.087583 | -0.000424 | 0.044081 | 0.404022 | 0.000000 | 24.549544 | 24.549544 | 2.727 |
 | `brotli+xchacha20-poly1305` | 7.999881 | 0.000119 | 0.891447 | 0.000588 | 0.029746 | 0.403782 | 0.000000 | 31.669650 | 31.669650 | 6.273 |
-
-### V3 Versus Old Full Protect
-
-The old full-protect baseline below was measured with the same benchmark harness
-against the former fused-protect implementation from commit `d8dcebb`. This is
-the apples-to-apples product comparison; it is separate from the shell-only row
-above.
-
-| candidate | known prefix hits | output bytes | byte delta | overhead % | median enc MiB/s | median dec MiB/s | weighted enc MiB/s | weighted dec MiB/s | entropy gap | chi-square/df | same-input drift % | input-bit delta % |
-|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| `current-v3-protect-monolith` | 0 / 11 | 1,377,062 | -508,165 | -26.955109 | 74.573 | 11.548 | 77.567 | 77.974 | 0.000131 | 0.980411 | 41.708743 | 45.308849 |
-| `old-v2-full-protect-fused` | 11 / 11 | 1,377,284 | -507,943 | -26.943334 | 58.862 | 14.607 | 65.339 | 76.514 | 0.000132 | 0.988865 | 41.428279 | 44.051412 |
 
 ## Command Map
 
@@ -291,10 +290,10 @@ fused envelope:
 
 ### Full-Flow Artifact Layer
 
-Use these when you want the normal Voided v3 monolith artifact model:
+Use these when you want the normal Voided monolith artifact model:
 
 - `protect`
-  - compress, encrypt, and shape data into a v3 monolith artifact
+  - compress, encrypt, and shape data into a monolith artifact
 - `open`
   - reverse the full flow and return the original plaintext bytes
 - `inspectArtifact`
@@ -365,6 +364,9 @@ Each primary surface has its own detailed guide:
 - [Browser manual](./packages/e2ee-client/README.md)
   - stateful browser client flows, top-level helpers, crypto namespace usage,
     and WASM behavior
+- [Recovery Deck protocol](./docs/recovery-deck-protocol.md)
+  - permanent card/rank/KDF constants, root wrapping, rotation, and the strict
+    no-persistence boundary
 
 ## Examples
 
@@ -374,8 +376,8 @@ Repository examples live in [`examples/`](./examples/):
   - smallest monolith-first example
 - `full-demo.js`
   - full artifact lifecycle with `protect`, `inspect`, `repack`, and `open`
-- `temperature-demo.js`
-  - preset comparison demo retained under the historical filename
+- `fuse-presets-demo.js`
+  - compare the compact, balanced, and concealed Fuse presets
 
 Build the workspace first, then run an example:
 
@@ -420,20 +422,6 @@ When changing the monolith artifact model, the most important checks are:
 - Rust core monolith protect/open tests
 - Node wrapper integration tests
 - browser/WASM fused roundtrip tests
-
-## v1 Boundary
-
-Voided v3 is monolith-first. The old map-based surface is not part of the current
-library contract.
-
-That means:
-
-- no map-first public API in the current wrappers
-- no map-first examples in the primary docs
-- no new development targeting the v1 map shape
-
-If someone needs that older map surface, it belongs to deprecated v1 rather
-than the current library line.
 
 ## License
 

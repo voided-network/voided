@@ -21,27 +21,6 @@ export interface CompressionResult {
   compressionRatio: number;
 }
 
-export interface ObfuscationResult {
-  obfuscated: string;
-  originalLength: number;
-  obfuscatedLength: number;
-  expansionRatio: number;
-  uniqueCharsObfuscated: number;
-  mappingsUsed: number;
-}
-
-export interface MapAnalysis {
-  temperature: number;
-  totalMappings: number;
-  averageMappingsPerChar: number;
-  averageMappingLength: number;
-  expansionRatio: number;
-  computeScore: number;
-  entropy: number;
-}
-
-export type ObfuscationMap = Record<string, string[]>;
-
 // WASM module interface
 export interface WasmModule {
   version(): string;
@@ -68,12 +47,6 @@ export interface WasmModule {
   // Compression
   compress(data: Uint8Array, algorithm?: string, level?: number): CompressionResult;
   decompress(data: Uint8Array, algorithm: string): Uint8Array;
-
-  // Obfuscation (if enabled)
-  generateMap?(temperature?: number, seed?: string, charset?: string): ObfuscationMap;
-  obfuscate?(text: string, map: ObfuscationMap, seed?: string, strategy?: string): ObfuscationResult;
-  deobfuscate?(obfuscatedText: string, map: ObfuscationMap): string;
-  analyzeMap?(map: ObfuscationMap): MapAnalysis;
 
   // Utility
   randomBytes(length: number): Uint8Array;

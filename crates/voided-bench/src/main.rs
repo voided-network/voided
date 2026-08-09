@@ -25,8 +25,6 @@ use voided_core::{
 const KEY: [u8; 32] = [0x42; 32];
 const WRONG_KEY: [u8; 32] = [0x24; 32];
 const MIB: f64 = 1024.0 * 1024.0;
-const OLD_PROTECTED_ARTIFACT_V2_VERSION: u8 = 0x02;
-const OLD_PROTECTED_ARTIFACT_HEADER_LEN: usize = 4 + 1 + 1 + 1 + 1 + 4 + 8 + 8 + 12;
 
 fn main() {
     if let Err(err) = run() {
@@ -162,7 +160,6 @@ fn print_help() {
 #[serde(rename_all = "kebab-case")]
 enum Candidate {
     VoidedProtectCurrent,
-    VoidedProtectOldFusedV2,
     VoidedC1eCurrent,
     VoidedFuseShellCurrent,
     XChaCha20Poly1305Raw,
@@ -175,7 +172,6 @@ impl Candidate {
     fn all() -> &'static [Candidate] {
         &[
             Candidate::VoidedProtectCurrent,
-            Candidate::VoidedProtectOldFusedV2,
             Candidate::VoidedC1eCurrent,
             Candidate::VoidedFuseShellCurrent,
             Candidate::XChaCha20Poly1305Raw,
@@ -188,7 +184,6 @@ impl Candidate {
     fn name(self) -> &'static str {
         match self {
             Candidate::VoidedProtectCurrent => "voided-protect-current",
-            Candidate::VoidedProtectOldFusedV2 => "voided-protect-old-fused-v2",
             Candidate::VoidedC1eCurrent => "voided-c1e-current",
             Candidate::VoidedFuseShellCurrent => "voided-fuse-shell-current",
             Candidate::XChaCha20Poly1305Raw => "xchacha20-poly1305-raw",
@@ -218,7 +213,6 @@ impl Candidate {
                 .map(|result| result.artifact)
                 .map_err(to_string)
             }
-            Candidate::VoidedProtectOldFusedV2 => old_fused_v2_protect(input, key, nonce_seed),
             Candidate::VoidedC1eCurrent => {
                 let key = Key::from_bytes(key).map_err(to_string)?;
                 let compressed = compression::compress(
@@ -280,10 +274,6 @@ impl Candidate {
             Candidate::VoidedProtectCurrent => {
                 let key = Key::from_bytes(key).map_err(to_string)?;
                 shell::open(artifact, &key).map_err(to_string)
-            }
-            Candidate::VoidedProtectOldFusedV2 => {
-                let key = Key::from_bytes(key).map_err(to_string)?;
-                shell::open_rotation_artifact(artifact, &key).map_err(to_string)
             }
             Candidate::VoidedC1eCurrent => {
                 let key = Key::from_bytes(key).map_err(to_string)?;
@@ -359,58 +349,6 @@ fn aes_decrypt(artifact: &[u8], key: &[u8; 32]) -> Result<Vec<u8>, String> {
     cipher
         .decrypt(AesNonce::from_slice(&artifact[..12]), &artifact[12..])
         .map_err(to_string)
-}
-
-fn old_fused_v2_protect(input: &[u8], key: &[u8; 32], nonce_seed: u8) -> Result<Vec<u8>, String> {
-    let key = Key::from_bytes(key).map_err(to_string)?;
-    let nonce = nonce12(nonce_seed);
-    let compressed = compression::compress(
-        input,
-        Some(CompressionOptions {
-            algorithm: CompressionAlgorithm::Brotli,
-            min_size_threshold: 100,
-            level: 6,
-        }),
-    )
-    .map_err(to_string)?;
-    let encrypted = encryption::encrypt(
-        &compressed.compressed,
-        &key,
-        Some(EncryptOptions {
-            algorithm: Some(EncryptionAlgorithm::XChaCha20Poly1305),
-            aad: None,
-        }),
-    )
-    .map_err(to_string)?;
-    let encrypted_bytes = encrypted.to_bytes();
-    let shell_envelope = shell::fuse(
-        &encrypted_bytes,
-        &key,
-        Some(FusedShellOptions {
-            preset: FusedPreset::Balanced,
-            chunk_size: None,
-            shell_nonce: Some(nonce),
-        }),
-    )
-    .map_err(to_string)?;
-    let tag_key = shell::derive_domain_key(&key, Some(&nonce), "fused-tag").map_err(to_string)?;
-
-    let mut artifact = Vec::with_capacity(
-        OLD_PROTECTED_ARTIFACT_HEADER_LEN + shell_envelope.payload.len() + shell::SHELL_TAG_SIZE,
-    );
-    artifact.extend_from_slice(&shell::PROTECTED_ARTIFACT_MAGIC);
-    artifact.push(OLD_PROTECTED_ARTIFACT_V2_VERSION);
-    artifact.push(FusedPreset::Balanced as u8);
-    artifact.push(compressed.algorithm as u8);
-    artifact.push(encrypted.algorithm as u8);
-    artifact.extend_from_slice(&shell_envelope.chunk_size.to_be_bytes());
-    artifact.extend_from_slice(&(input.len() as u64).to_be_bytes());
-    artifact.extend_from_slice(&(compressed.compressed.len() as u64).to_be_bytes());
-    artifact.extend_from_slice(&nonce);
-    artifact.extend_from_slice(&shell_envelope.payload);
-    let tag = shell::compute_shell_tag(&artifact, &tag_key).map_err(to_string)?;
-    artifact.extend_from_slice(&tag);
-    Ok(artifact)
 }
 
 #[derive(Debug, Clone, Serialize)]

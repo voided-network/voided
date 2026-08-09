@@ -9,13 +9,14 @@ The crate is organized around three layers:
 
 1. primitive cryptography
 2. fused shell primitives for already-prepared bytes
-3. v3 whole-monolith protected artifacts for the normal product path
+3. whole-monolith protected artifacts for the normal product path
 
 ## Contents
 
 - [What This Crate Is For](#what-this-crate-is-for)
 - [Installation](#installation)
 - [Core Concepts](#core-concepts)
+- [Recovery Deck](#recovery-deck)
 - [What Fused Means](#what-fused-means)
 - [Command Map](#command-map)
 - [Public Modules](#public-modules)
@@ -25,7 +26,6 @@ The crate is organized around three layers:
 - [Feature Flags](#feature-flags)
 - [Build Targets](#build-targets)
 - [Testing](#testing)
-- [v1 Boundary](#v1-boundary)
 - [License](#license)
 
 ## What This Crate Is For
@@ -33,7 +33,7 @@ The crate is organized around three layers:
 Use `voided-core` directly when you want:
 
 - native Rust access to Voided's primitives and artifact formats
-- the monolith-first Voided v3 model without a JavaScript wrapper
+- the monolith-first Voided 1.0 model without a JavaScript wrapper
 - one implementation that stays aligned across Rust, Node, and WASM
 - direct control over whether you use raw primitives, fused shell, or the full
   monolith artifact flow
@@ -49,14 +49,14 @@ Default backend-oriented build:
 
 ```toml
 [dependencies]
-voided-core = "0.2.3"
+voided-core = "1.0.0"
 ```
 
 Browser-oriented build:
 
 ```toml
 [dependencies]
-voided-core = { version = "0.2.3", default-features = false, features = ["browser"] }
+voided-core = { version = "1.0.0", default-features = false, features = ["browser"] }
 ```
 
 The default feature set is `backend`.
@@ -89,7 +89,7 @@ Use this layer when:
 
 ### Full-Flow Monolith Artifact
 
-The full-flow helper layer is the normal Voided v3 path:
+The full-flow helper layer is the normal Voided 1.0 path:
 
 1. optional compression
 2. authenticated encryption
@@ -102,12 +102,54 @@ The main functions are:
 - `inspect_artifact`
 - `repack_artifact`
 
-Use this layer when you want the standard Voided v3 monolith artifact contract.
+Use this layer when you want the standard Voided monolith artifact contract.
+
+## Recovery Deck
+
+`voided_core::recovery_deck` provides the source-of-truth recovery protocol
+shared by the Node and browser bindings. It validates an exact 52-card
+permutation, encodes its zero-based Lehmer rank as 29 big-endian bytes, derives
+a domain-separated Recovery Key, and wraps or rotates an unchanged 32-byte
+stable root.
+
+```rust
+use voided_core::encryption::generate_key;
+use voided_core::recovery_deck::{
+    create_recovery_deck,
+    derive_recovery_key,
+    rotate_recovery_deck,
+    unwrap_root_with_recovery_key,
+};
+
+let root = generate_key();
+let setup = create_recovery_deck(&root)?;
+
+let recovery_key = derive_recovery_key(&setup.deck)?;
+let recovered = unwrap_root_with_recovery_key(
+    &setup.root_wrapper,
+    &recovery_key,
+)?;
+assert_eq!(recovered.as_bytes(), root.as_bytes());
+
+let rotated = rotate_recovery_deck(&setup.root_wrapper, &setup.deck)?;
+let rotated_key = derive_recovery_key(&rotated.deck)?;
+let rotated_root = unwrap_root_with_recovery_key(
+    &rotated.root_wrapper,
+    &rotated_key,
+)?;
+assert_eq!(rotated_root.as_bytes(), root.as_bytes());
+# Ok::<(), voided_core::Error>(())
+```
+
+The ordered deck, its 29-byte rank, and its derived Recovery Key are transient
+secrets and must never be persisted or logged. Persist only the opaque
+authenticated root wrapper. Secure rotation always generates a completely new
+CSPRNG permutation; manually rearranging an exposed deck is not rotation.
 
 ## What Fused Means
 
 The fused shell is the outer envelope primitive for bytes that are already ready
-to store or transport. In the normal Voided v3 product flow, callers should use
+to store or transport. In the normal Voided 1.0 product flow, callers should use
 the whole-monolith `protect/open` helpers instead of assembling the product
 artifact by hand.
 
@@ -144,7 +186,7 @@ The public shell commands break down like this:
 - `inspect_fused`
   - inspect shell metadata without opening the inner payload
 - `protect`
-  - compress, encrypt, and shape plaintext into a standard v3 monolith artifact
+  - compress, encrypt, and shape plaintext into a standard monolith artifact
 - `open`
   - reverse the full `protect` pipeline and return the original plaintext
 - `inspect_artifact`
@@ -156,7 +198,7 @@ That gives you three clean entry points:
 
 - primitives when you only need crypto or compression
 - shell helpers when you already own the inner bytes
-- full-flow helpers when you want the standard Voided v3 monolith artifact contract
+- full-flow helpers when you want the standard Voided monolith artifact contract
 
 ## Public Modules
 
@@ -196,6 +238,16 @@ heuristic. Use it when the surrounding format authenticates or independently
 validates an exact maximum size and highly compressible input is legitimate.
 The caller ceiling is mandatory and may not exceed the crate's 512 MiB global
 in-memory decompression limit.
+
+### `voided_core::recovery_deck`
+
+Provides:
+
+- canonical 52-card validation and uniform CSPRNG generation
+- permanent 29-byte permutation-rank encoding
+- deterministic Recovery Key derivation
+- authenticated stable-root wrapping and unwrapping
+- fresh-deck setup and rotation that preserve the stable root
 
 ### `voided_core::shell`
 
@@ -271,7 +323,7 @@ assert_eq!(decrypted, plaintext);
 
 ### Example: Standard Monolith Artifact
 
-Use `protect/open` when you want the normal Voided v3 monolith artifact shape.
+Use `protect/open` when you want the normal Voided monolith artifact shape.
 
 ```rust
 use voided_core::encryption::generate_key;
@@ -334,7 +386,7 @@ assert_eq!(restored, payload);
   touching the artifact flow.
 - Use `compression` when you want direct compression results and metadata.
 - Use `fuse_bytes` when you already have the bytes you want inside the shell.
-- Use `protect` when you want the standard Voided v3 monolith artifact path.
+- Use `protect` when you want the standard Voided monolith artifact path.
 - Use `inspect_fused` or `inspect_artifact` when you want metadata without
   opening the payload. Their keyless metadata is unauthenticated and must not
   drive authorization, quota, billing, allocation, or algorithm-policy choices;
@@ -417,18 +469,6 @@ From the workspace Rust root:
 ```bash
 cargo test -p voided-core
 ```
-
-## v1 Boundary
-
-`voided-core` is the monolith-first Rust crate for the current library line.
-Map-based obfuscation belongs to deprecated v1 and is not part of the current
-crate surface.
-
-That means:
-
-- no map-shell module in the public current surface
-- no map-first examples in this crate guide
-- no new direct Rust development targeting the old map path
 
 ## License
 

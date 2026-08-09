@@ -110,7 +110,7 @@ fn generate_ed25519_key_pair_pem() -> Result<KeyPair> {
 
 /// Generate an Ed25519 key pair, returning raw bytes (public_key, private_key)
 ///
-/// Returns: (public_key: Vec<u8>, private_key: Vec<u8>)
+/// Returns: (public_key: `Vec<u8>`, private_key: `Vec<u8>`)
 /// - Public key is 32 bytes
 /// - Private key (signing key) is 32 bytes
 #[cfg(feature = "signing")]

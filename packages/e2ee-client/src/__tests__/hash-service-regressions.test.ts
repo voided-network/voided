@@ -23,7 +23,7 @@ describe("HashService security and Rust parity", () => {
     }
   );
 
-  test("matches Rust v2 salted-hash transcript vectors", async () => {
+  test("matches Rust salted-hash schema 2 transcript vectors", async () => {
     await expect(
       hashes.hashWithSalt(bytes("a"), bytes("bc"), "sha256")
     ).resolves.toBe(

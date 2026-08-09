@@ -1,12 +1,12 @@
 {
   "schemaVersion": 4,
   "package": "@voideddev/e2ee-client",
-  "packageVersion": "0.4.4",
+  "packageVersion": "1.0.0",
   "target": "wasm32-unknown-unknown",
-  "coreVersion": "0.2.3",
-  "bindingVersion": "0.2.2",
-  "sourceDigest": "sha256:db0023828ad400055da1a7f5cc2ddee7afcdc693b1fbe75c9f2110a1415d816a",
-  "buildId": "sha256:67cc25ba52f2a4f9a756235b58280f13501d334135a291425964c5a1d052b284",
+  "coreVersion": "1.0.0",
+  "bindingVersion": "1.0.0",
+  "sourceDigest": "sha256:86e22fc01604feaccf21f4e01e772d58c10c9bbb28aeb967112f5a68bd368c27",
+  "buildId": "sha256:20a92914784e67089017dff4c9bd12447f42a555926b170a8df61168f0c19ff7",
   "tools": {
     "cargo": "cargo 1.93.0 (083ac5135 2025-12-15)",
     "cargoSha256": "sha256:46c9483604e913070b085dc5acf972bc560395c10dfec1cdb389c4b6bf17cf67",
@@ -31,27 +31,27 @@
   "artifacts": [
     {
       "file": "voided_wasm.js",
-      "sha256": "sha256:d536549c56182b2444f55a591d633e1a1d8669f9a6e93c3c2dd4c7ff5243a0e6",
-      "size": 62875
+      "sha256": "sha256:c6cbe45bb196998626ae08dec4d271c23914973855306805fb3be899c28dbf9f",
+      "size": 71197
     },
     {
       "file": "voided_wasm_bg.wasm",
-      "sha256": "sha256:a5efe8d9f367b885a7c7a8be9184285c42855f87f0ad4c107fbf16da6de5b02b",
-      "size": 1906512
+      "sha256": "sha256:0341e69d9bbb9bd990bc7ce6a1c54836096f9e3e974e8be84300b1fd9a1141bf",
+      "size": 1933249
     },
     {
       "file": "voided_wasm.d.ts",
-      "sha256": "sha256:5e7759ae583bf0d5cfcc876f75d2f083f6f4b0ef5478c9f52bae9147ec136d87",
-      "size": 15805
+      "sha256": "sha256:c717d17f0a9421a4829c7d828de96cf2fea3c5698ceb5607404c833840e15a6f",
+      "size": 17660
     },
     {
       "file": "voided_wasm_bg.wasm.d.ts",
-      "sha256": "sha256:7701d045bff190adb968d3fed1a78c25dc00e297d5680fb51df0c2a244f7520b",
-      "size": 8941
+      "sha256": "sha256:d3dfdd1d9072f2c9b6a438fb5fadda280d44c6b7d0604d9cec5570796bcea4ce",
+      "size": 9555
     },
     {
       "file": "package.json",
-      "sha256": "sha256:536e02161c51eb632e129ee9ccf28a8bff85cd765ca048e61687aa36866e73cd",
+      "sha256": "sha256:51a7d7cb14888b0901cc98e0cb8f161d20a141f0bd1d0b36c699c5256f4d8620",
       "size": 496
     }
   ]

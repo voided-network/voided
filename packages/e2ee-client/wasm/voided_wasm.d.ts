@@ -22,6 +22,11 @@ export function compareHashes(a: Uint8Array, b: Uint8Array): boolean;
 export function compress(data: Uint8Array, algorithm?: string | null, level?: number | null): any;
 
 /**
+ * Generate a fresh deck and authenticated wrapper for an existing stable root.
+ */
+export function createRecoveryDeck(root_key: Uint8Array): any;
+
+/**
  * Decompress data
  */
 export function decompress(data: Uint8Array, algorithm: string): Uint8Array;
@@ -66,6 +71,16 @@ export function deriveKeyHkdfRaw(input_key_material: Uint8Array, salt: Uint8Arra
 export function deriveKeyPbkdf2(password: Uint8Array, salt: Uint8Array, iterations: number): Uint8Array;
 
 /**
+ * Deterministically derive the 32-byte Recovery Key for a valid deck.
+ */
+export function deriveRecoveryKey(deck: any): Uint8Array;
+
+/**
+ * Encode a valid recovery deck as its canonical 29-byte permutation rank.
+ */
+export function encodeRecoveryDeck(deck: any): Uint8Array;
+
+/**
  * Encrypt data using XChaCha20-Poly1305 by default or explicit AES-256-GCM.
  */
 export function encrypt(data: Uint8Array, key: Uint8Array, algorithm?: string | null): any;
@@ -94,6 +109,11 @@ export function generateHmac(data: Uint8Array, key: Uint8Array, algorithm?: stri
  * Generate a random 256-bit encryption key (returns Uint8Array)
  */
 export function generateKey(): Uint8Array;
+
+/**
+ * Generate a fresh standard 52-card recovery deck using the OS CSPRNG.
+ */
+export function generateRecoveryDeck(): any;
 
 /**
  * Format a SHA-256 fingerprint for human comparison (not Signal's protocol).
@@ -138,7 +158,7 @@ export function hexEncode(data: Uint8Array): string;
 export function init(): void;
 
 /**
- * Inspect a Voided v3 whole-monolith artifact without a key.
+ * Inspect a current VOF3 whole-monolith artifact without a key.
  */
 export function inspectArtifact(artifact: Uint8Array): any;
 
@@ -148,22 +168,22 @@ export function inspectArtifact(artifact: Uint8Array): any;
 export function inspectFused(data: Uint8Array): any;
 
 /**
- * Inspect either a current v3 artifact or an explicit legacy VOF2 rotation artifact.
+ * Inspect either a current VOF3 artifact or an explicit legacy VOF2 rotation artifact.
  */
 export function inspectRotationArtifact(artifact: Uint8Array): any;
 
 /**
- * Open a Voided v3 whole-monolith artifact.
+ * Open a current VOF3 whole-monolith artifact.
  */
 export function open(artifact: Uint8Array, key: Uint8Array): Uint8Array;
 
 /**
- * Open either a current v3 artifact or an explicit legacy VOF2 rotation artifact.
+ * Open either a current VOF3 artifact or an explicit legacy VOF2 rotation artifact.
  */
 export function openRotationArtifact(artifact: Uint8Array, key: Uint8Array): Uint8Array;
 
 /**
- * Protect bytes with the Voided v3 whole-monolith full flow.
+ * Protect bytes with the Voided 1.0 whole-monolith full flow.
  */
 export function protect(data: Uint8Array, key: Uint8Array, preset?: string | null, compression_algorithm?: string | null, compression_level?: number | null, encryption_algorithm?: string | null, shell_chunk_size?: number | null): any;
 
@@ -173,14 +193,29 @@ export function protect(data: Uint8Array, key: Uint8Array, preset?: string | nul
 export function randomBytes(length: number): Uint8Array;
 
 /**
- * Repack a current v3 monolith artifact under a new full-flow configuration.
+ * Repack a current VOF3 monolith artifact under a new full-flow configuration.
  */
 export function repackArtifact(artifact: Uint8Array, key: Uint8Array, preset?: string | null, compression_algorithm?: string | null, compression_level?: number | null, encryption_algorithm?: string | null, shell_chunk_size?: number | null): any;
+
+/**
+ * Replace a deck by rewrapping the same stable root under a fresh random deck.
+ */
+export function rotateRecoveryDeck(old_root_wrapper: Uint8Array, old_deck: any): any;
 
 /**
  * Reverse the fused shell primitive.
  */
 export function unfuse(data: Uint8Array, key: Uint8Array): Uint8Array;
+
+/**
+ * Recover a stable 32-byte root from an authenticated recovery wrapper.
+ */
+export function unwrapRootWithRecoveryKey(root_wrapper: Uint8Array, recovery_key: Uint8Array): Uint8Array;
+
+/**
+ * Return whether card IDs form one exact valid 52-card permutation.
+ */
+export function validateRecoveryDeck(deck: any): boolean;
 
 /**
  * Verify HMAC
@@ -198,6 +233,11 @@ export function verifyPbkdf2(data: Uint8Array, expected_hash: string, salt: Uint
 export function version(): string;
 
 /**
+ * Wrap a stable 32-byte root with a derived Recovery Key.
+ */
+export function wrapRootWithRecoveryKey(root_key: Uint8Array, recovery_key: Uint8Array): Uint8Array;
+
+/**
  * Compute X25519 shared secret.
  */
 export function x25519SharedSecret(our_private_key: Uint8Array, their_public_key: Uint8Array): Uint8Array;
@@ -210,6 +250,7 @@ export interface InitOutput {
     readonly base64Encode: (a: number, b: number, c: number) => void;
     readonly compareHashes: (a: number, b: number, c: number, d: number, e: number) => void;
     readonly compress: (a: number, b: number, c: number, d: number, e: number, f: number) => void;
+    readonly createRecoveryDeck: (a: number, b: number, c: number) => void;
     readonly decompress: (a: number, b: number, c: number, d: number, e: number) => void;
     readonly decompressBounded: (a: number, b: number, c: number, d: number, e: number, f: number) => void;
     readonly decrypt: (a: number, b: number, c: number, d: number) => void;
@@ -218,12 +259,15 @@ export interface InitOutput {
     readonly deriveKeyHkdf: (a: number, b: number, c: number, d: number, e: number, f: number, g: number) => void;
     readonly deriveKeyHkdfRaw: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number) => void;
     readonly deriveKeyPbkdf2: (a: number, b: number, c: number, d: number, e: number, f: number) => void;
+    readonly deriveRecoveryKey: (a: number, b: number) => void;
+    readonly encodeRecoveryDeck: (a: number, b: number) => void;
     readonly encrypt: (a: number, b: number, c: number, d: number, e: number, f: number, g: number) => void;
     readonly encryptWithAad: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number) => void;
     readonly fuse: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number) => void;
     readonly generateFingerprint: (a: number, b: number, c: number, d: number) => void;
     readonly generateHmac: (a: number, b: number, c: number, d: number, e: number, f: number, g: number) => void;
     readonly generateKey: (a: number) => void;
+    readonly generateRecoveryDeck: (a: number) => void;
     readonly generateSafetyNumbers: (a: number, b: number, c: number, d: number) => void;
     readonly generateSalt: (a: number, b: number) => void;
     readonly generateX25519KeyPair: (a: number, b: number, c: number) => void;
@@ -240,10 +284,14 @@ export interface InitOutput {
     readonly protect: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number, j: number, k: number, l: number, m: number) => void;
     readonly randomBytes: (a: number, b: number) => void;
     readonly repackArtifact: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number, j: number, k: number, l: number, m: number) => void;
+    readonly rotateRecoveryDeck: (a: number, b: number, c: number, d: number) => void;
     readonly unfuse: (a: number, b: number, c: number, d: number, e: number) => void;
+    readonly unwrapRootWithRecoveryKey: (a: number, b: number, c: number, d: number, e: number) => void;
+    readonly validateRecoveryDeck: (a: number) => number;
     readonly verifyHmac: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number) => void;
     readonly verifyPbkdf2: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number) => void;
     readonly version: (a: number) => void;
+    readonly wrapRootWithRecoveryKey: (a: number, b: number, c: number, d: number, e: number) => void;
     readonly x25519SharedSecret: (a: number, b: number, c: number, d: number, e: number) => void;
     readonly init: () => void;
     readonly BroccoliConcatFinish: (a: number, b: number, c: number) => number;

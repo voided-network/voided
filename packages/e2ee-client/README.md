@@ -15,6 +15,7 @@ At a high level, the package exposes four layers:
 ## Contents
 
 - [What This Package Is For](#what-this-package-is-for)
+- [Browser Support](#browser-support)
 - [Installation](#installation)
 - [Recommended Browser Path](#recommended-browser-path)
 - [Package Layers](#package-layers)
@@ -29,7 +30,6 @@ At a high level, the package exposes four layers:
 - [Key Storage And Lifecycle](#key-storage-and-lifecycle)
 - [Development](#development)
 - [Troubleshooting](#troubleshooting)
-- [v1 Boundary](#v1-boundary)
 - [License](#license)
 
 ## What This Package Is For
@@ -38,12 +38,18 @@ Use `@voideddev/e2ee-client` when you want:
 
 - browser-side encryption with first-party Voided APIs
 - a stateful client that manages browser key storage for you
-- v3 monolith artifact helpers in browser runtimes
+- monolith artifact helpers in browser runtimes
 - top-level helper functions for simpler app code
 - access to the WASM-backed low-level crypto layer when you need more control
 
 If you want direct Rust instead, use `voided-core`. If you want Node.js instead
 of the browser, use `@voideddev/enc-server`.
+
+## Browser Support
+
+Voided 1.0 targets current Safari/WebKit and Chromium-based browsers. Firefox
+is not a supported release target; compatibility there is best effort, and
+Firefox-specific behavior is not a Voided release gate.
 
 ## Installation
 
@@ -53,7 +59,7 @@ npm install @voideddev/e2ee-client
 
 If you plan to use fused helpers in the browser, treat the WASM runtime as part
 of the normal package requirement. The TypeScript fallback is useful for the
-older browser encryption path and primitive helpers, but it is not the current
+primitive browser encryption helpers, but it is not the current
 monolith artifact path.
 
 ## Recommended Browser Path
@@ -61,11 +67,11 @@ monolith artifact path.
 If you are choosing quickly and do not need a custom integration, start here:
 
 1. create a `VoidedE2EEClient`
-2. use `protect` to produce a v3 monolith artifact
+2. use `protect` to produce a monolith artifact
 3. use `inspectProtected` when you want metadata without opening it
 4. use `open` to restore the original text
 
-That is the normal browser-facing Voided v3 path.
+That is the normal browser-facing Voided 1.0 path.
 
 `inspectProtected`, `inspectArtifact`, and `inspectFused` are keyless structural
 inspection helpers. Their returned metadata is unauthenticated and must be
@@ -179,7 +185,7 @@ The fused shell is the outer artifact envelope. It does not replace browser
 encryption. It wraps already-prepared bytes in a stable, inspectable,
 preset-driven format.
 
-In the standard Voided v3 browser flow, the steps are:
+In the standard Voided 1.0 browser flow, the steps are:
 
 1. optional compression
 2. encryption
@@ -187,11 +193,11 @@ In the standard Voided v3 browser flow, the steps are:
 
 That means:
 
-- `encrypt` returns the older encrypted blob shape
+- `encrypt` returns the primitive encrypted blob shape
 - `fuse` wraps prepared bytes in the shell
-- `protect` returns the standard v3 monolith artifact shape
+- `protect` returns the standard monolith artifact shape
 
-Use `protect/open` when you want the standard Voided v3 monolith artifact contract.
+Use `protect/open` when you want the standard Voided monolith artifact contract.
 
 Use `fuse/unfuse` only when you already control the inner bytes and only need
 the outer shell.
@@ -215,7 +221,7 @@ Important behaviors:
 - key storage handled by the internal `KeyManager`
 - default storage is IndexedDB
 - the client auto-loads or auto-generates its current key
-- fused `protect/open` and older `encrypt/decrypt` flows both live here
+- fused `protect/open` and primitive `encrypt/decrypt` flows both live here
 
 Common client operations:
 
@@ -243,7 +249,7 @@ Recommended mental model:
   - a bounded but unauthenticated metadata view; treat every field as
     attacker-controlled until `open` succeeds
 - `encrypt/decrypt`
-  - the older browser blob path, still available but not the main v2 shape
+  - the primitive browser blob path, retained for direct encryption use
 
 Command intent:
 
@@ -406,7 +412,7 @@ returning any output if that cap would be crossed. The explicit ceiling may be
 at most 512 MiB. This method fails closed when the Rust/WASM backend is
 unavailable; it never substitutes an unbounded TypeScript decoder.
 
-`hashWithSalt` now matches the core/native v2 transcript exactly: a
+`hashWithSalt` matches core/native salted-hash transcript schema 2 exactly: a
 domain-separated, length-prefixed encoding of the data and salt. It
 intentionally differs from the legacy `hash(data || salt)` construction.
 Persisted legacy salted digests must be migrated or recomputed before they can
@@ -431,7 +437,7 @@ What they do:
 - `inspectFused`
   - inspect shell metadata without opening the inner payload
 - `protect`
-  - compress, encrypt, and shape bytes into a standard v3 monolith artifact
+  - compress, encrypt, and shape bytes into a standard VOF3 monolith artifact
 - `open`
   - reverse the full fused flow and return the original bytes
 - `inspectArtifact`
@@ -566,7 +572,7 @@ Recommended starting point:
 The normal browser artifact lifecycle is:
 
 1. `protect`
-   - produce a v3 monolith artifact from text or bytes
+   - produce a VOF3 monolith artifact from text or bytes
 2. `inspectProtected` or `inspectArtifact`
    - read preset, sizes, and envelope metadata
 3. `open`
@@ -649,6 +655,79 @@ Useful lifecycle operations include:
 - `deleteKey`
 - password-derived key setup
 
+Recovery Deck is a separate stateless root-recovery primitive. The top-level
+helpers and `crypto` namespace expose `generateRecoveryDeck`,
+`validateRecoveryDeck`, `encodeRecoveryDeck`, `deriveRecoveryKey`,
+`wrapRootWithRecoveryKey`, `unwrapRootWithRecoveryKey`, `createRecoveryDeck`,
+and `rotateRecoveryDeck`. They do not write to IndexedDB. Persist only the
+opaque `rootWrapper`; never persist the ordered deck, permutation rank, or
+derived Recovery Key. The helpers require the current Rust/WASM artifact and
+fail closed under the TypeScript fallback. See the repository's
+[`Recovery Deck protocol`](https://github.com/voided-network/voided/blob/main/docs/recovery-deck-protocol.md) for permanent
+encoding and derivation constants.
+
+### Optional Recovery Deck UI
+
+The browser package also ships one framework-free deck component. It starts
+with a securely generated permutation, supports direct card movement, and can
+replace the entire order through a fresh CSPRNG shuffle. It does not persist
+decks, know about Slipner Auth, or choose where an opaque root wrapper is
+stored.
+
+```ts
+import {
+  createRecoveryDeckUI,
+  deriveRecoveryKey,
+  wrapRootWithRecoveryKey,
+} from "@voideddev/e2ee-client";
+
+const root = crypto.getRandomValues(new Uint8Array(32));
+const deckUI = createRecoveryDeckUI({
+  rootClassName: "my-recovery-theme",
+  onConfirm: async (deck) => {
+    const recoveryKey = await deriveRecoveryKey(deck);
+    try {
+      const rootWrapper = await wrapRootWithRecoveryKey(root, recoveryKey);
+      await saveOpaqueWrapper(rootWrapper);
+    } finally {
+      recoveryKey.fill(0);
+      root.fill(0);
+    }
+  },
+  onClose: () => root.fill(0),
+});
+
+await deckUI.show(); // modal
+// Or use a separate instance inline/full-page:
+// await createRecoveryDeckUI(options).mount(document.querySelector("main")!);
+```
+
+The default surface is intentionally neutral and injects only structural CSS.
+Customize or replace it with:
+
+- `rootClassName` to scope a product theme
+- `classNames` to append classes to individual elements
+- `labels` to replace all user-facing copy
+- `renderCardContent` to replace the contents of every behavior-owning card
+- `injectDefaultStyles: false` for a completely application-owned stylesheet
+- stable `data-voideddev-component`, `data-voideddev-action`, card, suit, and
+  position attributes
+- `--voided-recovery-*` CSS custom properties for colors, borders, and radii
+
+No Shadow DOM, framework dependency, or inline element styles are used, and
+the defaults live in a low-priority CSS cascade layer. Normal application CSS
+therefore has complete control regardless of load order. `show()` opens a
+modal; `mount(container)` places the same component inline so an application
+can compose it as a separate page. Closing or destroying the component clears
+its retained card-order array.
+
+The component intentionally does not ship a forced 52-click reconstruction
+experience. Recovery-entry UX may use scanning, guided entry, hardware input,
+or another application-owned flow; cryptographic derivation still validates
+the exact canonical permutation before use. See
+[`recovery-deck-ui-example.html`](./examples/recovery-deck-ui-example.html) for
+both modal and inline mounting.
+
 `deriveKeyFromPassword` requires a password of at least 12 characters, a
 16-64 byte salt, and 600,000-1,000,000 PBKDF2-SHA256 iterations. It returns
 the exact salt/iteration record needed for recovery and also stores that record
@@ -728,21 +807,6 @@ Use the `crypto` namespace instead of `VoidedE2EEClient`.
 
 Use the WASM loader exports directly instead of relying on lazy backend
 selection.
-
-## v1 Boundary
-
-This package is the monolith-first current line. The old map-based surface is not
-part of the current public browser package contract.
-
-Separately, encrypted browser envelope `1.0` is rejected in favor of the
-authenticated `1.1` format described above.
-
-That means:
-
-- no map-first API in the current browser guide
-- no new current-line development targeting the old map shape
-- no expectation that the current package should preserve the deprecated map
-  surface
 
 ## License
 

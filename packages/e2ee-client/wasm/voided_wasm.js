@@ -112,6 +112,29 @@ export function compress(data, algorithm, level) {
 }
 
 /**
+ * Generate a fresh deck and authenticated wrapper for an existing stable root.
+ * @param {Uint8Array} root_key
+ * @returns {any}
+ */
+export function createRecoveryDeck(root_key) {
+    try {
+        const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+        const ptr0 = passArray8ToWasm0(root_key, wasm.__wbindgen_export);
+        const len0 = WASM_VECTOR_LEN;
+        wasm.createRecoveryDeck(retptr, ptr0, len0);
+        var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+        var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+        var r2 = getDataViewMemory0().getInt32(retptr + 4 * 2, true);
+        if (r2) {
+            throw takeObject(r1);
+        }
+        return takeObject(r0);
+    } finally {
+        wasm.__wbindgen_add_to_stack_pointer(16);
+    }
+}
+
+/**
  * Decompress data
  * @param {Uint8Array} data
  * @param {string} algorithm
@@ -359,6 +382,54 @@ export function deriveKeyPbkdf2(password, salt, iterations) {
 }
 
 /**
+ * Deterministically derive the 32-byte Recovery Key for a valid deck.
+ * @param {any} deck
+ * @returns {Uint8Array}
+ */
+export function deriveRecoveryKey(deck) {
+    try {
+        const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+        wasm.deriveRecoveryKey(retptr, addHeapObject(deck));
+        var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+        var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+        var r2 = getDataViewMemory0().getInt32(retptr + 4 * 2, true);
+        var r3 = getDataViewMemory0().getInt32(retptr + 4 * 3, true);
+        if (r3) {
+            throw takeObject(r2);
+        }
+        var v1 = getArrayU8FromWasm0(r0, r1).slice();
+        wasm.__wbindgen_export4(r0, r1 * 1, 1);
+        return v1;
+    } finally {
+        wasm.__wbindgen_add_to_stack_pointer(16);
+    }
+}
+
+/**
+ * Encode a valid recovery deck as its canonical 29-byte permutation rank.
+ * @param {any} deck
+ * @returns {Uint8Array}
+ */
+export function encodeRecoveryDeck(deck) {
+    try {
+        const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+        wasm.encodeRecoveryDeck(retptr, addHeapObject(deck));
+        var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+        var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+        var r2 = getDataViewMemory0().getInt32(retptr + 4 * 2, true);
+        var r3 = getDataViewMemory0().getInt32(retptr + 4 * 3, true);
+        if (r3) {
+            throw takeObject(r2);
+        }
+        var v1 = getArrayU8FromWasm0(r0, r1).slice();
+        wasm.__wbindgen_export4(r0, r1 * 1, 1);
+        return v1;
+    } finally {
+        wasm.__wbindgen_add_to_stack_pointer(16);
+    }
+}
+
+/**
  * Encrypt data using XChaCha20-Poly1305 by default or explicit AES-256-GCM.
  * @param {Uint8Array} data
  * @param {Uint8Array} key
@@ -536,6 +607,26 @@ export function generateKey() {
         var v1 = getArrayU8FromWasm0(r0, r1).slice();
         wasm.__wbindgen_export4(r0, r1 * 1, 1);
         return v1;
+    } finally {
+        wasm.__wbindgen_add_to_stack_pointer(16);
+    }
+}
+
+/**
+ * Generate a fresh standard 52-card recovery deck using the OS CSPRNG.
+ * @returns {any}
+ */
+export function generateRecoveryDeck() {
+    try {
+        const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+        wasm.generateRecoveryDeck(retptr);
+        var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+        var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+        var r2 = getDataViewMemory0().getInt32(retptr + 4 * 2, true);
+        if (r2) {
+            throw takeObject(r1);
+        }
+        return takeObject(r0);
     } finally {
         wasm.__wbindgen_add_to_stack_pointer(16);
     }
@@ -793,7 +884,7 @@ export function init() {
 }
 
 /**
- * Inspect a Voided v3 whole-monolith artifact without a key.
+ * Inspect a current VOF3 whole-monolith artifact without a key.
  * @param {Uint8Array} artifact
  * @returns {any}
  */
@@ -839,7 +930,7 @@ export function inspectFused(data) {
 }
 
 /**
- * Inspect either a current v3 artifact or an explicit legacy VOF2 rotation artifact.
+ * Inspect either a current VOF3 artifact or an explicit legacy VOF2 rotation artifact.
  * @param {Uint8Array} artifact
  * @returns {any}
  */
@@ -862,7 +953,7 @@ export function inspectRotationArtifact(artifact) {
 }
 
 /**
- * Open a Voided v3 whole-monolith artifact.
+ * Open a current VOF3 whole-monolith artifact.
  * @param {Uint8Array} artifact
  * @param {Uint8Array} key
  * @returns {Uint8Array}
@@ -891,7 +982,7 @@ export function open(artifact, key) {
 }
 
 /**
- * Open either a current v3 artifact or an explicit legacy VOF2 rotation artifact.
+ * Open either a current VOF3 artifact or an explicit legacy VOF2 rotation artifact.
  * @param {Uint8Array} artifact
  * @param {Uint8Array} key
  * @returns {Uint8Array}
@@ -920,7 +1011,7 @@ export function openRotationArtifact(artifact, key) {
 }
 
 /**
- * Protect bytes with the Voided v3 whole-monolith full flow.
+ * Protect bytes with the Voided 1.0 whole-monolith full flow.
  * @param {Uint8Array} data
  * @param {Uint8Array} key
  * @param {string | null} [preset]
@@ -981,7 +1072,7 @@ export function randomBytes(length) {
 }
 
 /**
- * Repack a current v3 monolith artifact under a new full-flow configuration.
+ * Repack a current VOF3 monolith artifact under a new full-flow configuration.
  * @param {Uint8Array} artifact
  * @param {Uint8Array} key
  * @param {string | null} [preset]
@@ -1005,6 +1096,30 @@ export function repackArtifact(artifact, key, preset, compression_algorithm, com
         var ptr4 = isLikeNone(encryption_algorithm) ? 0 : passStringToWasm0(encryption_algorithm, wasm.__wbindgen_export, wasm.__wbindgen_export2);
         var len4 = WASM_VECTOR_LEN;
         wasm.repackArtifact(retptr, ptr0, len0, ptr1, len1, ptr2, len2, ptr3, len3, isLikeNone(compression_level) ? 0x100000001 : (compression_level) >>> 0, ptr4, len4, isLikeNone(shell_chunk_size) ? 0x100000001 : (shell_chunk_size) >>> 0);
+        var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+        var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+        var r2 = getDataViewMemory0().getInt32(retptr + 4 * 2, true);
+        if (r2) {
+            throw takeObject(r1);
+        }
+        return takeObject(r0);
+    } finally {
+        wasm.__wbindgen_add_to_stack_pointer(16);
+    }
+}
+
+/**
+ * Replace a deck by rewrapping the same stable root under a fresh random deck.
+ * @param {Uint8Array} old_root_wrapper
+ * @param {any} old_deck
+ * @returns {any}
+ */
+export function rotateRecoveryDeck(old_root_wrapper, old_deck) {
+    try {
+        const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+        const ptr0 = passArray8ToWasm0(old_root_wrapper, wasm.__wbindgen_export);
+        const len0 = WASM_VECTOR_LEN;
+        wasm.rotateRecoveryDeck(retptr, ptr0, len0, addHeapObject(old_deck));
         var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
         var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
         var r2 = getDataViewMemory0().getInt32(retptr + 4 * 2, true);
@@ -1044,6 +1159,45 @@ export function unfuse(data, key) {
     } finally {
         wasm.__wbindgen_add_to_stack_pointer(16);
     }
+}
+
+/**
+ * Recover a stable 32-byte root from an authenticated recovery wrapper.
+ * @param {Uint8Array} root_wrapper
+ * @param {Uint8Array} recovery_key
+ * @returns {Uint8Array}
+ */
+export function unwrapRootWithRecoveryKey(root_wrapper, recovery_key) {
+    try {
+        const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+        const ptr0 = passArray8ToWasm0(root_wrapper, wasm.__wbindgen_export);
+        const len0 = WASM_VECTOR_LEN;
+        const ptr1 = passArray8ToWasm0(recovery_key, wasm.__wbindgen_export);
+        const len1 = WASM_VECTOR_LEN;
+        wasm.unwrapRootWithRecoveryKey(retptr, ptr0, len0, ptr1, len1);
+        var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+        var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+        var r2 = getDataViewMemory0().getInt32(retptr + 4 * 2, true);
+        var r3 = getDataViewMemory0().getInt32(retptr + 4 * 3, true);
+        if (r3) {
+            throw takeObject(r2);
+        }
+        var v3 = getArrayU8FromWasm0(r0, r1).slice();
+        wasm.__wbindgen_export4(r0, r1 * 1, 1);
+        return v3;
+    } finally {
+        wasm.__wbindgen_add_to_stack_pointer(16);
+    }
+}
+
+/**
+ * Return whether card IDs form one exact valid 52-card permutation.
+ * @param {any} deck
+ * @returns {boolean}
+ */
+export function validateRecoveryDeck(deck) {
+    const ret = wasm.validateRecoveryDeck(addHeapObject(deck));
+    return ret !== 0;
 }
 
 /**
@@ -1126,6 +1280,35 @@ export function version() {
     } finally {
         wasm.__wbindgen_add_to_stack_pointer(16);
         wasm.__wbindgen_export4(deferred1_0, deferred1_1, 1);
+    }
+}
+
+/**
+ * Wrap a stable 32-byte root with a derived Recovery Key.
+ * @param {Uint8Array} root_key
+ * @param {Uint8Array} recovery_key
+ * @returns {Uint8Array}
+ */
+export function wrapRootWithRecoveryKey(root_key, recovery_key) {
+    try {
+        const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+        const ptr0 = passArray8ToWasm0(root_key, wasm.__wbindgen_export);
+        const len0 = WASM_VECTOR_LEN;
+        const ptr1 = passArray8ToWasm0(recovery_key, wasm.__wbindgen_export);
+        const len1 = WASM_VECTOR_LEN;
+        wasm.wrapRootWithRecoveryKey(retptr, ptr0, len0, ptr1, len1);
+        var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+        var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+        var r2 = getDataViewMemory0().getInt32(retptr + 4 * 2, true);
+        var r3 = getDataViewMemory0().getInt32(retptr + 4 * 3, true);
+        if (r3) {
+            throw takeObject(r2);
+        }
+        var v3 = getArrayU8FromWasm0(r0, r1).slice();
+        wasm.__wbindgen_export4(r0, r1 * 1, 1);
+        return v3;
+    } finally {
+        wasm.__wbindgen_add_to_stack_pointer(16);
     }
 }
 
@@ -1238,6 +1421,10 @@ function __wbg_get_imports() {
             const ret = getObject(arg0).crypto;
             return addHeapObject(ret);
         },
+        __wbg_done_d100ae42c283d4d6: function(arg0) {
+            const ret = getObject(arg0).done;
+            return ret;
+        },
         __wbg_error_7534b8e9a36f1ab4: function(arg0, arg1) {
             let deferred0_0;
             let deferred0_1;
@@ -1255,6 +1442,14 @@ function __wbg_get_imports() {
         },
         __wbg_getRandomValues_b8f5dbd5f3995a9e: function() { return handleError(function (arg0, arg1) {
             getObject(arg0).getRandomValues(getObject(arg1));
+        }, arguments); },
+        __wbg_get_6d2fb306d63aa023: function(arg0, arg1) {
+            const ret = getObject(arg0)[arg1 >>> 0];
+            return addHeapObject(ret);
+        },
+        __wbg_get_b5c0d2cc90facf58: function() { return handleError(function (arg0, arg1) {
+            const ret = Reflect.get(getObject(arg0), getObject(arg1));
+            return addHeapObject(ret);
         }, arguments); },
         __wbg_get_with_ref_key_1dc361bd10053bfe: function(arg0, arg1) {
             const ret = getObject(arg0)[getObject(arg1)];
@@ -1280,7 +1475,19 @@ function __wbg_get_imports() {
             const ret = result;
             return ret;
         },
+        __wbg_isArray_eacffc44d1b42169: function(arg0) {
+            const ret = Array.isArray(getObject(arg0));
+            return ret;
+        },
+        __wbg_iterator_954cac89df2ecf44: function() {
+            const ret = Symbol.iterator;
+            return addHeapObject(ret);
+        },
         __wbg_length_184db1debc27a886: function(arg0) {
+            const ret = getObject(arg0).length;
+            return ret;
+        },
+        __wbg_length_39fd3a725d86b6f8: function(arg0) {
             const ret = getObject(arg0).length;
             return ret;
         },
@@ -1296,6 +1503,10 @@ function __wbg_get_imports() {
             const ret = new Uint8Array(getObject(arg0));
             return addHeapObject(ret);
         },
+        __wbg_new_c390db0e7d29b395: function() {
+            const ret = new Array();
+            return addHeapObject(ret);
+        },
         __wbg_new_e207e22a7d1fce8c: function() {
             const ret = new Object();
             return addHeapObject(ret);
@@ -1308,6 +1519,14 @@ function __wbg_get_imports() {
             const ret = new Uint8Array(arg0 >>> 0);
             return addHeapObject(ret);
         },
+        __wbg_next_216317bab0dc69eb: function(arg0) {
+            const ret = getObject(arg0).next;
+            return addHeapObject(ret);
+        },
+        __wbg_next_643d610838b78154: function() { return handleError(function (arg0) {
+            const ret = getObject(arg0).next();
+            return addHeapObject(ret);
+        }, arguments); },
         __wbg_node_905d3e251edff8a2: function(arg0) {
             const ret = getObject(arg0).node;
             return addHeapObject(ret);
@@ -1326,6 +1545,9 @@ function __wbg_get_imports() {
             const ret = module.require;
             return addHeapObject(ret);
         }, arguments); },
+        __wbg_set_2233fda9731347f4: function(arg0, arg1, arg2) {
+            getObject(arg0)[arg1 >>> 0] = takeObject(arg2);
+        },
         __wbg_set_3f1d0b984ed272ed: function(arg0, arg1, arg2) {
             getObject(arg0)[takeObject(arg1)] = takeObject(arg2);
         },
@@ -1354,6 +1576,10 @@ function __wbg_get_imports() {
         },
         __wbg_subarray_69d9fe500a11703e: function(arg0, arg1, arg2) {
             const ret = getObject(arg0).subarray(arg1 >>> 0, arg2 >>> 0);
+            return addHeapObject(ret);
+        },
+        __wbg_value_b62dc5579f480ba0: function(arg0) {
+            const ret = getObject(arg0).value;
             return addHeapObject(ret);
         },
         __wbg_versions_c01dfd4722a88165: function(arg0) {

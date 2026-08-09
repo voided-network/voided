@@ -16,11 +16,11 @@ test('collects and summarizes metrics', () => {
     StatsTracker.instance.metrics = [];
     StatsTracker.instance.add({
         label: 'a', originalSize: 100, compressedSize: 80, compressionRatio: 0.8,
-        storedSize: 120, expansionRatio: 1.2, computeUnits: 10, algorithm: 'x', temperature: 0.5, durationMs: 5
+        storedSize: 120, expansionRatio: 1.2, computeUnits: 10, algorithm: 'x', durationMs: 5
     });
     StatsTracker.instance.add({
         label: 'b', originalSize: 200, compressedSize: 100, compressionRatio: 0.5,
-        storedSize: 210, expansionRatio: 1.05, computeUnits: 20, algorithm: 'y', temperature: 0.7, durationMs: 7
+        storedSize: 210, expansionRatio: 1.05, computeUnits: 20, algorithm: 'y', durationMs: 7
     });
     const sum = StatsTracker.instance.summary;
     assert.strictEqual(sum.count, 2);

@@ -46,7 +46,6 @@ export function benchmarkCompression(
             expansionRatio: 0,
             computeUnits: iterations,
             algorithm: algo,
-            temperature: 0,
             durationMs: avg
         });
         results.push({ label: 'compression', algorithm: algo, iterations, avgMs: avg, totalMs: total });
@@ -87,7 +86,6 @@ export function benchmarkEncryption(
             expansionRatio: 0,
             computeUnits: iterations,
             algorithm: algo,
-            temperature: 0,
             durationMs: avg
         });
         results.push({ label: 'encryption', algorithm: algo, iterations, avgMs: avg, totalMs: total });
@@ -122,7 +120,6 @@ export function benchmarkHashing(
             expansionRatio: 0,
             computeUnits: iterations,
             algorithm: algo,
-            temperature: 0,
             durationMs: avg
         });
         results.push({ label: 'hash', algorithm: algo, iterations, avgMs: avg, totalMs: total });

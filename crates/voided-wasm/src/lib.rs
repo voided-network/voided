@@ -5,6 +5,7 @@
 
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
+use zeroize::Zeroize;
 
 mod browser_limits;
 use browser_limits::*;
@@ -163,6 +164,17 @@ pub struct X25519KeyPair {
     pub public_key: Vec<u8>,
     #[serde(serialize_with = "serialize_byte_vec")]
     pub private_key: Vec<u8>,
+}
+
+/// Fresh recovery deck plus the only value suitable for persistence.
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RecoveryDeckSetup {
+    /// Ordered canonical card IDs. This array is the recovery secret.
+    pub deck: Vec<String>,
+    /// Authenticated wrapper around the unchanged stable root key.
+    #[serde(serialize_with = "serialize_byte_vec")]
+    pub root_wrapper: Vec<u8>,
 }
 
 /// Generate a random 256-bit encryption key (returns Uint8Array)
@@ -473,6 +485,133 @@ pub fn derive_key_pbkdf2(
         32,
         "PBKDF2 returned an invalid key length",
     )
+}
+
+// ============================================================================
+// Recovery Deck
+// ============================================================================
+
+/// Generate a fresh standard 52-card recovery deck using the OS CSPRNG.
+#[wasm_bindgen(js_name = generateRecoveryDeck)]
+pub fn generate_recovery_deck() -> Result<JsValue, JsValue> {
+    let mut cards: Vec<String> = voided_core::recovery_deck::generate_recovery_deck()
+        .card_ids()
+        .map(str::to_string)
+        .collect();
+    let serialized =
+        serde_wasm_bindgen::to_value(&cards).map_err(|error| js_error(error.to_string()));
+    cards.zeroize();
+    serialized
+}
+
+/// Return whether card IDs form one exact valid 52-card permutation.
+#[wasm_bindgen(js_name = validateRecoveryDeck)]
+pub fn validate_recovery_deck(deck: JsValue) -> bool {
+    parse_recovery_deck(deck).is_ok()
+}
+
+/// Encode a valid recovery deck as its canonical 29-byte permutation rank.
+#[wasm_bindgen(js_name = encodeRecoveryDeck)]
+pub fn encode_recovery_deck(deck: JsValue) -> Result<Vec<u8>, JsValue> {
+    let deck = parse_recovery_deck(deck)?;
+    Ok(voided_core::recovery_deck::encode_recovery_deck(&deck).to_vec())
+}
+
+/// Deterministically derive the 32-byte Recovery Key for a valid deck.
+#[wasm_bindgen(js_name = deriveRecoveryKey)]
+pub fn derive_recovery_key(deck: JsValue) -> Result<Vec<u8>, JsValue> {
+    let deck = parse_recovery_deck(deck)?;
+    let key = voided_core::recovery_deck::derive_recovery_key(&deck)
+        .map_err(|error| js_error(error.to_string()))?;
+    Ok(key.as_bytes().to_vec())
+}
+
+/// Wrap a stable 32-byte root with a derived Recovery Key.
+#[wasm_bindgen(js_name = wrapRootWithRecoveryKey)]
+pub fn wrap_root_with_recovery_key(
+    root_key: &[u8],
+    recovery_key: &[u8],
+) -> Result<Vec<u8>, JsValue> {
+    validate_key(root_key)?;
+    validate_key(recovery_key)?;
+    let root_key = parse_core_key(root_key)?;
+    let recovery_key = parse_core_key(recovery_key)?;
+    voided_core::recovery_deck::wrap_root_with_recovery_key(&root_key, &recovery_key)
+        .map_err(|error| js_error(error.to_string()))
+}
+
+/// Recover a stable 32-byte root from an authenticated recovery wrapper.
+#[wasm_bindgen(js_name = unwrapRootWithRecoveryKey)]
+pub fn unwrap_root_with_recovery_key(
+    root_wrapper: &[u8],
+    recovery_key: &[u8],
+) -> Result<Vec<u8>, JsValue> {
+    browser_limit(validate_exact_len(
+        root_wrapper.len(),
+        voided_core::recovery_deck::RECOVERY_ROOT_WRAPPER_SIZE,
+        "recovery root wrapper must contain exactly 80 bytes",
+    ))?;
+    validate_key(recovery_key)?;
+    let recovery_key = parse_core_key(recovery_key)?;
+    let root_key =
+        voided_core::recovery_deck::unwrap_root_with_recovery_key(root_wrapper, &recovery_key)
+            .map_err(|error| js_error(error.to_string()))?;
+    Ok(root_key.as_bytes().to_vec())
+}
+
+/// Generate a fresh deck and authenticated wrapper for an existing stable root.
+#[wasm_bindgen(js_name = createRecoveryDeck)]
+pub fn create_recovery_deck(root_key: &[u8]) -> Result<JsValue, JsValue> {
+    validate_key(root_key)?;
+    let root_key = parse_core_key(root_key)?;
+    let setup = voided_core::recovery_deck::create_recovery_deck(&root_key)
+        .map_err(|error| js_error(error.to_string()))?;
+    recovery_setup_to_js(setup)
+}
+
+/// Replace a deck by rewrapping the same stable root under a fresh random deck.
+#[wasm_bindgen(js_name = rotateRecoveryDeck)]
+pub fn rotate_recovery_deck(
+    old_root_wrapper: &[u8],
+    old_deck: JsValue,
+) -> Result<JsValue, JsValue> {
+    browser_limit(validate_exact_len(
+        old_root_wrapper.len(),
+        voided_core::recovery_deck::RECOVERY_ROOT_WRAPPER_SIZE,
+        "recovery root wrapper must contain exactly 80 bytes",
+    ))?;
+    let old_deck = parse_recovery_deck(old_deck)?;
+    let setup = voided_core::recovery_deck::rotate_recovery_deck(old_root_wrapper, &old_deck)
+        .map_err(|error| js_error(error.to_string()))?;
+    recovery_setup_to_js(setup)
+}
+
+fn parse_recovery_deck(
+    value: JsValue,
+) -> Result<voided_core::recovery_deck::RecoveryDeck, JsValue> {
+    let mut card_ids: Vec<String> =
+        serde_wasm_bindgen::from_value(value).map_err(|error| js_error(error.to_string()))?;
+    let result = voided_core::recovery_deck::RecoveryDeck::from_card_ids(&card_ids)
+        .map_err(|error| js_error(error.to_string()));
+    card_ids.zeroize();
+    result
+}
+
+fn parse_core_key(bytes: &[u8]) -> Result<voided_core::encryption::Key, JsValue> {
+    voided_core::encryption::Key::from_bytes(bytes).map_err(|error| js_error(error.to_string()))
+}
+
+fn recovery_setup_to_js(
+    setup: voided_core::recovery_deck::RecoveryDeckSetup,
+) -> Result<JsValue, JsValue> {
+    let mut value = RecoveryDeckSetup {
+        deck: setup.deck.card_ids().map(str::to_string).collect(),
+        root_wrapper: setup.root_wrapper,
+    };
+    let serialized =
+        serde_wasm_bindgen::to_value(&value).map_err(|error| js_error(error.to_string()));
+    value.deck.zeroize();
+    serialized
 }
 
 /// Generate X25519 key pair (deterministic if seed provided).
@@ -1096,7 +1235,7 @@ pub fn inspect_fused(data: &[u8]) -> Result<JsValue, JsValue> {
         .map_err(|e| JsValue::from_str(&e.to_string()))
 }
 
-/// Protect bytes with the Voided v3 whole-monolith full flow.
+/// Protect bytes with the Voided 1.0 whole-monolith full flow.
 #[wasm_bindgen]
 pub fn protect(
     data: &[u8],
@@ -1145,7 +1284,7 @@ pub fn protect(
         .map_err(|e| JsValue::from_str(&e.to_string()))
 }
 
-/// Open a Voided v3 whole-monolith artifact.
+/// Open a current VOF3 whole-monolith artifact.
 #[wasm_bindgen(js_name = open)]
 pub fn open_artifact(artifact: &[u8], key: &[u8]) -> Result<Vec<u8>, JsValue> {
     inspect_current_artifact_for_browser(artifact)?;
@@ -1159,7 +1298,7 @@ pub fn open_artifact(artifact: &[u8], key: &[u8]) -> Result<Vec<u8>, JsValue> {
     )
 }
 
-/// Open either a current v3 artifact or an explicit legacy VOF2 rotation artifact.
+/// Open either a current VOF3 artifact or an explicit legacy VOF2 rotation artifact.
 #[wasm_bindgen(js_name = openRotationArtifact)]
 pub fn open_rotation_artifact(artifact: &[u8], key: &[u8]) -> Result<Vec<u8>, JsValue> {
     inspect_rotation_artifact_for_browser(artifact)?;
@@ -1173,7 +1312,7 @@ pub fn open_rotation_artifact(artifact: &[u8], key: &[u8]) -> Result<Vec<u8>, Js
     )
 }
 
-/// Inspect a Voided v3 whole-monolith artifact without a key.
+/// Inspect a current VOF3 whole-monolith artifact without a key.
 #[wasm_bindgen(js_name = inspectArtifact)]
 pub fn inspect_artifact(artifact: &[u8]) -> Result<JsValue, JsValue> {
     let info = inspect_current_artifact_for_browser(artifact)?;
@@ -1181,7 +1320,7 @@ pub fn inspect_artifact(artifact: &[u8]) -> Result<JsValue, JsValue> {
         .map_err(|e| JsValue::from_str(&e.to_string()))
 }
 
-/// Inspect either a current v3 artifact or an explicit legacy VOF2 rotation artifact.
+/// Inspect either a current VOF3 artifact or an explicit legacy VOF2 rotation artifact.
 #[wasm_bindgen(js_name = inspectRotationArtifact)]
 pub fn inspect_rotation_artifact(artifact: &[u8]) -> Result<JsValue, JsValue> {
     let info = inspect_rotation_artifact_for_browser(artifact)?;
@@ -1189,7 +1328,7 @@ pub fn inspect_rotation_artifact(artifact: &[u8]) -> Result<JsValue, JsValue> {
         .map_err(|e| JsValue::from_str(&e.to_string()))
 }
 
-/// Repack a current v3 monolith artifact under a new full-flow configuration.
+/// Repack a current VOF3 monolith artifact under a new full-flow configuration.
 #[wasm_bindgen(js_name = repackArtifact)]
 pub fn repack_artifact(
     artifact: &[u8],

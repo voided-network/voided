@@ -53,6 +53,13 @@ export interface ProtectResult extends ProtectedArtifactInfo {
   artifact: Buffer;
 }
 
+export interface RecoveryDeckSetup {
+  /** Ordered canonical card IDs. This array is secret key material. */
+  deck: string[];
+  /** Opaque authenticated root wrapper. This is the only persistable value. */
+  rootWrapper: Buffer;
+}
+
 // Native module interface
 export interface NativeModule {
   VERSION: string;
@@ -63,6 +70,16 @@ export interface NativeModule {
   decrypt(encrypted: EncryptionResult, key: Buffer): Buffer;
   deriveKeyHkdf(ikm: Buffer, salt: Buffer | null, info: Buffer): Buffer;
   deriveKeyPbkdf2(password: Buffer, salt: Buffer, iterations: number): Buffer;
+
+  // Recovery Deck
+  generateRecoveryDeck(): string[];
+  validateRecoveryDeck(deck: string[]): boolean;
+  encodeRecoveryDeck(deck: string[]): Buffer;
+  deriveRecoveryKey(deck: string[]): Buffer;
+  wrapRootWithRecoveryKey(rootKey: Buffer, recoveryKey: Buffer): Buffer;
+  unwrapRootWithRecoveryKey(rootWrapper: Buffer, recoveryKey: Buffer): Buffer;
+  createRecoveryDeck(rootKey: Buffer): RecoveryDeckSetup;
+  rotateRecoveryDeck(rootWrapper: Buffer, oldDeck: string[]): RecoveryDeckSetup;
 
   // Hashing
   hash(data: Buffer, algorithm?: string): string;

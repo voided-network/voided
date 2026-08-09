@@ -19,6 +19,17 @@ export {
   // Key derivation
   deriveKeyHkdf,
   deriveKeyPbkdf2,
+
+  // Recovery Deck
+  generateRecoveryDeck,
+  validateRecoveryDeck,
+  encodeRecoveryDeck,
+  deriveRecoveryKey,
+  wrapRootWithRecoveryKey,
+  unwrapRootWithRecoveryKey,
+  createRecoveryDeck,
+  rotateRecoveryDeck,
+  type RecoveryDeckSetup,
   
   // Hashing
   hash,
@@ -112,20 +123,3 @@ export {
   benchmarkHashing,
   type OpBenchmarkResult,
 } from "./benchmark-all.js";
-
-// Historical planning metadata for the v2 fused-first migration.
-// The current product protect/open path is the v3 whole-monolith artifact.
-export {
-  VOIDED_V2_PRESET_PLAN,
-  DEFAULT_VOIDED_V2_POLICY_PLAN,
-  HIGH_SECURITY_VOIDED_V2_POLICY_PLAN,
-  listVoidedV2Presets,
-  resolveVoidedV2Preset,
-  type VoidedV2PolicyPlan,
-  type VoidedV2PresetAlias,
-  type VoidedV2PresetId,
-  type VoidedV2PresetPlanEntry,
-  type VoidedV2PresetStatus,
-  type VoidedV2PresetSupport,
-  type VoidedV2RoleAlias,
-} from "./v2-profile-plan.js";

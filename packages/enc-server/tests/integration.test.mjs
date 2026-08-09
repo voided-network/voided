@@ -59,7 +59,7 @@ const {
 
 await test('encrypt/decrypt roundtrip still works', () => {
   const key = generateKey();
-  const plaintext = Buffer.from('Voided v3 core encryption check');
+  const plaintext = Buffer.from('Voided 1.0 core encryption check');
   const encrypted = encrypt(plaintext, key, 'xchacha20-poly1305');
   const decrypted = decrypt(encrypted, key);
 

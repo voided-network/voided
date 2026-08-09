@@ -141,6 +141,42 @@ await test('deriveKeyPbkdf2 works', () => {
   if (key.length !== 32) throw new Error(`Expected 32 bytes, got ${key.length}`);
 });
 
+await test('Recovery Deck matches the permanent vector and rotates the root wrapper', () => {
+  const canonicalDeck = [
+    'AS', '2S', '3S', '4S', '5S', '6S', '7S', '8S', '9S', '10S', 'JS', 'QS', 'KS',
+    'AH', '2H', '3H', '4H', '5H', '6H', '7H', '8H', '9H', '10H', 'JH', 'QH', 'KH',
+    'AD', '2D', '3D', '4D', '5D', '6D', '7D', '8D', '9D', '10D', 'JD', 'QD', 'KD',
+    'AC', '2C', '3C', '4C', '5C', '6C', '7C', '8C', '9C', '10C', 'JC', 'QC', 'KC',
+  ];
+  if (!wasm.validateRecoveryDeck(canonicalDeck)) throw new Error('Deck rejected');
+  const encoded = wasm.encodeRecoveryDeck(canonicalDeck);
+  if (encoded.length !== 29 || encoded.some(byte => byte !== 0)) {
+    throw new Error('Canonical deck rank mismatch');
+  }
+  const recoveryKey = wasm.deriveRecoveryKey(canonicalDeck);
+  const recoveryHex = Array.from(recoveryKey)
+    .map(byte => byte.toString(16).padStart(2, '0'))
+    .join('');
+  if (recoveryHex !== '7d819b1d9cb4a0346a7e03a505e9bc6ef738518aa91ce99b04a866e436efd95c') {
+    throw new Error('Recovery Key vector mismatch');
+  }
+
+  const root = new Uint8Array(32).fill(0x5a);
+  const setup = wasm.createRecoveryDeck(root);
+  if (!wasm.validateRecoveryDeck(setup.deck) || setup.rootWrapper.length !== 80) {
+    throw new Error('Invalid recovery setup');
+  }
+  const rotated = wasm.rotateRecoveryDeck(setup.rootWrapper, setup.deck);
+  const rotatedKey = wasm.deriveRecoveryKey(rotated.deck);
+  const recovered = wasm.unwrapRootWithRecoveryKey(rotated.rootWrapper, rotatedKey);
+  if (!recovered.every((byte, index) => byte === root[index])) {
+    throw new Error('Rotation changed the stable root');
+  }
+  recoveryKey.fill(0);
+  rotatedKey.fill(0);
+  recovered.fill(0);
+});
+
 // ============================================================================
 // HASHING TESTS
 // ============================================================================

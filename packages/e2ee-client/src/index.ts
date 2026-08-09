@@ -2,12 +2,21 @@
 export * as crypto from "./crypto-backend";
 export {
   decompressBounded,
+  generateRecoveryDeck,
+  validateRecoveryDeck,
+  encodeRecoveryDeck,
+  deriveRecoveryKey,
+  wrapRootWithRecoveryKey,
+  unwrapRootWithRecoveryKey,
+  createRecoveryDeck,
+  rotateRecoveryDeck,
   useWasmBackend,
   forceTypeScriptBackend,
   forceWasmBackend,
   getCurrentBackend,
   isWasmBackendReady,
 } from "./crypto-backend";
+export type { RecoveryDeckSetup } from "./crypto-backend";
 
 import {
   protect as protectArtifactBytes,
@@ -1119,7 +1128,7 @@ export class VoidedE2EEClient {
   }
 
   /**
-   * Protect data with the Voided v3 whole-monolith full flow.
+   * Protect data with the Voided 1.0 whole-monolith full flow.
    */
   public async protect(
     data: string,
@@ -1345,7 +1354,7 @@ export class VoidedE2EEClient {
   }
 
   /**
-   * Open a v3 monolith protected blob.
+   * Open a current VOF3 monolith protected blob.
    */
   public async open(blob: ProtectedBlob): Promise<string> {
     Validator.validateProtectedBlob(blob);
@@ -1398,7 +1407,7 @@ export class VoidedE2EEClient {
   }
 
   /**
-   * Inspect a v3 monolith protected blob without opening it.
+   * Inspect a current VOF3 monolith protected blob without opening it.
    */
   public async inspectProtected(blob: ProtectedBlob): Promise<ProtectedBlobInfo> {
     Validator.validateProtectedBlob(blob);
@@ -1996,6 +2005,24 @@ export {
   type KeyExportOptions,
   type KeyImportOptions,
 } from "./key-ui";
+
+// Optional, framework-free Recovery Deck UI for modal or inline composition.
+export {
+  RECOVERY_DECK_UI_CARD_IDS,
+  RECOVERY_DECK_DEFAULT_CSS,
+  VoidedRecoveryDeckUI,
+  createRecoveryDeckUI,
+  installRecoveryDeckDefaultStyles,
+  moveRecoveryDeckUICard,
+  validateRecoveryDeckUICards,
+  type RecoveryDeckUIChangeReason,
+  type RecoveryDeckUICard,
+  type RecoveryDeckUICardRenderState,
+  type RecoveryDeckUIClassNames,
+  type RecoveryDeckUILabels,
+  type RecoveryDeckUIOptions,
+  type RecoveryDeckUIPresentation,
+} from "./recovery-deck-ui";
 
 // Export hash service
 export { hashService } from "./hash-service";

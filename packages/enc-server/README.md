@@ -2,7 +2,7 @@
 
 `@voideddev/enc-server` is the Node.js package for Voided's native Rust-backed
 runtime. It exposes synchronous server-side APIs for hashing, compression,
-authenticated encryption, fused shell operations, and v3 monolith protected
+authenticated encryption, fused shell operations, and monolith protected
 artifacts.
 
 Under the hood, the package is layered like this:
@@ -24,11 +24,10 @@ Under the hood, the package is layered like this:
 - [Primitive Crypto APIs](#primitive-crypto-apis)
 - [Fused Shell And Full-Flow APIs](#fused-shell-and-full-flow-apis)
 - [Higher-Level Helper Exports](#higher-level-helper-exports)
-- [Fused Presets And Planning Metadata](#fused-presets-and-planning-metadata)
+- [Fused Presets](#fused-presets)
 - [Native Runtime Behavior](#native-runtime-behavior)
 - [Development](#development)
 - [Troubleshooting](#troubleshooting)
-- [v1 Boundary](#v1-boundary)
 - [License](#license)
 
 ## What This Package Is For
@@ -37,7 +36,7 @@ Use `@voideddev/enc-server` when you want:
 
 - Node.js access to the Voided native runtime
 - synchronous server-side APIs backed by Rust
-- the monolith-first Voided v3 artifact model
+- the monolith-first Voided 1.0 artifact model
 - direct use of hashing, compression, encryption, shell, and artifact helpers
 - small higher-level utilities that are packaged on top of the native runtime
 
@@ -62,7 +61,7 @@ from the tagged Voided source release and run the native verification suite.
 
 ### Full-Flow Monolith Artifact
 
-This is the normal Voided v3 path in Node.js.
+This is the normal Voided 1.0 path in Node.js.
 
 ```ts
 import {
@@ -139,7 +138,7 @@ console.log(restored.equals(payload));
 The fused shell is the outer artifact format. It wraps bytes that are already
 prepared and gives them a stable, inspectable, preset-driven envelope.
 
-In the standard Voided v3 product flow, `protect/open` own the whole artifact
+In the standard Voided 1.0 product flow, `protect/open` own the whole artifact
 plan:
 
 1. optionally compressed
@@ -149,9 +148,9 @@ plan:
 That means:
 
 - `encrypt` gives you ciphertext and encryption metadata, but not the standard
-  v3 monolith artifact
+  monolith artifact
 - `fuse` wraps prepared bytes in the shell
-- `protect` runs the normal full flow and returns the standard v3 monolith artifact
+- `protect` runs the normal full flow and returns the standard monolith artifact
 
 Use `fuse/unfuse` when you already control the bytes that should live inside
 the shell.
@@ -184,7 +183,7 @@ These are for cases where you already own the bytes being shelled.
 - `inspectArtifact`
 - `repackArtifact`
 
-These are the standard Voided v3 monolith artifact APIs.
+These are the standard Voided monolith artifact APIs.
 
 ## Primitive Crypto APIs
 
@@ -195,6 +194,14 @@ Primitive exports include:
 - `decrypt`
 - `deriveKeyHkdf`
 - `deriveKeyPbkdf2`
+- `generateRecoveryDeck`
+- `validateRecoveryDeck`
+- `encodeRecoveryDeck`
+- `deriveRecoveryKey`
+- `wrapRootWithRecoveryKey`
+- `unwrapRootWithRecoveryKey`
+- `createRecoveryDeck`
+- `rotateRecoveryDeck`
 - `hash`
 - `hashWithSalt`
 - `compareHashes`
@@ -220,6 +227,11 @@ Important behavior notes:
 - the package is synchronous because the native module is loaded directly into
   Node.js
 - there is no TypeScript crypto fallback in this package
+- Recovery Deck is stateless: persist only its opaque `rootWrapper`, never the
+  ordered deck, permutation rank, or derived Recovery Key
+- the permanent card ordering, rank encoding, derivation domain, and wrapper
+  format are documented in the
+  [`Recovery Deck protocol`](https://github.com/voided-network/voided/blob/main/docs/recovery-deck-protocol.md)
 - XChaCha20-Poly1305 is the default primitive; direct AES-256-GCM callers must
   count uses across their system, prevent nonce reuse, and rotate a key before
   2^32 encryptions
@@ -262,7 +274,7 @@ What each one does:
 
 ### Full-Flow Artifacts
 
-Use these when you want the standard Voided v3 monolith artifact contract:
+Use these when you want the standard Voided monolith artifact contract:
 
 - `protect(data, key, options?)`
 - `open(artifact, key)`
@@ -272,7 +284,7 @@ Use these when you want the standard Voided v3 monolith artifact contract:
 What each one does:
 
 - `protect`
-  - compress, encrypt, and shape the input into the standard v3 monolith artifact
+  - compress, encrypt, and shape the input into the standard monolith artifact
 - `open`
   - reverse `protect` and return the original plaintext bytes
 - `inspectArtifact`
@@ -348,7 +360,7 @@ import { rust } from "@voideddev/enc-server";
 That can be convenient when you want the raw native wrapper grouped under one
 namespace instead of pulling individual functions.
 
-## Fused Presets And Planning Metadata
+## Fused Presets
 
 The stable public fused presets are:
 
@@ -356,16 +368,8 @@ The stable public fused presets are:
 - `balanced`
 - `concealed`
 
-Planning metadata is exported through:
-
-- `VOIDED_V2_PRESET_PLAN`
-- `DEFAULT_VOIDED_V2_POLICY_PLAN`
-- `HIGH_SECURITY_VOIDED_V2_POLICY_PLAN`
-- `listVoidedV2Presets()`
-- `resolveVoidedV2Preset()`
-
-This metadata is useful when you want to align on preset ids, aliases, or
-default policy selection in higher-level tooling.
+Use `balanced` unless the application has a measured reason to prefer the
+lower-overhead `compact` or heavier `concealed` shell profile.
 
 ## Native Runtime Behavior
 
@@ -424,18 +428,6 @@ Use `protect/open` instead. `encrypt/decrypt` are primitive AEAD helpers, while
 ### I only want the shell layer
 
 Use `fuse/unfuse` instead of `protect/open`.
-
-## v1 Boundary
-
-This package is the monolith-first current line. The old map-based APIs such as
-`encryptWithMap` and `VoidedService` have been removed from this branch and
-belong to deprecated v1 only.
-
-That means:
-
-- no map-first public API in the current package
-- no map-first examples in this manual
-- no new current-line development targeting the old map shape
 
 ## License
 

@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Voided Recovery Deck UI</title>
+    <style>
+      body { max-width: 760px; margin: 40px auto; padding: 0 20px; font-family: system-ui, sans-serif; }
+      .actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 20px 0; }
+      .actions button { padding: 8px 12px; font: inherit; }
+      #inline-host { margin-top: 20px; }
+      #status { min-height: 1.5em; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Recovery Deck UI</h1>
+      <p>
+        The same generic component can open as a modal or mount inline. It
+        starts with a secure random deck, supports card movement, and can
+        replace the entire permutation with a fresh secure shuffle.
+      </p>
+      <div class="actions">
+        <button id="open-modal" type="button">Open modal</button>
+        <button id="mount-inline" type="button">Mount inline</button>
+      </div>
+      <p id="status" role="status">Ready.</p>
+      <div id="inline-host"></div>
+    </main>
+
+    <script type="module">
+      import {
+        createRecoveryDeckUI,
+        deriveRecoveryKey,
+        forceWasmBackend,
+        wrapRootWithRecoveryKey,
+      } from "../dist/index.js";
+
+      const status = document.querySelector("#status");
+      const inlineHost = document.querySelector("#inline-host");
+      let activeUI = null;
+      let opaqueRootWrapper = null;
+
+      function setStatus(message) {
+        status.textContent = message;
+      }
+
+      function createUI() {
+        const root = crypto.getRandomValues(new Uint8Array(32));
+        return createRecoveryDeckUI({
+          closeOnConfirm: true,
+          onConfirm: async (deck) => {
+            const recoveryKey = await deriveRecoveryKey(deck);
+            try {
+              const nextWrapper = await wrapRootWithRecoveryKey(root, recoveryKey);
+              opaqueRootWrapper?.fill(0);
+              opaqueRootWrapper = nextWrapper;
+              setStatus("Deck confirmed. Only the opaque root wrapper remains in memory.");
+            } finally {
+              recoveryKey.fill(0);
+              root.fill(0);
+            }
+          },
+          onClose: () => root.fill(0),
+        });
+      }
+
+      document.querySelector("#open-modal").addEventListener("click", async () => {
+        await forceWasmBackend();
+        activeUI?.destroy();
+        activeUI = createUI();
+        await activeUI.show();
+      });
+
+      document.querySelector("#mount-inline").addEventListener("click", async () => {
+        await forceWasmBackend();
+        activeUI?.destroy();
+        activeUI = createUI();
+        await activeUI.mount(inlineHost);
+      });
+
+      window.addEventListener("pagehide", () => {
+        activeUI?.destroy();
+        opaqueRootWrapper?.fill(0);
+        opaqueRootWrapper = null;
+      });
+    </script>
+  </body>
+</html>

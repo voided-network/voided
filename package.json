@@ -1,6 +1,6 @@
 {
   "name": "@voideddev/monorepo",
-  "version": "0.2.0",
+  "version": "1.0.0",
   "private": true,
   "workspaces": [
     "packages/*"
@@ -24,7 +24,7 @@
     "typecheck": "npm run typecheck --workspaces --if-present",
     "licenses:generate": "node scripts/generate-third-party-notices.js",
     "release:verify:source": "node scripts/verify-release-source.js --all --allow-untagged",
-    "lint": "eslint packages/*/src/**/*.{js,ts}",
+    "lint": "eslint --max-warnings=0 \"packages/*/src/**/*.{js,ts,mjs,cjs}\" \"packages/*/scripts/**/*.{js,ts,mjs,cjs}\" \"packages/*/tests/**/*.{js,ts,mjs,cjs}\" \"scripts/**/*.{js,ts,mjs,cjs}\" \"examples/**/*.{js,ts,mjs,cjs}\"",
     "clean": "rm -rf node_modules packages/*/node_modules packages/*/dist crates/target crates/voided-wasm/pkg packages/enc-server/native/voided_node.node packages/enc-server/prebuilds/darwin-* packages/e2ee-client/wasm/init.js packages/e2ee-client/wasm/voided_wasm*"
   },
   "overrides": {

@@ -134,10 +134,26 @@ try {
   writeFileSync(
     childScript,
     `
+      import { createRequire } from 'node:module';
       import { pathToFileURL } from 'node:url';
       const root = ${JSON.stringify(packedRoot)};
+      const require = createRequire(import.meta.url);
       const api = await import(pathToFileURL(root + '/dist/index.js').href);
       const nativeEntry = await import(pathToFileURL(root + '/dist/native/index.js').href);
+      for (const exportName of [
+        'generateRecoveryDeck',
+        'validateRecoveryDeck',
+        'encodeRecoveryDeck',
+        'deriveRecoveryKey',
+        'wrapRootWithRecoveryKey',
+        'unwrapRootWithRecoveryKey',
+        'createRecoveryDeck',
+        'rotateRecoveryDeck',
+      ]) {
+        if (!(exportName in api)) {
+          throw new Error('packed server API omitted ' + exportName);
+        }
+      }
       const key = api.generateKey();
       const plaintext = Buffer.from('packed enc-server smoke');
       const encrypted = api.encrypt(plaintext, key);
@@ -168,6 +184,120 @@ try {
         { ...encrypted, tag: mutateBuffer(encrypted.tag) },
         'authentication tag',
       );
+
+      const canonicalDeck = [
+        'AS', '2S', '3S', '4S', '5S', '6S', '7S', '8S', '9S', '10S', 'JS', 'QS', 'KS',
+        'AH', '2H', '3H', '4H', '5H', '6H', '7H', '8H', '9H', '10H', 'JH', 'QH', 'KH',
+        'AD', '2D', '3D', '4D', '5D', '6D', '7D', '8D', '9D', '10D', 'JD', 'QD', 'KD',
+        'AC', '2C', '3C', '4C', '5C', '6C', '7C', '8C', '9C', '10C', 'JC', 'QC', 'KC',
+      ];
+      if (!api.validateRecoveryDeck(canonicalDeck)) {
+        throw new Error('packed server Recovery Deck rejected the canonical card set');
+      }
+      if (
+        api.validateRecoveryDeck([...canonicalDeck.slice(0, 51), canonicalDeck[0]])
+      ) {
+        throw new Error('packed server Recovery Deck accepted a duplicate card');
+      }
+      const canonicalRank = api.encodeRecoveryDeck(canonicalDeck);
+      const canonicalRecoveryKey = api.deriveRecoveryKey(canonicalDeck);
+      if (
+        canonicalRank.toString('hex') !== '00'.repeat(29) ||
+        canonicalRecoveryKey.toString('hex') !==
+          '7d819b1d9cb4a0346a7e03a505e9bc6ef738518aa91ce99b04a866e436efd95c'
+      ) {
+        throw new Error('packed server Recovery Deck changed a permanent vector');
+      }
+      const cjsApi = require(root + '/dist/index.cjs');
+      const cjsNative = require(root + '/dist/native/index.cjs');
+      if (
+        typeof cjsApi.deriveRecoveryKey !== 'function' ||
+        typeof cjsApi.rotateRecoveryDeck !== 'function' ||
+        typeof cjsNative.getNative !== 'function' ||
+        cjsApi.deriveRecoveryKey(canonicalDeck).toString('hex') !==
+          canonicalRecoveryKey.toString('hex')
+      ) {
+        throw new Error('packed server CommonJS entry points are incomplete');
+      }
+      const recoveryRoot = Buffer.alloc(32, 0x5a);
+      const directRecoveryWrapper = api.wrapRootWithRecoveryKey(
+        recoveryRoot,
+        canonicalRecoveryKey,
+      );
+      if (
+        directRecoveryWrapper.length !== 80 ||
+        !api.unwrapRootWithRecoveryKey(
+          directRecoveryWrapper,
+          canonicalRecoveryKey,
+        ).equals(recoveryRoot)
+      ) {
+        throw new Error('packed server Recovery Deck root wrapping failed');
+      }
+      const wrongDeck = [...canonicalDeck];
+      [wrongDeck[0], wrongDeck[1]] = [wrongDeck[1], wrongDeck[0]];
+      const wrongRecoveryKey = api.deriveRecoveryKey(wrongDeck);
+      let wrongDeckRejected = false;
+      try {
+        api.unwrapRootWithRecoveryKey(directRecoveryWrapper, wrongRecoveryKey);
+      } catch {
+        wrongDeckRejected = true;
+      }
+      if (!wrongDeckRejected) {
+        throw new Error('packed server Recovery Deck accepted the wrong deck');
+      }
+      const recoverySetup = api.createRecoveryDeck(recoveryRoot);
+      const setupRecoveryKey = api.deriveRecoveryKey(recoverySetup.deck);
+      if (
+        !api.validateRecoveryDeck(recoverySetup.deck) ||
+        recoverySetup.rootWrapper.length !== 80 ||
+        !api.unwrapRootWithRecoveryKey(
+          recoverySetup.rootWrapper,
+          setupRecoveryKey,
+        ).equals(recoveryRoot)
+      ) {
+        throw new Error('packed server Recovery Deck setup failed');
+      }
+      const rotatedRecovery = api.rotateRecoveryDeck(
+        recoverySetup.rootWrapper,
+        recoverySetup.deck,
+      );
+      const rotatedRecoveryKey = api.deriveRecoveryKey(rotatedRecovery.deck);
+      if (
+        !api.validateRecoveryDeck(rotatedRecovery.deck) ||
+        !api.unwrapRootWithRecoveryKey(
+          rotatedRecovery.rootWrapper,
+          rotatedRecoveryKey,
+        ).equals(recoveryRoot)
+      ) {
+        throw new Error('packed server Recovery Deck rotation changed the stable root');
+      }
+      let oldDeckRejected = false;
+      try {
+        api.unwrapRootWithRecoveryKey(
+          rotatedRecovery.rootWrapper,
+          setupRecoveryKey,
+        );
+      } catch {
+        oldDeckRejected = true;
+      }
+      if (!oldDeckRejected) {
+        throw new Error('packed server Recovery Deck rotation accepted the old deck');
+      }
+      for (const bytes of [
+        canonicalRank,
+        canonicalRecoveryKey,
+        recoveryRoot,
+        directRecoveryWrapper,
+        wrongRecoveryKey,
+        recoverySetup.rootWrapper,
+        setupRecoveryKey,
+        rotatedRecovery.rootWrapper,
+        rotatedRecoveryKey,
+      ]) {
+        bytes.fill(0);
+      }
+      recoverySetup.deck.fill('');
+      rotatedRecovery.deck.fill('');
 
       const binding = nativeEntry.getNative();
       let rejected = false;
