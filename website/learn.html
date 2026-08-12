@@ -6,18 +6,18 @@
   <meta name="description" content="Interactive Voided learning lab: choose an SDK, understand the artifact pipeline, compare Fuse presets, and learn Recovery Deck boundaries.">
   <meta name="theme-color" content="#080a0b">
   <title>Learn Voided — Interactive architecture guides</title>
-  <link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="/assets/styles.css">
-  <script src="/assets/site.js" defer></script>
+  <link rel="icon" href="./assets/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="./assets/styles.css">
+  <script src="./assets/site.js" defer></script>
 </head>
 <body data-page="learn">
   <a class="skip-link" href="#main">Skip to content</a>
   <header class="site-header">
     <div class="site-header__inner">
-      <a class="brand" href="/" aria-label="Voided home"><span class="brand__mark" aria-hidden="true"></span>VOIDED</a>
+      <a class="brand" href="./index.html" aria-label="Voided home"><span class="brand__mark" aria-hidden="true"></span>VOIDED</a>
       <button class="menu-toggle" type="button" aria-expanded="false" aria-controls="site-navigation"><span class="sr-only">Toggle navigation</span>Menu</button>
       <nav class="site-nav" id="site-navigation" aria-label="Primary navigation">
-        <a href="/docs.html">Docs</a><a href="/learn.html" aria-current="page">Learn</a><a href="/support.html">Support</a><a href="https://github.com/voided-network/voided">GitHub</a>
+        <a href="./docs.html">Docs</a><a href="./learn.html" aria-current="page">Learn</a><a href="./support.html">Support</a><a href="https://github.com/voided-network/voided">GitHub</a>
         <button class="header-search" type="button" data-search-open aria-label="Search documentation">Search <kbd>⌘K</kbd></button>
       </nav>
     </div>
@@ -103,7 +103,7 @@ const restored = await client.open(artifact);</code></pre></div>
 
     <section class="section" aria-labelledby="recovery-model-title" data-search-title="Recovery Deck mental model" data-search-summary="Understand deterministic recovery, stable roots, and rotation">
       <div class="section__inner recovery-spotlight">
-        <div class="recovery-copy reveal"><span class="eyebrow">Recovery model</span><h2 id="recovery-model-title">Recover the root. Leave the data alone.</h2><p>Application keys sit below a stable user/account root. A Recovery Deck unwraps that root; rotating the deck replaces only its wrapper.</p><div class="recovery-facts"><div class="recovery-fact"><strong>1 deck</strong><span>whole hierarchy</span></div><div class="recovery-fact"><strong>N apps</strong><span>isolated keys</span></div><div class="recovery-fact"><strong>0 decks</strong><span>stored by Voided</span></div><div class="recovery-fact"><strong>0 data</strong><span>re-encrypted on rotation</span></div></div><a class="button" href="/docs.html?guide=recovery">Build the recovery flow <span class="arrow" aria-hidden="true">→</span></a></div>
+        <div class="recovery-copy reveal"><span class="eyebrow">Recovery model</span><h2 id="recovery-model-title">Recover the root. Leave the data alone.</h2><p>Application keys sit below a stable user/account root. A Recovery Deck unwraps that root; rotating the deck replaces only its wrapper.</p><div class="recovery-facts"><div class="recovery-fact"><strong>1 deck</strong><span>whole hierarchy</span></div><div class="recovery-fact"><strong>N apps</strong><span>isolated keys</span></div><div class="recovery-fact"><strong>0 decks</strong><span>stored by Voided</span></div><div class="recovery-fact"><strong>0 data</strong><span>re-encrypted on rotation</span></div></div><a class="button" href="./docs.html?guide=recovery">Build the recovery flow <span class="arrow" aria-hidden="true">→</span></a></div>
         <div class="anatomy reveal" aria-label="Recovery hierarchy">
           <div class="anatomy-step"><span class="anatomy-step__node"></span><h3>Physical deck</h3><p>The exact order is the secret. Generate it locally with a CSPRNG.</p></div>
           <div class="anatomy-step"><span class="anatomy-step__node"></span><h3>Canonical rank</h3><p>A unique 29-byte integer representation of one permutation.</p></div>
@@ -125,10 +125,10 @@ const restored = await client.open(artifact);</code></pre></div>
       </div>
     </section>
 
-    <section class="section section--signal final-cta" aria-labelledby="learn-final-title"><div class="final-cta__inner reveal"><span class="eyebrow">Ready to implement</span><h2 id="learn-final-title">Take the model into code.</h2><div class="final-cta__actions"><a class="button" href="/docs.html">Open the SDK guides <span class="arrow" aria-hidden="true">→</span></a><a class="button button--quiet" href="/support.html">Troubleshoot an integration</a></div></div></section>
+    <section class="section section--signal final-cta" aria-labelledby="learn-final-title"><div class="final-cta__inner reveal"><span class="eyebrow">Ready to implement</span><h2 id="learn-final-title">Take the model into code.</h2><div class="final-cta__actions"><a class="button" href="./docs.html">Open the SDK guides <span class="arrow" aria-hidden="true">→</span></a><a class="button button--quiet" href="./support.html">Troubleshoot an integration</a></div></div></section>
   </main>
 
-  <footer class="site-footer"><div class="site-footer__inner"><div><a class="brand" href="/"><span class="brand__mark" aria-hidden="true"></span>VOIDED</a><p class="site-footer__meta">MIT licensed · Learn the boundary, then ship it</p></div><nav aria-label="Footer navigation"><a href="/docs.html">Docs</a><a href="/support.html">Support</a><a href="https://github.com/voided-network/voided">GitHub</a></nav></div></footer>
+  <footer class="site-footer"><div class="site-footer__inner"><div><a class="brand" href="./index.html"><span class="brand__mark" aria-hidden="true"></span>VOIDED</a><p class="site-footer__meta">MIT licensed · Learn the boundary, then ship it</p></div><nav aria-label="Footer navigation"><a href="./docs.html">Docs</a><a href="./support.html">Support</a><a href="https://github.com/voided-network/voided">GitHub</a></nav></div></footer>
   <dialog class="search-dialog" data-search-dialog aria-label="Search Voided documentation"><form class="search-form" method="dialog"><input type="search" data-search-input placeholder="Search guides, concepts, APIs…" autocomplete="off"><button class="search-close" value="cancel" aria-label="Close search">Esc</button></form><div class="search-results" data-search-results><p class="search-empty">Type a concept or API name.</p></div></dialog>
   <div class="sr-only" aria-live="polite" data-live-region></div>
 </body>

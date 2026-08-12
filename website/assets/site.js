@@ -47,17 +47,17 @@ function setupCopyButtons() {
 }
 
 const searchIndex = [
-  { title: "Get started", summary: "Choose Browser, Node.js, or Rust and use the normal protect/open flow.", url: "/docs.html?guide=start" },
-  { title: "Browser SDK", summary: "Stateful client, IndexedDB keys, WASM behavior, compression, and browser support.", url: "/docs.html?guide=browser" },
-  { title: "Node.js SDK", summary: "Native Rust package, Buffer APIs, runtime verification, CJS, and ESM.", url: "/docs.html?guide=node" },
-  { title: "Rust crate", summary: "voided-core source-of-truth APIs, feature flags, and native integration.", url: "/docs.html?guide=rust" },
-  { title: "Artifact model", summary: "VOF3, Fuse, protect/open, inspection, repacking, and presets.", url: "/docs.html?guide=fuse" },
-  { title: "Recovery Deck", summary: "52-card generation, deterministic derivation, root wrapping, UI, and rotation.", url: "/docs.html?guide=recovery" },
-  { title: "Security boundaries", summary: "Authentication, inspection, bounded work, key lifecycle, and reporting.", url: "/docs.html?guide=security" },
-  { title: "Choose an API", summary: "Interactive decision guide for runtime and artifact ownership.", url: "/learn.html#choose-api" },
-  { title: "Fuse preset lab", summary: "Compare compact, balanced, and concealed intent.", url: "/learn.html#preset-lab" },
-  { title: "Developer support", summary: "Generate diagnostic commands and a safe issue report.", url: "/support.html" },
-  { title: "Compatibility", summary: "Safari, Chromium, Firefox policy, Node.js, macOS, Linux, and Windows.", url: "/support.html#compat-title" },
+  { title: "Get started", summary: "Choose Browser, Node.js, or Rust and use the normal protect/open flow.", url: "./docs.html?guide=start" },
+  { title: "Browser SDK", summary: "Stateful client, IndexedDB keys, WASM behavior, compression, and browser support.", url: "./docs.html?guide=browser" },
+  { title: "Node.js SDK", summary: "Native Rust package, Buffer APIs, runtime verification, CJS, and ESM.", url: "./docs.html?guide=node" },
+  { title: "Rust crate", summary: "voided-core source-of-truth APIs, feature flags, and native integration.", url: "./docs.html?guide=rust" },
+  { title: "Artifact model", summary: "VOF3, Fuse, protect/open, inspection, repacking, and presets.", url: "./docs.html?guide=fuse" },
+  { title: "Recovery Deck", summary: "52-card generation, deterministic derivation, root wrapping, UI, and rotation.", url: "./docs.html?guide=recovery" },
+  { title: "Security boundaries", summary: "Authentication, inspection, bounded work, key lifecycle, and reporting.", url: "./docs.html?guide=security" },
+  { title: "Choose an API", summary: "Interactive decision guide for runtime and artifact ownership.", url: "./learn.html#choose-api" },
+  { title: "Fuse preset lab", summary: "Compare compact, balanced, and concealed intent.", url: "./learn.html#preset-lab" },
+  { title: "Developer support", summary: "Generate diagnostic commands and a safe issue report.", url: "./support.html" },
+  { title: "Compatibility", summary: "Safari, Chromium, Firefox policy, Node.js, macOS, Linux, and Windows.", url: "./support.html#compat-title" },
   { title: "Report a vulnerability", summary: "Open a private GitHub Security Advisory without exposing secret material.", url: "https://github.com/voided-network/voided/security/advisories/new" },
 ];
 
@@ -155,7 +155,7 @@ const sdkExamples = {
     filename: "browser.ts",
     linkLabel: "Open the Browser guide",
     description: "Use the stateful client for browser key storage and the normal protect/open lifecycle.",
-    href: "/docs.html?guide=browser",
+    href: "./docs.html?guide=browser",
     code: `import { VoidedE2EEClient } from "@voideddev/e2ee-client";
 
 const client = new VoidedE2EEClient();
@@ -170,7 +170,7 @@ const restored = await client.open(blob);`,
     filename: "server.mjs",
     linkLabel: "Open the Node.js guide",
     description: "Use native Rust-backed Buffer APIs when plaintext already lives in a trusted Node.js process.",
-    href: "/docs.html?guide=node",
+    href: "./docs.html?guide=node",
     code: `import { generateKey, open, protect } from "@voideddev/enc-server";
 
 const key = generateKey();
@@ -186,7 +186,7 @@ key.fill(0);`,
     filename: "main.rs",
     linkLabel: "Open the Rust guide",
     description: "Use the source-of-truth crate for native systems, feature control, and explicit byte ownership.",
-    href: "/docs.html?guide=rust",
+    href: "./docs.html?guide=rust",
     code: `use voided_core::shell::{open, protect, ProtectOptions};
 use voided_core::encryption::generate_key;
 

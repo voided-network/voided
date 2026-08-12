@@ -8,20 +8,20 @@
   <meta property="og:title" content="Voided — encrypted data, shaped as an artifact">
   <meta property="og:description" content="Developer tools, guides, and protocols for Voided 1.0.">
   <title>Voided — Developer encryption infrastructure</title>
-  <link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="/assets/styles.css">
-  <script src="/assets/site.js" defer></script>
+  <link rel="icon" href="./assets/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="./assets/styles.css">
+  <script src="./assets/site.js" defer></script>
 </head>
 <body data-page="home">
   <a class="skip-link" href="#main">Skip to content</a>
   <header class="site-header is-overlay">
     <div class="site-header__inner">
-      <a class="brand" href="/" aria-label="Voided home"><span class="brand__mark" aria-hidden="true"></span>VOIDED</a>
+      <a class="brand" href="./index.html" aria-label="Voided home"><span class="brand__mark" aria-hidden="true"></span>VOIDED</a>
       <button class="menu-toggle" type="button" aria-expanded="false" aria-controls="site-navigation"><span class="sr-only">Toggle navigation</span>Menu</button>
       <nav class="site-nav" id="site-navigation" aria-label="Primary navigation">
-        <a href="/docs.html">Docs</a>
-        <a href="/learn.html">Learn</a>
-        <a href="/support.html">Support</a>
+        <a href="./docs.html">Docs</a>
+        <a href="./learn.html">Learn</a>
+        <a href="./support.html">Support</a>
         <a href="https://github.com/voided-network/voided">GitHub</a>
         <button class="header-search" type="button" data-search-open aria-label="Search documentation">Search <kbd>⌘K</kbd></button>
       </nav>
@@ -36,8 +36,8 @@
           <h1 id="hero-title">Encrypted data,<span>shaped as an artifact.</span></h1>
           <p class="hero__lede">One Rust core. Native Node.js and browser WASM. A stable, authenticated format from first byte to final recovery path.</p>
           <div class="hero__actions">
-            <a class="button button--signal" href="/docs.html">Start building <span class="arrow" aria-hidden="true">→</span></a>
-            <a class="button" href="/learn.html">Understand the model</a>
+            <a class="button button--signal" href="./docs.html">Start building <span class="arrow" aria-hidden="true">→</span></a>
+            <a class="button" href="./learn.html">Understand the model</a>
           </div>
           <p class="hero__status"><span class="signal-dot" aria-hidden="true"></span> 1.0 release candidate · VOF3 / Fuse · Windows validation pending</p>
         </div>
@@ -84,7 +84,7 @@
 
 <span class="tok-key">const</span> restored = <span class="tok-key">await</span> client.<span class="tok-fn">open</span>(blob);</code></pre>
             </div>
-            <a class="text-link mt-24" href="/docs.html?guide=browser"><span data-sdk-link-label>Open the Browser guide</span> <span class="arrow" aria-hidden="true">→</span></a>
+            <a class="text-link mt-24" href="./docs.html?guide=browser"><span data-sdk-link-label>Open the Browser guide</span> <span class="arrow" aria-hidden="true">→</span></a>
           </div>
         </div>
       </div>
@@ -130,7 +130,7 @@
           <div class="preset"><span class="preset__name">balanced · default</span><h3>Ship the general case.</h3><p>The recommended starting point for most protected application data.</p></div>
           <div class="preset"><span class="preset__name">concealed</span><h3>Vary the silhouette.</h3><p>A heavier shape profile for workflows that value more shell variation.</p></div>
         </div>
-        <a class="text-link mt-40" href="/learn.html#preset-lab">Compare the presets <span class="arrow" aria-hidden="true">→</span></a>
+        <a class="text-link mt-40" href="./learn.html#preset-lab">Compare the presets <span class="arrow" aria-hidden="true">→</span></a>
       </div>
     </section>
 
@@ -146,7 +146,7 @@
             <div class="recovery-fact"><strong>32 bytes</strong><span>derived key</span></div>
             <div class="recovery-fact"><strong>80 bytes</strong><span>persistable wrapper</span></div>
           </div>
-          <a class="button" href="/docs.html?guide=recovery">Read the protocol guide <span class="arrow" aria-hidden="true">→</span></a>
+          <a class="button" href="./docs.html?guide=recovery">Read the protocol guide <span class="arrow" aria-hidden="true">→</span></a>
         </div>
         <div class="deck-visual reveal" aria-label="Abstract fan of five playing cards representing a Recovery Deck">
           <div class="deck-card"><span>A♠</span><small>00</small></div>
@@ -186,9 +186,9 @@
           <p>Short, opinionated guides for the moments where encryption libraries usually leave you guessing.</p>
         </div>
         <div class="field-notes reveal">
-          <a class="field-note" href="/learn.html#choose-api"><span class="field-note__type">Decision guide · 5 min</span><h3>Which API layer should own my data?</h3><p>Pick primitives, Fuse, or the standard monolith flow based on who owns the outer format.</p><span class="arrow" aria-hidden="true">→</span></a>
-          <a class="field-note" href="/docs.html?guide=security"><span class="field-note__type">Security · 8 min</span><h3>Inspection is not authentication.</h3><p>Why structural metadata stays attacker-controlled until the keyed open succeeds.</p><span class="arrow" aria-hidden="true">→</span></a>
-          <a class="field-note" href="/docs.html?guide=recovery"><span class="field-note__type">Protocol · 10 min</span><h3>Rotate recovery without touching user data.</h3><p>Rewrap one stable root under a completely fresh CSPRNG deck.</p><span class="arrow" aria-hidden="true">→</span></a>
+          <a class="field-note" href="./learn.html#choose-api"><span class="field-note__type">Decision guide · 5 min</span><h3>Which API layer should own my data?</h3><p>Pick primitives, Fuse, or the standard monolith flow based on who owns the outer format.</p><span class="arrow" aria-hidden="true">→</span></a>
+          <a class="field-note" href="./docs.html?guide=security"><span class="field-note__type">Security · 8 min</span><h3>Inspection is not authentication.</h3><p>Why structural metadata stays attacker-controlled until the keyed open succeeds.</p><span class="arrow" aria-hidden="true">→</span></a>
+          <a class="field-note" href="./docs.html?guide=recovery"><span class="field-note__type">Protocol · 10 min</span><h3>Rotate recovery without touching user data.</h3><p>Rewrap one stable root under a completely fresh CSPRNG deck.</p><span class="arrow" aria-hidden="true">→</span></a>
         </div>
       </div>
     </section>
@@ -198,8 +198,8 @@
         <span class="eyebrow">Build from the right layer</span>
         <h2 id="final-title">Protect the data.<br>Keep the architecture legible.</h2>
         <div class="final-cta__actions">
-          <a class="button" href="/docs.html">Read the docs <span class="arrow" aria-hidden="true">→</span></a>
-          <a class="button button--quiet" href="/support.html">Get unstuck</a>
+          <a class="button" href="./docs.html">Read the docs <span class="arrow" aria-hidden="true">→</span></a>
+          <a class="button button--quiet" href="./support.html">Get unstuck</a>
         </div>
       </div>
     </section>
@@ -207,8 +207,8 @@
 
   <footer class="site-footer">
     <div class="site-footer__inner">
-      <div><a class="brand" href="/"><span class="brand__mark" aria-hidden="true"></span>VOIDED</a><p class="site-footer__meta">MIT licensed · Rust source of truth · voidednetwork.com</p></div>
-      <nav aria-label="Footer navigation"><a href="/docs.html">Docs</a><a href="/learn.html">Learn</a><a href="/support.html">Support</a><a href="https://github.com/voided-network/voided">GitHub</a></nav>
+      <div><a class="brand" href="./index.html"><span class="brand__mark" aria-hidden="true"></span>VOIDED</a><p class="site-footer__meta">MIT licensed · Rust source of truth · voidednetwork.com</p></div>
+      <nav aria-label="Footer navigation"><a href="./docs.html">Docs</a><a href="./learn.html">Learn</a><a href="./support.html">Support</a><a href="https://github.com/voided-network/voided">GitHub</a></nav>
     </div>
   </footer>
 

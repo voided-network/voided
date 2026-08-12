@@ -16,12 +16,11 @@ for (const page of pages) {
   if (duplicateIds.length > 0) failures.push(`${page}: duplicate ids ${[...new Set(duplicateIds)].join(", ")}`);
   if (!html.includes('<meta name="viewport"')) failures.push(`${page}: missing viewport metadata`);
   if (!html.includes("skip-link")) failures.push(`${page}: missing skip link`);
-  if (!html.includes('href="/assets/styles.css"')) failures.push(`${page}: missing shared stylesheet`);
+  if (!html.includes('href="./assets/styles.css"')) failures.push(`${page}: missing shared stylesheet`);
 
-  for (const match of html.matchAll(/(?:href|src)="(\/[^"#?]+)"/g)) {
+  for (const match of html.matchAll(/(?:href|src)="((?:\.\/|\/)[^"#?]+)"/g)) {
     const target = match[1];
-    if (/^\/https?:/.test(target)) continue;
-    let localPath = resolve(root, `.${target}`);
+    let localPath = resolve(root, target.startsWith("/") ? `.${target}` : target);
     if (target.endsWith("/")) localPath = join(localPath, "index.html");
     try {
       readFileSync(localPath);
@@ -42,4 +41,3 @@ if (failures.length > 0) {
 }
 
 console.log(`[voided-site] verified ${pages.length} pages, shared assets, local links, unique ids, and accessibility hooks`);
-
