@@ -1,0 +1,5 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://voidednetwork.com/sitemap.xml
+

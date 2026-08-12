@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Interactive Voided learning lab: choose an SDK, understand the artifact pipeline, compare Fuse presets, and learn Recovery Deck boundaries.">
+  <meta name="theme-color" content="#080a0b">
+  <title>Learn Voided — Interactive architecture guides</title>
+  <link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/assets/styles.css">
+  <script src="/assets/site.js" defer></script>
+</head>
+<body data-page="learn">
+  <a class="skip-link" href="#main">Skip to content</a>
+  <header class="site-header">
+    <div class="site-header__inner">
+      <a class="brand" href="/" aria-label="Voided home"><span class="brand__mark" aria-hidden="true"></span>VOIDED</a>
+      <button class="menu-toggle" type="button" aria-expanded="false" aria-controls="site-navigation"><span class="sr-only">Toggle navigation</span>Menu</button>
+      <nav class="site-nav" id="site-navigation" aria-label="Primary navigation">
+        <a href="/docs.html">Docs</a><a href="/learn.html" aria-current="page">Learn</a><a href="/support.html">Support</a><a href="https://github.com/voided-network/voided">GitHub</a>
+        <button class="header-search" type="button" data-search-open aria-label="Search documentation">Search <kbd>⌘K</kbd></button>
+      </nav>
+    </div>
+  </header>
+
+  <main id="main">
+    <section class="page-hero">
+      <div class="page-hero__inner reveal">
+        <span class="eyebrow">Architecture, without ceremony</span>
+        <h1>Know what owns each byte.</h1>
+        <p>Use the decision lab to find your integration path, then pull apart the artifact and recovery models until the boundaries are obvious.</p>
+      </div>
+    </section>
+
+    <section class="section" id="choose-api" aria-labelledby="choose-title" data-search-title="Choose a Voided API" data-search-summary="Interactive decision guide for runtime and ownership">
+      <div class="section__inner">
+        <div class="section__intro reveal">
+          <div><span class="eyebrow">Decision lab</span><h2 class="section__title" id="choose-title">Tell us where you are.</h2></div>
+          <p>Two decisions are enough: where plaintext lives, and whether Voided should own the complete artifact.</p>
+        </div>
+        <div class="learn-grid reveal" data-path-finder>
+          <form class="learn-panel" aria-label="Integration choices">
+            <span class="eyebrow">Your system</span>
+            <h2>Choose the boundary.</h2>
+            <fieldset class="choice-group" data-choice-group="runtime">
+              <legend>Plaintext runtime</legend>
+              <div class="choice-row"><button class="choice-button" type="button" aria-pressed="true" data-choice="browser">Browser</button><button class="choice-button" type="button" aria-pressed="false" data-choice="node">Node.js</button><button class="choice-button" type="button" aria-pressed="false" data-choice="rust">Rust</button></div>
+            </fieldset>
+            <fieldset class="choice-group" data-choice-group="ownership">
+              <legend>Artifact ownership</legend>
+              <div class="choice-row"><button class="choice-button" type="button" aria-pressed="true" data-choice="full">Voided owns it</button><button class="choice-button" type="button" aria-pressed="false" data-choice="shell">I prepared the bytes</button><button class="choice-button" type="button" aria-pressed="false" data-choice="primitive">I own the format</button></div>
+            </fieldset>
+            <fieldset class="choice-group" data-choice-group="need">
+              <legend>Additional need</legend>
+              <div class="choice-row"><button class="choice-button" type="button" aria-pressed="true" data-choice="artifact">Protected data</button><button class="choice-button" type="button" aria-pressed="false" data-choice="recovery">Root recovery</button></div>
+            </fieldset>
+          </form>
+          <div class="learn-panel recommendation" aria-live="polite">
+            <span class="recommendation__package" data-recommendation-package>@voideddev/e2ee-client</span>
+            <h3 data-recommendation-title>Use protect/open.</h3>
+            <p data-recommendation-copy>Let the stateful browser client own key persistence and the complete VOF3 artifact lifecycle.</p>
+            <div class="code-window"><div class="code-window__bar"><span data-recommendation-file>browser.ts</span><button class="copy-button" type="button" data-copy="#recommendation-code">Copy</button></div><pre><code id="recommendation-code" data-recommendation-code>const artifact = await client.protect(data, {
+  preset: "balanced",
+});
+const restored = await client.open(artifact);</code></pre></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section section--light" aria-labelledby="anatomy-title" data-search-title="Anatomy of a protected artifact" data-search-summary="How plaintext becomes a VOF3 artifact and returns">
+      <div class="section__inner">
+        <div class="section__intro reveal"><div><span class="eyebrow">Artifact anatomy</span><h2 class="section__title" id="anatomy-title">Follow one payload.</h2></div><p>Each stage has a job. Keeping those jobs separate is what makes the whole flow explainable.</p></div>
+        <div class="anatomy reveal">
+          <div class="anatomy-step"><span class="anatomy-step__node"></span><h3>Application bytes</h3><p>Your trusted input. Decide its maximum size and whether every byte shares one compression trust boundary.</p></div>
+          <div class="anatomy-step"><span class="anatomy-step__node"></span><h3>Prepared bytes</h3><p>Optional gzip or Brotli under explicit bounds. Compression changes size, not confidentiality.</p></div>
+          <div class="anatomy-step"><span class="anatomy-step__node"></span><h3>AEAD payload</h3><p>Ciphertext, nonce, tag, and authenticated context. Tampering becomes a hard failure.</p></div>
+          <div class="anatomy-step"><span class="anatomy-step__node"></span><h3>VOF3 monolith</h3><p>The complete artifact plan is shaped into one stable outer object under compact, balanced, or concealed intent.</p></div>
+          <div class="anatomy-step"><span class="anatomy-step__node"></span><h3>Structural view</h3><p>Inspection can show sizes and shape without a key. It is useful and unauthenticated.</p></div>
+          <div class="anatomy-step"><span class="anatomy-step__node"></span><h3>Authenticated open</h3><p>Structure and work bounds first; tag verification before plaintext; bounded decompression last.</p></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="preset-lab" aria-labelledby="preset-lab-title" data-search-title="Fuse preset lab" data-search-summary="Interactive comparison of compact, balanced, and concealed">
+      <div class="section__inner">
+        <div class="section__intro reveal"><div><span class="eyebrow">Preset lab</span><h2 class="section__title" id="preset-lab-title">Change shape, not truth.</h2></div><p>This is a decision aid, not a synthetic benchmark. Measure actual bytes before tuning production.</p></div>
+        <div class="preset-lab reveal" data-preset-lab>
+          <div class="preset-controls" aria-label="Choose a Fuse preset"><button type="button" data-preset="compact" aria-pressed="false">compact</button><button type="button" data-preset="balanced" aria-pressed="true">balanced</button><button type="button" data-preset="concealed" aria-pressed="false">concealed</button></div>
+          <div class="preset-output">
+            <span class="eyebrow" data-preset-label>Balanced · recommended default</span>
+            <h3 class="mt-24" data-preset-title>Start here.</h3>
+            <p class="mt-24" data-preset-copy>General-purpose artifact shaping for most applications. It keeps overhead and shell variation in a practical middle ground.</p>
+            <div class="preset-meter" aria-hidden="true"><span data-preset-meter></span></div>
+            <div class="preset-stats"><div class="preset-stat"><span>Shell overhead</span><strong data-preset-overhead>medium</strong></div><div class="preset-stat"><span>Shape variation</span><strong data-preset-variation>medium</strong></div><div class="preset-stat"><span>Decision</span><strong data-preset-use>default</strong></div></div>
+            <div class="code-window mt-40"><div class="code-window__bar"><span>options.ts</span><button class="copy-button" type="button" data-copy="#preset-code">Copy</button></div><pre><code id="preset-code" data-preset-code>const { artifact } = protect(data, key, {
+  preset: "balanced",
+});</code></pre></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" aria-labelledby="recovery-model-title" data-search-title="Recovery Deck mental model" data-search-summary="Understand deterministic recovery, stable roots, and rotation">
+      <div class="section__inner recovery-spotlight">
+        <div class="recovery-copy reveal"><span class="eyebrow">Recovery model</span><h2 id="recovery-model-title">Recover the root. Leave the data alone.</h2><p>Application keys sit below a stable user/account root. A Recovery Deck unwraps that root; rotating the deck replaces only its wrapper.</p><div class="recovery-facts"><div class="recovery-fact"><strong>1 deck</strong><span>whole hierarchy</span></div><div class="recovery-fact"><strong>N apps</strong><span>isolated keys</span></div><div class="recovery-fact"><strong>0 decks</strong><span>stored by Voided</span></div><div class="recovery-fact"><strong>0 data</strong><span>re-encrypted on rotation</span></div></div><a class="button" href="/docs.html?guide=recovery">Build the recovery flow <span class="arrow" aria-hidden="true">→</span></a></div>
+        <div class="anatomy reveal" aria-label="Recovery hierarchy">
+          <div class="anatomy-step"><span class="anatomy-step__node"></span><h3>Physical deck</h3><p>The exact order is the secret. Generate it locally with a CSPRNG.</p></div>
+          <div class="anatomy-step"><span class="anatomy-step__node"></span><h3>Canonical rank</h3><p>A unique 29-byte integer representation of one permutation.</p></div>
+          <div class="anatomy-step"><span class="anatomy-step__node"></span><h3>Recovery Key</h3><p>Domain-separated 32-byte output. Useful only transiently.</p></div>
+          <div class="anatomy-step"><span class="anatomy-step__node"></span><h3>Stable root</h3><p>Unwrapped without changing application keys or re-encrypting data.</p></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section section--light" aria-labelledby="anti-pattern-title" data-search-title="Voided anti-patterns" data-search-summary="What not to do with encryption, compression, inspection, and recovery">
+      <div class="section__inner">
+        <div class="section__intro reveal"><div><span class="eyebrow">Anti-patterns</span><h2 class="section__title" id="anti-pattern-title">The mistakes worth memorizing.</h2></div><p>Most failures happen around the cryptography: serialization, lifecycle, logs, concurrency, and false trust.</p></div>
+        <div class="principles reveal">
+          <div class="principle"><span class="principle__number">×</span><h3>Authorize from inspection</h3><p>Keyless metadata is a preview, not authenticated truth. Route conservatively and trust only after open.</p></div>
+          <div class="principle"><span class="principle__number">×</span><h3>Compress mixed secrets</h3><p>Shared compression context plus observable ciphertext length can become an oracle. Keep one trust boundary or leave compression off.</p></div>
+          <div class="principle"><span class="principle__number">×</span><h3>Rotate by nudging a deck</h3><p>Nearby permutations are searchable after compromise. Secure recovery rotation starts over with a wholly fresh random deck.</p></div>
+          <div class="principle"><span class="principle__number">×</span><h3>Let two tabs own rotation</h3><p>Sequential changes are detected. Truly concurrent lifecycle writers require an application-level transactional lock.</p></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section section--signal final-cta" aria-labelledby="learn-final-title"><div class="final-cta__inner reveal"><span class="eyebrow">Ready to implement</span><h2 id="learn-final-title">Take the model into code.</h2><div class="final-cta__actions"><a class="button" href="/docs.html">Open the SDK guides <span class="arrow" aria-hidden="true">→</span></a><a class="button button--quiet" href="/support.html">Troubleshoot an integration</a></div></div></section>
+  </main>
+
+  <footer class="site-footer"><div class="site-footer__inner"><div><a class="brand" href="/"><span class="brand__mark" aria-hidden="true"></span>VOIDED</a><p class="site-footer__meta">MIT licensed · Learn the boundary, then ship it</p></div><nav aria-label="Footer navigation"><a href="/docs.html">Docs</a><a href="/support.html">Support</a><a href="https://github.com/voided-network/voided">GitHub</a></nav></div></footer>
+  <dialog class="search-dialog" data-search-dialog aria-label="Search Voided documentation"><form class="search-form" method="dialog"><input type="search" data-search-input placeholder="Search guides, concepts, APIs…" autocomplete="off"><button class="search-close" value="cancel" aria-label="Close search">Esc</button></form><div class="search-results" data-search-results><p class="search-empty">Type a concept or API name.</p></div></dialog>
+  <div class="sr-only" aria-live="polite" data-live-region></div>
+</body>
+</html>

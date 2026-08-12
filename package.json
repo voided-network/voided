@@ -22,9 +22,11 @@
     "test:release-provenance-inputs": "node scripts/test-release-provenance-inputs.js",
     "test:rust:performance": "cargo test --manifest-path crates/Cargo.toml -p voided-core --test stress_tests throughput --release -- --ignored --test-threads=1",
     "typecheck": "npm run typecheck --workspaces --if-present",
+    "site:dev": "node website/server.mjs",
+    "site:check": "node website/verify-site.mjs",
     "licenses:generate": "node scripts/generate-third-party-notices.js",
     "release:verify:source": "node scripts/verify-release-source.js --all --allow-untagged",
-    "lint": "eslint --max-warnings=0 \"packages/*/src/**/*.{js,ts,mjs,cjs}\" \"packages/*/scripts/**/*.{js,ts,mjs,cjs}\" \"packages/*/tests/**/*.{js,ts,mjs,cjs}\" \"scripts/**/*.{js,ts,mjs,cjs}\" \"examples/**/*.{js,ts,mjs,cjs}\"",
+    "lint": "eslint --max-warnings=0 \"packages/*/src/**/*.{js,ts,mjs,cjs}\" \"packages/*/scripts/**/*.{js,ts,mjs,cjs}\" \"packages/*/tests/**/*.{js,ts,mjs,cjs}\" \"scripts/**/*.{js,ts,mjs,cjs}\" \"examples/**/*.{js,ts,mjs,cjs}\" \"website/**/*.{js,mjs}\"",
     "clean": "rm -rf node_modules packages/*/node_modules packages/*/dist crates/target crates/voided-wasm/pkg packages/enc-server/native/voided_node.node packages/enc-server/prebuilds/darwin-* packages/e2ee-client/wasm/init.js packages/e2ee-client/wasm/voided_wasm*"
   },
   "overrides": {

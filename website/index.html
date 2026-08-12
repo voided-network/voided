@@ -1,0 +1,221 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Voided is a monolith-first encryption toolkit with one Rust core, native Node.js and browser WASM surfaces, and deterministic Recovery Deck support.">
+  <meta name="theme-color" content="#080a0b">
+  <meta property="og:title" content="Voided — encrypted data, shaped as an artifact">
+  <meta property="og:description" content="Developer tools, guides, and protocols for Voided 1.0.">
+  <title>Voided — Developer encryption infrastructure</title>
+  <link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/assets/styles.css">
+  <script src="/assets/site.js" defer></script>
+</head>
+<body data-page="home">
+  <a class="skip-link" href="#main">Skip to content</a>
+  <header class="site-header is-overlay">
+    <div class="site-header__inner">
+      <a class="brand" href="/" aria-label="Voided home"><span class="brand__mark" aria-hidden="true"></span>VOIDED</a>
+      <button class="menu-toggle" type="button" aria-expanded="false" aria-controls="site-navigation"><span class="sr-only">Toggle navigation</span>Menu</button>
+      <nav class="site-nav" id="site-navigation" aria-label="Primary navigation">
+        <a href="/docs.html">Docs</a>
+        <a href="/learn.html">Learn</a>
+        <a href="/support.html">Support</a>
+        <a href="https://github.com/voided-network/voided">GitHub</a>
+        <button class="header-search" type="button" data-search-open aria-label="Search documentation">Search <kbd>⌘K</kbd></button>
+      </nav>
+    </div>
+  </header>
+
+  <main id="main">
+    <section class="hero" aria-labelledby="hero-title">
+      <div class="hero__inner">
+        <div class="hero__copy">
+          <div class="hero__brand">MONOLITH-FIRST ENCRYPTION</div>
+          <h1 id="hero-title">Encrypted data,<span>shaped as an artifact.</span></h1>
+          <p class="hero__lede">One Rust core. Native Node.js and browser WASM. A stable, authenticated format from first byte to final recovery path.</p>
+          <div class="hero__actions">
+            <a class="button button--signal" href="/docs.html">Start building <span class="arrow" aria-hidden="true">→</span></a>
+            <a class="button" href="/learn.html">Understand the model</a>
+          </div>
+          <p class="hero__status"><span class="signal-dot" aria-hidden="true"></span> 1.0 release candidate · VOF3 / Fuse · Windows validation pending</p>
+        </div>
+        <div class="artifact-stage" data-artifact-stage aria-label="Interactive visualization of a Voided protected artifact">
+          <canvas id="signal-canvas" aria-hidden="true"></canvas>
+          <div class="artifact-core" aria-hidden="true">
+            <div class="artifact-core__grid"></div>
+            <div class="artifact-core__pulse"></div>
+            <div class="artifact-core__label"><span>VOF3</span><span>AUTHENTICATED</span></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" aria-labelledby="start-title" data-search-title="Choose a Voided SDK" data-search-summary="Browser, Node.js, and Rust quickstarts">
+      <div class="section__inner">
+        <div class="section__intro reveal">
+          <div>
+            <span class="eyebrow">Three surfaces · one implementation</span>
+            <h2 class="section__title" id="start-title">Start where your data lives.</h2>
+          </div>
+          <p>Every first-party surface resolves to the same source-of-truth Rust behavior. Pick the runtime; the artifact contract stays put.</p>
+        </div>
+
+        <div class="path-switcher reveal" data-sdk-switcher>
+          <div class="path-tabs" role="tablist" aria-label="SDK quickstarts">
+            <button class="path-tab" type="button" role="tab" aria-selected="true" data-sdk="browser"><span><strong>Browser</strong><small>STATEFUL + WASM</small></span></button>
+            <button class="path-tab" type="button" role="tab" aria-selected="false" data-sdk="node"><span><strong>Node.js</strong><small>NATIVE RUST</small></span></button>
+            <button class="path-tab" type="button" role="tab" aria-selected="false" data-sdk="rust"><span><strong>Rust</strong><small>SOURCE OF TRUTH</small></span></button>
+          </div>
+          <div class="path-output" role="tabpanel">
+            <div class="path-summary">
+              <p data-sdk-description>Use the stateful client for browser key storage and the normal protect/open lifecycle.</p>
+              <span class="package-name" data-sdk-package>@voideddev/e2ee-client</span>
+            </div>
+            <div class="code-window">
+              <div class="code-window__bar"><span data-sdk-filename>browser.ts</span><button class="copy-button" type="button" data-copy="#home-sdk-code">Copy</button></div>
+              <pre><code id="home-sdk-code" data-sdk-code><span class="tok-key">import</span> { VoidedE2EEClient } <span class="tok-key">from</span> <span class="tok-str">"@voideddev/e2ee-client"</span>;
+
+<span class="tok-key">const</span> client = <span class="tok-key">new</span> <span class="tok-fn">VoidedE2EEClient</span>();
+<span class="tok-key">const</span> blob = <span class="tok-key">await</span> client.<span class="tok-fn">protect</span>(<span class="tok-str">"Private data"</span>, {
+  preset: <span class="tok-str">"balanced"</span>,
+});
+
+<span class="tok-key">const</span> restored = <span class="tok-key">await</span> client.<span class="tok-fn">open</span>(blob);</code></pre>
+            </div>
+            <a class="text-link mt-24" href="/docs.html?guide=browser"><span data-sdk-link-label>Open the Browser guide</span> <span class="arrow" aria-hidden="true">→</span></a>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section section--light" aria-labelledby="pipeline-title" data-search-title="The Voided protected artifact pipeline" data-search-summary="Compression, authenticated encryption, and whole-monolith shaping">
+      <div class="section__inner">
+        <div class="section__intro reveal">
+          <div>
+            <span class="eyebrow">The normal 1.0 path</span>
+            <h2 class="section__title" id="pipeline-title">One call owns the whole journey.</h2>
+          </div>
+          <p><strong>protect/open</strong> is the standard contract. Reach for primitives or shell-only APIs only when you already own the surrounding format.</p>
+        </div>
+        <div class="pipeline reveal">
+          <div class="pipeline__row">
+            <span class="pipeline__index">01</span><h3>Prepare</h3><p>Optional compression is explicit, bounded, and chosen before encryption. Browser high-level encryption leaves it off unless you opt in.</p><span class="pipeline__glyph" aria-hidden="true">◇</span>
+          </div>
+          <div class="pipeline__row">
+            <span class="pipeline__index">02</span><h3>Authenticate</h3><p>XChaCha20-Poly1305 is the general default. Any change to ciphertext, nonce, tag, or authenticated structure makes open fail.</p><span class="pipeline__glyph" aria-hidden="true">◇</span>
+          </div>
+          <div class="pipeline__row">
+            <span class="pipeline__index">03</span><h3>Shape</h3><p>Fuse turns the complete encrypted plan into a stable VOF3 monolith artifact with a preset-driven outer form.</p><span class="pipeline__glyph" aria-hidden="true">◇</span>
+          </div>
+          <div class="pipeline__row">
+            <span class="pipeline__index">04</span><h3>Open</h3><p>Bounds and structure are checked before expensive work. Authentication succeeds before plaintext is released.</p><span class="pipeline__glyph" aria-hidden="true">◆</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" aria-labelledby="presets-title" data-search-title="Fused presets" data-search-summary="Compact, balanced, and concealed artifact profiles">
+      <div class="section__inner">
+        <div class="section__intro reveal">
+          <div>
+            <span class="eyebrow">Preset, not guesswork</span>
+            <h2 class="section__title" id="presets-title">Choose intent. Keep the format.</h2>
+          </div>
+          <p>Presets change artifact shape and overhead, not the underlying security primitive. Start with balanced; move only after measuring your own corpus.</p>
+        </div>
+        <div class="preset-line reveal">
+          <div class="preset"><span class="preset__name">compact</span><h3>Keep it lean.</h3><p>Lowest shell overhead when size is the governing constraint.</p></div>
+          <div class="preset"><span class="preset__name">balanced · default</span><h3>Ship the general case.</h3><p>The recommended starting point for most protected application data.</p></div>
+          <div class="preset"><span class="preset__name">concealed</span><h3>Vary the silhouette.</h3><p>A heavier shape profile for workflows that value more shell variation.</p></div>
+        </div>
+        <a class="text-link mt-40" href="/learn.html#preset-lab">Compare the presets <span class="arrow" aria-hidden="true">→</span></a>
+      </div>
+    </section>
+
+    <section class="section" aria-labelledby="recovery-title" data-search-title="Recovery Deck" data-search-summary="A stateless deterministic recovery credential made from one 52-card permutation">
+      <div class="section__inner recovery-spotlight">
+        <div class="recovery-copy reveal">
+          <span class="eyebrow">Protocol spotlight · Recovery Deck</span>
+          <h2 id="recovery-title">One deck. Your stable root.</h2>
+          <p>A uniformly shuffled 52-card deck deterministically recreates a Recovery Key. The key unwraps your stable root; the deck and derived key are never stored.</p>
+          <div class="recovery-facts">
+            <div class="recovery-fact"><strong>225.58 bits</strong><span>permutation entropy</span></div>
+            <div class="recovery-fact"><strong>29 bytes</strong><span>canonical rank</span></div>
+            <div class="recovery-fact"><strong>32 bytes</strong><span>derived key</span></div>
+            <div class="recovery-fact"><strong>80 bytes</strong><span>persistable wrapper</span></div>
+          </div>
+          <a class="button" href="/docs.html?guide=recovery">Read the protocol guide <span class="arrow" aria-hidden="true">→</span></a>
+        </div>
+        <div class="deck-visual reveal" aria-label="Abstract fan of five playing cards representing a Recovery Deck">
+          <div class="deck-card"><span>A♠</span><small>00</small></div>
+          <div class="deck-card"><span>7♥</span><small>13</small></div>
+          <div class="deck-card"><span>K♦</span><small>38</small></div>
+          <div class="deck-card"><span>3♣</span><small>41</small></div>
+          <div class="deck-card"><span>J♠</span><small>10</small></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section section--light" aria-labelledby="trust-title" data-search-title="Security posture" data-search-summary="Fail closed behavior, bounded work, and stable protocols">
+      <div class="section__inner">
+        <div class="section__intro reveal">
+          <div>
+            <span class="eyebrow">Trust the boundary, not the vibe</span>
+            <h2 class="section__title" id="trust-title">Security behavior you can reason about.</h2>
+          </div>
+          <p>Voided’s strongest feature is not a magic algorithm. It is a narrow contract with explicit formats, limits, failure behavior, and ownership.</p>
+        </div>
+        <div class="principles reveal">
+          <div class="principle"><span class="principle__number">01</span><h3>One source of truth</h3><p>Rust owns cryptographic behavior. Native Node and browser WASM expose the same protocol instead of reinterpreting it independently.</p></div>
+          <div class="principle"><span class="principle__number">02</span><h3>Authenticate before release</h3><p>Malformed structure, tampering, oversized work, and incorrect keys fail before untrusted plaintext or unbounded output is returned.</p></div>
+          <div class="principle"><span class="principle__number">03</span><h3>Stable means stable</h3><p>VOF3 and the initial Recovery Deck constants are frozen contracts. An incompatible future design gets a new scheme, not a silent reinterpretation.</p></div>
+          <div class="principle"><span class="principle__number">04</span><h3>Know your trust boundary</h3><p>Browser keys cannot survive fully compromised same-origin JavaScript. XSS prevention, dependency hygiene, CSP, and lifecycle locking remain application responsibilities.</p></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" aria-labelledby="notes-title">
+      <div class="section__inner">
+        <div class="section__intro reveal">
+          <div>
+            <span class="eyebrow">Field notes</span>
+            <h2 class="section__title" id="notes-title">Deep dives without the fog.</h2>
+          </div>
+          <p>Short, opinionated guides for the moments where encryption libraries usually leave you guessing.</p>
+        </div>
+        <div class="field-notes reveal">
+          <a class="field-note" href="/learn.html#choose-api"><span class="field-note__type">Decision guide · 5 min</span><h3>Which API layer should own my data?</h3><p>Pick primitives, Fuse, or the standard monolith flow based on who owns the outer format.</p><span class="arrow" aria-hidden="true">→</span></a>
+          <a class="field-note" href="/docs.html?guide=security"><span class="field-note__type">Security · 8 min</span><h3>Inspection is not authentication.</h3><p>Why structural metadata stays attacker-controlled until the keyed open succeeds.</p><span class="arrow" aria-hidden="true">→</span></a>
+          <a class="field-note" href="/docs.html?guide=recovery"><span class="field-note__type">Protocol · 10 min</span><h3>Rotate recovery without touching user data.</h3><p>Rewrap one stable root under a completely fresh CSPRNG deck.</p><span class="arrow" aria-hidden="true">→</span></a>
+        </div>
+      </div>
+    </section>
+
+    <section class="section section--signal final-cta" aria-labelledby="final-title">
+      <div class="final-cta__inner reveal">
+        <span class="eyebrow">Build from the right layer</span>
+        <h2 id="final-title">Protect the data.<br>Keep the architecture legible.</h2>
+        <div class="final-cta__actions">
+          <a class="button" href="/docs.html">Read the docs <span class="arrow" aria-hidden="true">→</span></a>
+          <a class="button button--quiet" href="/support.html">Get unstuck</a>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="site-footer__inner">
+      <div><a class="brand" href="/"><span class="brand__mark" aria-hidden="true"></span>VOIDED</a><p class="site-footer__meta">MIT licensed · Rust source of truth · voidednetwork.com</p></div>
+      <nav aria-label="Footer navigation"><a href="/docs.html">Docs</a><a href="/learn.html">Learn</a><a href="/support.html">Support</a><a href="https://github.com/voided-network/voided">GitHub</a></nav>
+    </div>
+  </footer>
+
+  <dialog class="search-dialog" data-search-dialog aria-label="Search Voided documentation">
+    <form class="search-form" method="dialog"><input type="search" data-search-input placeholder="Search guides, concepts, APIs…" autocomplete="off"><button class="search-close" value="cancel" aria-label="Close search">Esc</button></form>
+    <div class="search-results" data-search-results><p class="search-empty">Type a concept or API name.</p></div>
+  </dialog>
+  <div class="sr-only" aria-live="polite" data-live-region></div>
+</body>
+</html>

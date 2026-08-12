@@ -1,0 +1,288 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Voided developer documentation for browser, Node.js, Rust, Fuse artifacts, Recovery Deck, and security boundaries.">
+  <meta name="theme-color" content="#080a0b">
+  <title>Voided Docs — Build from the right layer</title>
+  <link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/assets/styles.css">
+  <script src="/assets/site.js" defer></script>
+</head>
+<body data-page="docs">
+  <a class="skip-link" href="#main">Skip to content</a>
+  <header class="site-header">
+    <div class="site-header__inner">
+      <a class="brand" href="/" aria-label="Voided home"><span class="brand__mark" aria-hidden="true"></span>VOIDED</a>
+      <button class="menu-toggle" type="button" aria-expanded="false" aria-controls="site-navigation"><span class="sr-only">Toggle navigation</span>Menu</button>
+      <nav class="site-nav" id="site-navigation" aria-label="Primary navigation">
+        <a href="/docs.html" aria-current="page">Docs</a>
+        <a href="/learn.html">Learn</a>
+        <a href="/support.html">Support</a>
+        <a href="https://github.com/voided-network/voided">GitHub</a>
+        <button class="header-search" type="button" data-search-open aria-label="Search documentation">Search <kbd>⌘K</kbd></button>
+      </nav>
+    </div>
+  </header>
+  <div class="status-band">
+    <div class="status-band__inner"><strong><span class="signal-dot" aria-hidden="true"></span> 1.0 RELEASE CANDIDATE</strong><p>Docs match the audited 1.0 source. Windows native execution remains before publication.</p></div>
+  </div>
+
+  <main id="main" class="docs-shell">
+    <aside class="docs-sidebar" aria-label="Documentation guides">
+      <div class="docs-sidebar__group">
+        <div class="docs-sidebar__label">Begin</div>
+        <button class="docs-nav-button" type="button" data-guide="start" aria-current="page">Get started</button>
+        <button class="docs-nav-button" type="button" data-guide="fuse">Artifact model</button>
+      </div>
+      <div class="docs-sidebar__group">
+        <div class="docs-sidebar__label">SDKs</div>
+        <button class="docs-nav-button" type="button" data-guide="browser">Browser</button>
+        <button class="docs-nav-button" type="button" data-guide="node">Node.js</button>
+        <button class="docs-nav-button" type="button" data-guide="rust">Rust</button>
+      </div>
+      <div class="docs-sidebar__group">
+        <div class="docs-sidebar__label">Protocols</div>
+        <button class="docs-nav-button" type="button" data-guide="recovery">Recovery Deck</button>
+        <button class="docs-nav-button" type="button" data-guide="security">Security</button>
+      </div>
+    </aside>
+
+    <div class="docs-main">
+      <article class="docs-guide" data-guide-panel="start" data-search-title="Get started with Voided" data-search-summary="Install a package and choose protect/open, Fuse, or primitive APIs">
+        <header class="docs-guide__header">
+          <span class="eyebrow">Guide 01</span>
+          <h1>Get started.</h1>
+          <p>Choose the runtime your plaintext already lives in. Then let the standard monolith path own compression, authenticated encryption, and artifact shaping together.</p>
+        </header>
+        <section class="docs-section" id="start-choose" data-doc-heading="Choose a surface">
+          <h2>Choose a surface</h2>
+          <table class="decision-table">
+            <thead><tr><th>Your runtime</th><th>Install</th><th>Use it for</th></tr></thead>
+            <tbody>
+              <tr><td>Browser</td><td><code class="inline-code">@voideddev/e2ee-client</code></td><td>Stateful client-side encryption, IndexedDB key storage, browser WASM artifacts, and optional Recovery Deck UI.</td></tr>
+              <tr><td>Node.js</td><td><code class="inline-code">@voideddev/enc-server</code></td><td>Native Rust-backed server work, buffers, protected artifacts, hashing, compression, and recovery.</td></tr>
+              <tr><td>Rust</td><td><code class="inline-code">voided-core</code></td><td>Direct source-of-truth APIs, custom native systems, feature selection, and byte-level control.</td></tr>
+            </tbody>
+          </table>
+          <div class="callout"><strong>Default decision</strong><p>Use <code>protect/open</code>. Use primitive encryption only when your application owns the outer format. Use shell-only Fuse APIs only when your inner bytes are already prepared.</p></div>
+        </section>
+        <section class="docs-section" id="start-browser" data-doc-heading="Browser in sixty seconds">
+          <h2>Browser in sixty seconds</h2>
+          <div class="code-window"><div class="code-window__bar"><span>browser.ts</span><button class="copy-button" type="button" data-copy="#start-browser-code">Copy</button></div><pre><code id="start-browser-code">import { VoidedE2EEClient } from "@voideddev/e2ee-client";
+
+const client = new VoidedE2EEClient();
+const artifact = await client.protect("Private browser data", {
+  preset: "balanced",
+});
+
+const info = await client.inspectProtected(artifact);
+const restored = await client.open(artifact);
+
+console.log(info.preset, restored);</code></pre></div>
+          <p class="mt-24">The stateful client creates or loads its key from IndexedDB. Inspection is structural only; treat every returned field as attacker-controlled until <code>open</code> succeeds.</p>
+        </section>
+        <section class="docs-section" id="start-node" data-doc-heading="Node.js in sixty seconds">
+          <h2>Node.js in sixty seconds</h2>
+          <div class="code-window"><div class="code-window__bar"><span>server.mjs</span><button class="copy-button" type="button" data-copy="#start-node-code">Copy</button></div><pre><code id="start-node-code">import { generateKey, inspectArtifact, open, protect } from "@voideddev/enc-server";
+
+const key = generateKey();
+const { artifact } = protect(Buffer.from("Private server data"), key, {
+  preset: "balanced",
+  compressionAlgorithm: "brotli",
+  encryptionAlgorithm: "xchacha20-poly1305",
+});
+
+console.log(inspectArtifact(artifact).preset);
+console.log(open(artifact, key).toString("utf8"));
+key.fill(0);</code></pre></div>
+        </section>
+        <section class="docs-section" id="start-status" data-doc-heading="Release status">
+          <h2>Release status</h2>
+          <p>The source tree and docs are at 1.0.0 release-candidate state. macOS arm64 and Linux x64 native packages, browser WASM, CJS, and ESM paths have passed their release gates. The Windows x64 prebuild has verified provenance and hashes; real Windows execution is the final native gate before publication.</p>
+          <div class="callout callout--danger"><strong>Do not pin an unpublished package</strong><p>Until the 1.0 tags and packages exist, use the audited source commit rather than assuming the npm or crates.io release is live.</p></div>
+        </section>
+      </article>
+
+      <article class="docs-guide" data-guide-panel="browser" hidden data-search-title="Voided browser SDK" data-search-summary="Stateful browser client, WASM loading, key storage, compression, and Recovery Deck UI">
+        <header class="docs-guide__header"><span class="eyebrow">SDK guide</span><h1>Browser.</h1><p>Use the stateful client when Voided should manage the browser key lifecycle. Drop to the crypto namespace when your application needs explicit byte control.</p></header>
+        <section class="docs-section" id="browser-when" data-doc-heading="When to use it">
+          <h2>When to use it</h2>
+          <ul><li>Your plaintext is created or consumed in the browser.</li><li>You want local IndexedDB-backed key persistence.</li><li>You need the VOF3 monolith path through verified WASM.</li><li>You want a neutral, customizable Recovery Deck setup component.</li></ul>
+          <p class="mt-24">Do not move plaintext to a server merely to encrypt it there. Do not use browser storage as a substitute for account recovery, device custody, or cross-tab transaction coordination.</p>
+        </section>
+        <section class="docs-section" id="browser-client" data-doc-heading="Stateful client">
+          <h2>Stateful client</h2>
+          <div class="code-window"><div class="code-window__bar"><span>client.ts</span><button class="copy-button" type="button" data-copy="#browser-client-code">Copy</button></div><pre><code id="browser-client-code">import { VoidedE2EEClient } from "@voideddev/e2ee-client";
+
+const client = new VoidedE2EEClient();
+
+const protectedBlob = await client.protect("Private data", {
+  preset: "balanced",
+});
+
+// Metadata is not authenticated yet.
+const preview = await client.inspectProtected(protectedBlob);
+
+// Successful open authenticates the artifact.
+const plaintext = await client.open(protectedBlob);</code></pre></div>
+          <h3>Top-level helpers</h3><p><code>protect</code>, <code>open</code>, <code>inspectProtected</code>, <code>exportKey</code>, <code>importKey</code>, and <code>rotateKey</code> operate through a default singleton client. Use them for small integrations; hold your own client instance when lifecycle ownership matters.</p>
+        </section>
+        <section class="docs-section" id="browser-wasm" data-doc-heading="WASM behavior">
+          <h2>WASM behavior</h2>
+          <p>Fuse, full-flow artifacts, bounded decompression, and Recovery Deck require the verified Rust/WASM runtime. The browser package does not silently replace those protocols with a TypeScript interpretation.</p>
+          <div class="callout"><strong>Fail closed by default</strong><p>If WASM initialization fails in a browser, the operation throws. Calling <code>forceTypeScriptBackend()</code> is an explicit opt-in for supported primitive browser helpers only.</p></div>
+          <p>Use <code>configureWasmLoader</code> before initialization when your bundler or CDN needs an explicit artifact URL. A configured URL is locked to that initialization attempt; a failed configured load does not silently hunt for another binary.</p>
+        </section>
+        <section class="docs-section" id="browser-storage" data-doc-heading="Storage and lifecycle">
+          <h2>Storage and lifecycle</h2>
+          <p>Only a confirmed <code>null</code> read creates a first-use key. Storage errors fail closed and remain retryable. Each key-dependent operation revalidates persisted authority before taking a stable-key lease.</p>
+          <div class="callout callout--danger"><strong>One lifecycle writer per key ID</strong><p>Truly concurrent rotations, migrations, replacements, or deletion across tabs require an application-owned transactional lock. The generic storage interface does not pretend to coordinate them.</p></div>
+          <p>Fully compromised same-origin JavaScript can observe plaintext and usable keys. CSP, XSS prevention, dependency hygiene, and origin design are part of your security boundary.</p>
+        </section>
+        <section class="docs-section" id="browser-compression" data-doc-heading="Compression">
+          <h2>Compression</h2>
+          <p>High-level browser encryption defaults to <code>compressionAlgorithm: "none"</code>. Compression can reveal secrets through ciphertext length when secret and attacker-controlled inputs share a context.</p>
+          <div class="code-window"><div class="code-window__bar"><span>explicit-compression.ts</span><button class="copy-button" type="button" data-copy="#browser-compression-code">Copy</button></div><pre><code id="browser-compression-code">// Only when the whole plaintext has one trust boundary.
+const blob = await client.encrypt(data, {
+  compressionAlgorithm: "gzip",
+});</code></pre></div>
+        </section>
+        <section class="docs-section" id="browser-support" data-doc-heading="Browser support">
+          <h2>Browser support</h2>
+          <p>Voided 1.0 targets current Safari/WebKit and Chromium-based browsers. Firefox is best-effort and is not a release gate.</p>
+        </section>
+      </article>
+
+      <article class="docs-guide" data-guide-panel="node" hidden data-search-title="Voided Node.js SDK" data-search-summary="Native Rust-backed encryption, buffers, protected artifacts, and runtime verification">
+        <header class="docs-guide__header"><span class="eyebrow">SDK guide</span><h1>Node.js.</h1><p>Native Rust behavior exposed as direct Buffer APIs. No TypeScript crypto fallback and no ambiguity about which implementation protected your bytes.</p></header>
+        <section class="docs-section" id="node-when" data-doc-heading="When to use it"><h2>When to use it</h2><ul><li>Plaintext already exists in a trusted Node.js process.</li><li>You need native protected artifacts, hashing, compression, or recovery.</li><li>You want CJS and ESM entry points over the same verified binary.</li></ul></section>
+        <section class="docs-section" id="node-protect" data-doc-heading="Protect and open">
+          <h2>Protect and open</h2>
+          <div class="code-window"><div class="code-window__bar"><span>artifact.mjs</span><button class="copy-button" type="button" data-copy="#node-protect-code">Copy</button></div><pre><code id="node-protect-code">import { generateKey, inspectArtifact, open, protect } from "@voideddev/enc-server";
+
+const key = generateKey();
+try {
+  const result = protect(Buffer.from("Private server data"), key, {
+    preset: "balanced",
+    compressionAlgorithm: "brotli",
+    encryptionAlgorithm: "xchacha20-poly1305",
+  });
+
+  const structuralInfo = inspectArtifact(result.artifact);
+  const restored = open(result.artifact, key);
+} finally {
+  key.fill(0);
+}</code></pre></div>
+          <p class="mt-24">The normal path returns a complete artifact. Raw <code>encrypt/decrypt</code> returns primitive AEAD fields and leaves outer serialization to you.</p>
+        </section>
+        <section class="docs-section" id="node-native" data-doc-heading="Native runtime">
+          <h2>Native runtime</h2>
+          <p>Supported release prebuilds are macOS arm64, Linux x64 GNU with glibc 2.34 or newer, and Windows x64 MSVC. The postinstall and runtime loaders verify the selected artifact against the release manifest before loading it.</p>
+          <div class="code-window"><div class="code-window__bar"><span>release checks</span><button class="copy-button" type="button" data-copy="#node-native-code">Copy</button></div><pre><code id="node-native-code">npm --prefix packages/enc-server run verify:release:current
+npm --prefix packages/enc-server run smoke:package:current
+npm --prefix packages/enc-server run test:integration</code></pre></div>
+          <p class="mt-24">Another architecture, C library, or older Linux distribution must build from the tagged source and run the native verification suite.</p>
+        </section>
+        <section class="docs-section" id="node-layers" data-doc-heading="API layers"><h2>API layers</h2><table class="decision-table"><thead><tr><th>Layer</th><th>Calls</th><th>Use when</th></tr></thead><tbody><tr><td>Full flow</td><td><code>protect/open</code></td><td>Voided should own the standard artifact end to end.</td></tr><tr><td>Shell only</td><td><code>fuse/unfuse</code></td><td>You already prepared the inner bytes.</td></tr><tr><td>Primitive</td><td><code>encrypt/decrypt</code></td><td>You own the outer format and lifecycle.</td></tr></tbody></table></section>
+      </article>
+
+      <article class="docs-guide" data-guide-panel="rust" hidden data-search-title="voided-core Rust crate" data-search-summary="Source-of-truth Rust APIs, feature flags, and protected artifact examples">
+        <header class="docs-guide__header"><span class="eyebrow">SDK guide</span><h1>Rust.</h1><p>The implementation of record. Use it directly for native systems, explicit feature control, and the narrowest possible dependency boundary.</p></header>
+        <section class="docs-section" id="rust-install" data-doc-heading="Add the crate"><h2>Add the crate</h2><div class="code-window"><div class="code-window__bar"><span>Cargo.toml</span><button class="copy-button" type="button" data-copy="#rust-install-code">Copy</button></div><pre><code id="rust-install-code">[dependencies]
+voided-core = "1.0"</code></pre></div><p class="mt-24">Use the exact tagged source until the crate is published.</p></section>
+        <section class="docs-section" id="rust-artifact" data-doc-heading="Standard artifact">
+          <h2>Standard artifact</h2>
+          <div class="code-window"><div class="code-window__bar"><span>main.rs</span><button class="copy-button" type="button" data-copy="#rust-artifact-code">Copy</button></div><pre><code id="rust-artifact-code">use voided_core::encryption::generate_key;
+use voided_core::shell::{
+    inspect_artifact, open, protect, FusedPreset, ProtectOptions,
+};
+
+let key = generate_key();
+let protected = protect(
+    b"hello monolith world",
+    &key,
+    Some(ProtectOptions {
+        preset: FusedPreset::Balanced,
+        ..ProtectOptions::default()
+    }),
+)?;
+
+let info = inspect_artifact(&protected.artifact)?;
+let restored = open(&protected.artifact, &key)?;</code></pre></div>
+        </section>
+        <section class="docs-section" id="rust-features" data-doc-heading="Feature flags"><h2>Feature flags</h2><table class="decision-table"><thead><tr><th>Feature</th><th>Purpose</th></tr></thead><tbody><tr><td>backend</td><td>Default full native feature set.</td></tr><tr><td>browser</td><td>Browser-compatible subset used by WASM.</td></tr><tr><td>compression</td><td>Brotli and gzip support.</td></tr><tr><td>signing</td><td>Ed25519 and P-256 helpers. RSA-PSS wire ID is reserved, not implemented.</td></tr><tr><td>std / wasm</td><td>Target and runtime integration controls.</td></tr></tbody></table><div class="callout"><strong>No unsafe code</strong><p>The crate declares <code>#![forbid(unsafe_code)]</code>.</p></div></section>
+      </article>
+
+      <article class="docs-guide" data-guide-panel="fuse" hidden data-search-title="VOF3 Fuse artifact model" data-search-summary="How protect/open, fuse/unfuse, inspection, and presets relate">
+        <header class="docs-guide__header"><span class="eyebrow">Core concept</span><h1>Artifact model.</h1><p>Fuse is the stable outer shell. The standard Voided 1.0 product path protects the whole monolith: prepare, authenticate, shape, then open in reverse.</p></header>
+        <section class="docs-section" id="fuse-model" data-doc-heading="The mental model"><h2>The mental model</h2><ol><li>Optionally compress under an explicit policy.</li><li>Encrypt with authenticated encryption.</li><li>Shape the complete plan into the VOF3 artifact.</li><li>On open, validate structure and bounds before expensive work.</li><li>Authenticate before releasing plaintext.</li></ol><div class="callout"><strong>Fuse is not another cipher</strong><p>It is an authenticated outer artifact format and shaping layer around already encrypted material.</p></div></section>
+        <section class="docs-section" id="fuse-layer" data-doc-heading="Choose the API layer"><h2>Choose the API layer</h2><table class="decision-table"><thead><tr><th>If you need</th><th>Use</th><th>Why</th></tr></thead><tbody><tr><td>The normal Voided artifact</td><td><code>protect/open</code></td><td>One contract owns the whole safe sequence.</td></tr><tr><td>A shell around prepared bytes</td><td><code>fuse/unfuse</code></td><td>You already control and understand the inner payload.</td></tr><tr><td>Only authenticated encryption</td><td><code>encrypt/decrypt</code></td><td>Your system owns serialization and outer format.</td></tr></tbody></table></section>
+        <section class="docs-section" id="fuse-inspection" data-doc-heading="Inspection"><h2>Inspection</h2><p><code>inspectFused</code> and <code>inspectArtifact</code> parse structural metadata without a key. This is useful for routing, size display, and format introspection—but it is not proof.</p><div class="callout callout--danger"><strong>Never authorize from inspected fields</strong><p>Preset, sizes, chunk counts, and every other keyless field are attacker-controlled until <code>open</code> or <code>unfuse</code> succeeds with the expected key.</p></div></section>
+        <section class="docs-section" id="fuse-presets" data-doc-heading="Presets"><h2>Presets</h2><ul><li><strong>compact</strong> — lowest shell overhead.</li><li><strong>balanced</strong> — general-purpose default.</li><li><strong>concealed</strong> — heavier shape variation.</li></ul><p class="mt-24">Presets do not upgrade the entropy of weak key material. Measure size and performance on your corpus before moving away from balanced.</p></section>
+        <section class="docs-section" id="fuse-version" data-doc-heading="Version stability"><h2>Version stability</h2><p>Package version 1.0 and wire-format version 3 are deliberately independent. VOF3 is the frozen authenticated byte format used by the first stable package release. Legacy readers exist for explicit migration; current writers produce VOF3.</p></section>
+      </article>
+
+      <article class="docs-guide" data-guide-panel="recovery" hidden data-search-title="Recovery Deck protocol" data-search-summary="Generate, derive, wrap, recover, rotate, and customize a stateless 52-card recovery credential">
+        <header class="docs-guide__header"><span class="eyebrow">Protocol guide</span><h1>Recovery Deck.</h1><p>One CSPRNG-shuffled standard deck becomes one deterministic Recovery Key. Persist only the opaque wrapper around your stable root.</p></header>
+        <section class="docs-section" id="recovery-flow" data-doc-heading="The recovery flow"><h2>The recovery flow</h2><ol><li>Validate exactly 52 canonical cards, each exactly once.</li><li>Rank the permutation into exactly 29 big-endian bytes.</li><li>Derive 32 bytes with domain-separated HKDF-SHA256.</li><li>Use that key to unwrap the stable 32-byte root.</li><li>Clear deck and derived-key copies as soon as the flow ends.</li></ol><div class="callout"><strong>Same deck, same key—every time</strong><p>The protocol constants are permanent. A future incompatible design must use a separate scheme, not silently reinterpret an existing deck.</p></div></section>
+        <section class="docs-section" id="recovery-persist" data-doc-heading="What to persist"><h2>What to persist</h2><table class="decision-table"><thead><tr><th>Material</th><th>Persist?</th><th>Reason</th></tr></thead><tbody><tr><td>Ordered deck</td><td>No</td><td>It is the recovery secret.</td></tr><tr><td>29-byte permutation rank</td><td>No</td><td>It is an equivalent secret representation.</td></tr><tr><td>32-byte Recovery Key</td><td>No</td><td>It directly unwraps the root.</td></tr><tr><td>80-byte root wrapper</td><td>Yes</td><td>It is opaque, authenticated, and intended for storage.</td></tr></tbody></table></section>
+        <section class="docs-section" id="recovery-node" data-doc-heading="Node.js setup and rotation">
+          <h2>Node.js setup and rotation</h2>
+          <div class="code-window"><div class="code-window__bar"><span>recovery.mjs</span><button class="copy-button" type="button" data-copy="#recovery-node-code">Copy</button></div><pre><code id="recovery-node-code">import {
+  createRecoveryDeck,
+  deriveRecoveryKey,
+  rotateRecoveryDeck,
+  unwrapRootWithRecoveryKey,
+} from "@voideddev/enc-server";
+
+const setup = createRecoveryDeck(stableRoot);
+await displayForPhysicalBackup(setup.deck);
+await saveOpaqueWrapper(setup.rootWrapper);
+
+// Later: reconstruct the same root.
+const recoveryKey = deriveRecoveryKey(enteredDeck);
+const root = unwrapRootWithRecoveryKey(savedWrapper, recoveryKey);
+
+// Secure rotation creates a wholly new random deck.
+const next = rotateRecoveryDeck(savedWrapper, enteredDeck);</code></pre></div>
+          <div class="callout callout--danger"><strong>Secure rotation means a fresh random permutation</strong><p>Manually changing a known deck creates a small, guessable neighborhood. Rotation must generate a completely new CSPRNG deck and replace the old wrapper.</p></div>
+        </section>
+        <section class="docs-section" id="recovery-ui" data-doc-heading="Browser UI">
+          <h2>Browser UI</h2><p>The optional framework-free component opens as a modal with <code>show()</code> or mounts inline with <code>mount(container)</code>. It supports card movement and a fresh secure shuffle; it does not impose a manual 52-card construction flow.</p>
+          <div class="code-window"><div class="code-window__bar"><span>recovery-ui.ts</span><button class="copy-button" type="button" data-copy="#recovery-ui-code">Copy</button></div><pre><code id="recovery-ui-code">import { createRecoveryDeckUI } from "@voideddev/e2ee-client";
+
+const deckUI = createRecoveryDeckUI({
+  rootClassName: "my-recovery-theme",
+  injectDefaultStyles: false,
+  onConfirm: async (deck) => {
+    await wrapAndSaveStableRoot(deck);
+  },
+});
+
+await deckUI.show();       // modal
+// await deckUI.mount(main); // inline or full-page composition</code></pre></div>
+          <p class="mt-24">Use <code>classNames</code>, <code>labels</code>, <code>renderCardContent</code>, stable data attributes, or a fully application-owned stylesheet. Voided owns behavior; your product owns the experience.</p>
+        </section>
+        <section class="docs-section" id="recovery-threats" data-doc-heading="Threats"><h2>Threats that matter</h2><p>Brute force is not the practical concern. Screenshots, recording, photographs, clipboard exposure, malware, telemetry, crash reports, browser persistence, accidental sync, weak RNG, and memory copies are.</p><p>An attacker holding both an old deck and an offline copy of its old wrapper can still recover that old root. Rotation invalidates the active wrapper; it cannot revoke every copied historical wrapper in the world.</p></section>
+      </article>
+
+      <article class="docs-guide" data-guide-panel="security" hidden data-search-title="Voided security boundaries" data-search-summary="Authenticated encryption, untrusted inspection, bounded work, key lifecycle, and vulnerability reporting">
+        <header class="docs-guide__header"><span class="eyebrow">Operational guide</span><h1>Security.</h1><p>Voided narrows the cryptographic contract. Your application still owns authentication, authorization, trusted input boundaries, secret custody, and the runtime around it.</p></header>
+        <section class="docs-section" id="security-do" data-doc-heading="Do this"><h2>Do this</h2><ul><li>Prefer XChaCha20-Poly1305 unless interoperability requires AES-256-GCM.</li><li>Treat keyless inspection as attacker-controlled metadata.</li><li>Use <code>protect/open</code> for normal application artifacts.</li><li>Zeroize mutable secret buffers after use.</li><li>Keep one browser lifecycle writer per key ID.</li><li>Keep Recovery Deck material out of logs, storage, analytics, and crash reports.</li><li>Run package integrity and current-platform smoke checks in release automation.</li></ul></section>
+        <section class="docs-section" id="security-dont" data-doc-heading="Do not do this"><h2>Do not do this</h2><ul><li>Do not authorize based on <code>inspectArtifact</code> output.</li><li>Do not reuse an AES-GCM nonce with the same key.</li><li>Do not assume a 256-bit KDF output adds entropy to weak input.</li><li>Do not enable compression across mixed attacker-controlled and secret values.</li><li>Do not interpret grouped fingerprints as an identity-binding safety-number protocol.</li><li>Do not treat browser IndexedDB as account recovery.</li></ul></section>
+        <section class="docs-section" id="security-failure" data-doc-heading="Failure behavior"><h2>Failure behavior</h2><p>Wrong keys, malformed structure, non-canonical inputs, oversized work, tampered tags, invalid algorithms, and unavailable required backends throw. Authenticated decryption does not stream plaintext before the tag verifies.</p><div class="callout"><strong>Errors are part of the API</strong><p>Catch them at your trust boundary and return a generic failure to untrusted callers. Keep detailed internal diagnostics free of key material and plaintext.</p></div></section>
+        <section class="docs-section" id="security-report" data-doc-heading="Report a vulnerability"><h2>Report a vulnerability</h2><p>Use a private GitHub Security Advisory for suspected vulnerabilities. Include the affected package and version, platform, minimal reproduction, security impact, and whether any secret material was exposed. Do not post exploitable details in a public issue.</p><a class="button mt-24" href="https://github.com/voided-network/voided/security/advisories/new">Open a private advisory <span class="arrow" aria-hidden="true">→</span></a></section>
+      </article>
+    </div>
+
+    <aside class="docs-toc" aria-label="On this page"><h2>On this page</h2><nav data-doc-toc></nav></aside>
+  </main>
+
+  <footer class="site-footer"><div class="site-footer__inner"><div><a class="brand" href="/"><span class="brand__mark" aria-hidden="true"></span>VOIDED</a><p class="site-footer__meta">MIT licensed · Documentation for Voided 1.0</p></div><nav aria-label="Footer navigation"><a href="/learn.html">Learn</a><a href="/support.html">Support</a><a href="https://github.com/voided-network/voided">GitHub</a></nav></div></footer>
+
+  <dialog class="search-dialog" data-search-dialog aria-label="Search Voided documentation"><form class="search-form" method="dialog"><input type="search" data-search-input placeholder="Search guides, concepts, APIs…" autocomplete="off"><button class="search-close" value="cancel" aria-label="Close search">Esc</button></form><div class="search-results" data-search-results><p class="search-empty">Type a concept or API name.</p></div></dialog>
+  <div class="sr-only" aria-live="polite" data-live-region></div>
+</body>
+</html>

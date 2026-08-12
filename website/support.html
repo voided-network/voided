@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Voided developer support: generate diagnostic commands, solve common integration failures, check compatibility, and report security issues privately.">
+  <meta name="theme-color" content="#080a0b">
+  <title>Voided Support — Diagnose, verify, and report</title>
+  <link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/assets/styles.css">
+  <script src="/assets/site.js" defer></script>
+</head>
+<body data-page="support">
+  <a class="skip-link" href="#main">Skip to content</a>
+  <header class="site-header">
+    <div class="site-header__inner">
+      <a class="brand" href="/" aria-label="Voided home"><span class="brand__mark" aria-hidden="true"></span>VOIDED</a>
+      <button class="menu-toggle" type="button" aria-expanded="false" aria-controls="site-navigation"><span class="sr-only">Toggle navigation</span>Menu</button>
+      <nav class="site-nav" id="site-navigation" aria-label="Primary navigation"><a href="/docs.html">Docs</a><a href="/learn.html">Learn</a><a href="/support.html" aria-current="page">Support</a><a href="https://github.com/voided-network/voided">GitHub</a><button class="header-search" type="button" data-search-open aria-label="Search documentation">Search <kbd>⌘K</kbd></button></nav>
+    </div>
+  </header>
+
+  <main id="main">
+    <section class="page-hero">
+      <div class="page-hero__inner reveal"><span class="eyebrow">Developer support</span><h1>Get to the actual failure.</h1><p>Choose your runtime and symptom. Voided will give you the shortest useful verification sequence and a clean diagnostic report to share.</p></div>
+    </section>
+
+    <section class="support-layout" aria-labelledby="diagnose-title" data-search-title="Voided diagnostic builder" data-search-summary="Generate commands and an issue report for browser, Node.js, or Rust">
+      <div class="support-intro reveal"><span class="eyebrow">Guided triage</span><h2 id="diagnose-title">Build a useful report.</h2><p>No key material. No plaintext. No thousand-line environment dump. Just the runtime facts and release checks that can change the diagnosis.</p><div class="callout callout--danger mt-40"><strong>Scrub before sharing</strong><p>Never attach Recovery Deck order, derived keys, raw roots, unredacted environment variables, protected customer data, or crash dumps containing plaintext.</p></div></div>
+      <form class="support-form reveal" data-diagnostic-form>
+        <div class="support-question"><label for="diag-runtime">Where does it fail?</label><select id="diag-runtime" name="runtime"><option value="browser">Browser / WASM</option><option value="node">Node.js native package</option><option value="rust">Rust crate</option></select></div>
+        <div class="support-question"><label for="diag-symptom">What are you seeing?</label><select id="diag-symptom" name="symptom"><option value="load">Backend or native module will not load</option><option value="open">A protected artifact will not open</option><option value="recovery">Recovery Deck reconstruction fails</option><option value="performance">Performance or memory regression</option><option value="package">Package contents or release verification fails</option></select></div>
+        <div class="support-question"><label for="diag-context">Safe context to include</label><textarea id="diag-context" name="context" rows="4" placeholder="OS/browser version, package version, and the exact public error message. Do not paste secrets or customer data."></textarea></div>
+        <div class="diagnostic-output">
+          <div class="code-window"><div class="code-window__bar"><span>diagnostic-report.txt</span><button class="copy-button" type="button" data-copy="#diagnostic-code">Copy report</button></div><pre><code id="diagnostic-code" data-diagnostic-output>Runtime: Browser / WASM
+Symptom: Backend or native module will not load
+
+Run:
+npm --prefix packages/e2ee-client run verify:release
+npm --prefix packages/e2ee-client run test:wasm
+npm --prefix packages/e2ee-client run smoke:package
+
+Include:
+- Browser and OS version
+- Package version
+- Configured WASM URL, without credentials
+- Exact initialization error
+
+Never include keys, deck order, plaintext, or protected customer data.</code></pre></div>
+        </div>
+      </form>
+    </section>
+
+    <section class="section section--light" aria-labelledby="fast-fixes-title" data-search-title="Common Voided failures" data-search-summary="WASM, native module, artifact, Recovery Deck, and compression troubleshooting">
+      <div class="section__inner">
+        <div class="section__intro reveal"><div><span class="eyebrow">Fast fixes</span><h2 class="section__title" id="fast-fixes-title">Start with the boundary.</h2></div><p>Most failures become simple once you identify whether the package, backend, artifact, key, or application lifecycle owns them.</p></div>
+        <dl class="support-list reveal">
+          <div class="support-item"><dt>WASM will not load</dt><dd>Configure the exact artifact URL before first use. Confirm the packaged manifest and binary travel together. Voided deliberately refuses a silent TypeScript replacement for Fuse or Recovery Deck.</dd></div>
+          <div class="support-item"><dt>Native module rejected</dt><dd>Run <code>verify:release:current</code>. Confirm OS, architecture, C library, Node version, manifest hash, package version, and build ID all match.</dd></div>
+          <div class="support-item"><dt>Artifact will not open</dt><dd>Do not “repair” bytes. Confirm the complete artifact, expected key, and package line. Wrong keys, tampering, truncation, non-canonical fields, and unsupported versions must fail.</dd></div>
+          <div class="support-item"><dt>Recovery fails</dt><dd>Validate exactly 52 canonical cards with no duplicates. Confirm the exact physical order and wrapper pair. Do not log the deck or derived key while debugging.</dd></div>
+          <div class="support-item"><dt>Compression is absent</dt><dd>Browser high-level encryption leaves compression off by default. Opt in only when the whole plaintext shares one trust boundary.</dd></div>
+          <div class="support-item"><dt>Cross-tab key race</dt><dd>Keep one lifecycle writer per key ID. Add an application-owned transactional lock around concurrent rotation, import, migration, replacement, or deletion.</dd></div>
+        </dl>
+      </div>
+    </section>
+
+    <section class="section" aria-labelledby="compat-title" data-search-title="Voided compatibility" data-search-summary="Supported browsers, Node versions, native targets, and Rust targets">
+      <div class="section__inner">
+        <div class="section__intro reveal"><div><span class="eyebrow">Compatibility</span><h2 class="section__title" id="compat-title">Supported means tested.</h2></div><p>A target outside this matrix may work, but should build from tagged source and prove itself before production use.</p></div>
+        <div class="compat-table reveal" role="table" aria-label="Compatibility matrix">
+          <div class="compat-row" role="row"><strong role="cell">Safari / WebKit</strong><span class="compat-status" role="cell">Supported</span><p role="cell">Current releases; browser WASM and stateful client path.</p></div>
+          <div class="compat-row" role="row"><strong role="cell">Chromium browsers</strong><span class="compat-status" role="cell">Supported</span><p role="cell">Current releases; browser WASM and stateful client path.</p></div>
+          <div class="compat-row" role="row"><strong role="cell">Firefox</strong><span class="compat-status compat-status--muted" role="cell">Best effort</span><p role="cell">Not a Voided 1.0 release gate.</p></div>
+          <div class="compat-row" role="row"><strong role="cell">Node.js</strong><span class="compat-status" role="cell">18+</span><p role="cell">CJS and ESM package entry points.</p></div>
+          <div class="compat-row" role="row"><strong role="cell">macOS</strong><span class="compat-status" role="cell">arm64</span><p role="cell">Verified native prebuild.</p></div>
+          <div class="compat-row" role="row"><strong role="cell">Linux</strong><span class="compat-status" role="cell">x64 GNU</span><p role="cell">glibc 2.34 or newer; packed runtime smoke passed on glibc 2.39.</p></div>
+          <div class="compat-row" role="row"><strong role="cell">Windows</strong><span class="compat-status compat-status--muted" role="cell">x64 MSVC · RC</span><p role="cell">Hash and provenance verified; real Windows execution is pending.</p></div>
+          <div class="compat-row" role="row"><strong role="cell">Rust</strong><span class="compat-status" role="cell">Native + WASM</span><p role="cell">Feature selection depends on target and required primitives.</p></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" aria-labelledby="release-title" data-search-title="Voided release verification" data-search-summary="Source, package, dependency, and current-platform checks">
+      <div class="section__inner recovery-spotlight">
+        <div class="recovery-copy reveal"><span class="eyebrow">Release verification</span><h2 id="release-title">Prove what you ship.</h2><p>Voided packages bind release artifacts to a clean committed source snapshot. The native and WASM loaders verify the binary they select before use.</p><div class="recovery-facts"><div class="recovery-fact"><strong>150</strong><span>Rust tests</span></div><div class="recovery-fact"><strong>364</strong><span>JS unit tests</span></div><div class="recovery-fact"><strong>0</strong><span>audit vulnerabilities</span></div><div class="recovery-fact"><strong>1 gate</strong><span>Windows pending</span></div></div></div>
+        <div class="code-window reveal"><div class="code-window__bar"><span>release-gates.sh</span><button class="copy-button" type="button" data-copy="#release-gates-code">Copy</button></div><pre><code id="release-gates-code">npm run release:verify:source
+npm run site:check
+npm test
+npm run typecheck
+npm run lint
+
+cargo test --workspace --all-features
+cargo clippy --workspace --all-targets --all-features -- -D warnings
+cargo audit
+cargo deny check</code></pre></div>
+      </div>
+    </section>
+
+    <section class="section section--signal final-cta" aria-labelledby="support-final-title"><div class="final-cta__inner reveal"><span class="eyebrow">Still blocked?</span><h2 id="support-final-title">Bring evidence,<br>not secret material.</h2><div class="final-cta__actions"><a class="button" href="https://github.com/voided-network/voided/issues/new">Open a public issue <span class="arrow" aria-hidden="true">→</span></a><a class="button button--quiet" href="https://github.com/voided-network/voided/security/advisories/new">Report a vulnerability privately</a></div></div></section>
+  </main>
+
+  <footer class="site-footer"><div class="site-footer__inner"><div><a class="brand" href="/"><span class="brand__mark" aria-hidden="true"></span>VOIDED</a><p class="site-footer__meta">Never include secret material in support reports</p></div><nav aria-label="Footer navigation"><a href="/docs.html">Docs</a><a href="/learn.html">Learn</a><a href="https://github.com/voided-network/voided">GitHub</a></nav></div></footer>
+  <dialog class="search-dialog" data-search-dialog aria-label="Search Voided documentation"><form class="search-form" method="dialog"><input type="search" data-search-input placeholder="Search guides, concepts, APIs…" autocomplete="off"><button class="search-close" value="cancel" aria-label="Close search">Esc</button></form><div class="search-results" data-search-results><p class="search-empty">Type a concept or API name.</p></div></dialog>
+  <div class="sr-only" aria-live="polite" data-live-region></div>
+</body>
+</html>
