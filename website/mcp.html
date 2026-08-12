@@ -17,10 +17,10 @@
 
   <main id="main">
     <section class="page-hero page-hero--utility">
-      <div class="page-hero__inner reveal">
+      <div class="page-hero__inner">
         <span class="eyebrow">Voided MCP · read only</span>
-        <h1>Give an AI the source.</h1>
-        <p>The Voided MCP server lets an agent inspect local Voided architecture, modules, symbols, code, and knowledge files without sending keys, deck order, plaintext, or repository content to a Voided backend.</p>
+        <h1>Local source context for AI.</h1>
+        <p>The read-only Voided MCP server exposes architecture, modules, symbols, code, and knowledge files from a local checkout. It does not require keys, deck order, plaintext, or a Voided backend.</p>
         <div class="hero__actions"><a class="button button--signal" href="./downloads/voided-mcp.mjs" download>Download voided-mcp.mjs</a><a class="button" href="./mcp.json">Open MCP descriptor</a></div>
         <p class="status-line"><span class="signal-dot" aria-hidden="true"></span> Source-ready direct download · npm registry publication pending</p>
       </div>
@@ -30,7 +30,7 @@
       <article class="utility-content">
         <section class="utility-section" id="install" data-search-title="Install Voided MCP" data-search-summary="Download, verify, and configure the read-only local MCP server">
           <span class="eyebrow">Install</span>
-          <h2>One file. Node 18+.</h2>
+          <h2>Install the single-file server.</h2>
           <p>The current launch path is this versioned direct artifact. <code class="inline-code">@slipner/cli</code> is not public on the npm registry yet, so do not use an npm install command.</p>
           <div class="code-window"><div class="code-window__bar"><span>terminal</span><button class="copy-button" type="button" data-copy="#mcp-install-code">Copy</button></div><pre><code id="mcp-install-code">curl -fsSLo voided-mcp.mjs https://voidednetwork.com/downloads/voided-mcp.mjs
 shasum -a 256 voided-mcp.mjs
@@ -57,7 +57,7 @@ VOIDED_ROOT=/absolute/path/to/voided node /absolute/path/to/voided-mcp.mjs</code
 
         <section class="utility-section" id="tools" data-search-title="Voided MCP tools" data-search-summary="Context, module, knowledge, code, symbol, and file tools">
           <span class="eyebrow">Six tools</span>
-          <h2>Ask from broad to exact.</h2>
+          <h2>Search from context to source.</h2>
           <div class="mcp-tool-list">
             <div><code>voided_get_context</code><p>Confirm the checkout, discover crates and packages, and get a compact repository orientation.</p></div>
             <div><code>voided_list_modules</code><p>List first-party Rust, Node.js, browser, and knowledge surfaces.</p></div>

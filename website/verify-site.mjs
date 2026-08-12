@@ -34,6 +34,11 @@ for (const page of pages) {
   }
 }
 
+const home = readFileSync(join(root, "index.html"), "utf8");
+for (const required of ["data-function-lab", "data-deck-lab", "./assets/demo.js"]) {
+  if (!home.includes(required)) failures.push(`index.html: missing ${required} live demo surface`);
+}
+
 const siteScript = readFileSync(join(root, "assets", "site.js"), "utf8");
 for (const required of ["prefers-reduced-motion", "aria-expanded", "data-copy", "data-guide", "Voided MCP", "llms-full.txt"]) {
   if (!siteScript.includes(required)) failures.push(`site.js: missing ${required} behavior or search route`);
@@ -65,6 +70,27 @@ if (actualMcpHash !== expectedMcpHash) failures.push(`voided-mcp.mjs: SHA-256 ${
 for (const descriptor of ["mcp.html", "mcp.json", "ai.json", "downloads/README.txt"]) {
   if (!readFileSync(join(root, descriptor), "utf8").includes(expectedMcpHash)) failures.push(`${descriptor}: missing MCP checksum`);
 }
+
+const demoScript = readFileSync(join(root, "assets", "demo.js"), "utf8");
+for (const required of ["generateKey", "protect", "open", "fuse", "unfuse", "encrypt", "decrypt"]) {
+  if (!demoScript.includes(required)) failures.push(`demo.js: missing live ${required} integration`);
+}
+if (!demoScript.includes("../runtime/voided_wasm.js")) failures.push("demo.js: missing self-hosted WASM runtime import");
+if (!demoScript.includes("../runtime/e2ee-client.js") || !demoScript.includes("createRecoveryDeckUI")) failures.push("demo.js: Recovery Deck preview must use the shipped generic component");
+if (demoScript.includes("innerHTML")) failures.push("demo.js: output must use text-safe DOM construction");
+if (siteScript.includes("IntersectionObserver") || siteScript.includes("setupReveals")) failures.push("site.js: scroll-triggered reveal behavior must remain disabled");
+
+const wasmGlue = readFileSync(join(root, "runtime", "voided_wasm.js"));
+const wasmBinary = readFileSync(join(root, "runtime", "voided_wasm_bg.wasm"));
+const wasmGlueHash = createHash("sha256").update(wasmGlue).digest("hex");
+const wasmBinaryHash = createHash("sha256").update(wasmBinary).digest("hex");
+if (wasmGlue.length < 50_000 || wasmBinary.length < 1_000_000) failures.push("runtime: bundled WASM release assets are incomplete");
+const packageWasmGlueHash = createHash("sha256").update(readFileSync(join(root, "..", "packages", "e2ee-client", "wasm", "voided_wasm.js"))).digest("hex");
+const packageWasmBinaryHash = createHash("sha256").update(readFileSync(join(root, "..", "packages", "e2ee-client", "wasm", "voided_wasm_bg.wasm"))).digest("hex");
+if (wasmGlueHash !== packageWasmGlueHash || wasmBinaryHash !== packageWasmBinaryHash) failures.push("runtime: website WASM assets do not match the verified e2ee-client release assets");
+const clientBundleHash = createHash("sha256").update(readFileSync(join(root, "runtime", "e2ee-client.js"))).digest("hex");
+const packageClientBundleHash = createHash("sha256").update(readFileSync(join(root, "..", "packages", "e2ee-client", "dist", "index.js"))).digest("hex");
+if (clientBundleHash !== packageClientBundleHash) failures.push("runtime: website e2ee-client bundle does not match the built package asset");
 
 async function smokeMcp() {
   const child = spawn(process.execPath, [mcpPath], {
@@ -163,4 +189,5 @@ console.log(`[voided-site] verified ${pages.length} pages`);
 console.log("[voided-site] verified file-preview-safe local links, shared assets, unique ids, and accessibility hooks");
 console.log("[voided-site] parsed ai.json and mcp.json; checked compact and full AI references");
 console.log(`[voided-site] verified voided-mcp.mjs SHA-256 ${actualMcpHash}`);
+console.log(`[voided-site] verified live demo package/WASM assets ${clientBundleHash.slice(0, 12)} / ${wasmGlueHash.slice(0, 12)} / ${wasmBinaryHash.slice(0, 12)}`);
 console.log(`[voided-site] MCP smoke passed: initialize -> tools/list (${mcpSmoke.toolCount}) -> context -> knowledge search (${mcpSmoke.matchCount}) -> bounded read (${mcpSmoke.readPath})`);

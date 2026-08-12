@@ -137,23 +137,6 @@ function setupSearch() {
   });
 }
 
-function setupReveals() {
-  const elements = document.querySelectorAll(".reveal");
-  if (reducedMotion || !("IntersectionObserver" in window)) {
-    elements.forEach((element) => element.classList.add("is-visible"));
-    return;
-  }
-  const observer = new IntersectionObserver((entries) => {
-    for (const entry of entries) {
-      if (entry.isIntersecting) {
-        entry.target.classList.add("is-visible");
-        observer.unobserve(entry.target);
-      }
-    }
-  }, { threshold: 0.14, rootMargin: "0px 0px -6%" });
-  elements.forEach((element) => observer.observe(element));
-}
-
 const sdkExamples = {
   browser: {
     package: "@voideddev/e2ee-client",
@@ -230,70 +213,6 @@ function setupSdkSwitcher() {
   });
 }
 
-function setupArtifactStage() {
-  const stage = document.querySelector("[data-artifact-stage]");
-  if (!stage || reducedMotion) return;
-  stage.addEventListener("pointermove", (event) => {
-    const bounds = stage.getBoundingClientRect();
-    const x = (event.clientX - bounds.left) / bounds.width - 0.5;
-    const y = (event.clientY - bounds.top) / bounds.height - 0.5;
-    stage.style.setProperty("--ry", `${x * 10}deg`);
-    stage.style.setProperty("--rx", `${y * -8}deg`);
-  });
-  stage.addEventListener("pointerleave", () => {
-    stage.style.setProperty("--ry", "0deg");
-    stage.style.setProperty("--rx", "0deg");
-  });
-}
-
-function setupSignalCanvas() {
-  const canvas = document.querySelector("#signal-canvas");
-  if (!canvas) return;
-  const context = canvas.getContext("2d");
-  const points = Array.from({ length: 28 }, (_, index) => ({
-    x: ((index * 37) % 101) / 100,
-    y: ((index * 61) % 97) / 96,
-    phase: index * 0.41,
-  }));
-  let frame = 0;
-  function draw(time = 0) {
-    const bounds = canvas.getBoundingClientRect();
-    const ratio = Math.min(window.devicePixelRatio || 1, 2);
-    const width = Math.max(1, Math.floor(bounds.width * ratio));
-    const height = Math.max(1, Math.floor(bounds.height * ratio));
-    if (canvas.width !== width || canvas.height !== height) {
-      canvas.width = width;
-      canvas.height = height;
-    }
-    context.clearRect(0, 0, width, height);
-    context.strokeStyle = "rgba(199,255,94,.15)";
-    context.fillStyle = "rgba(199,255,94,.7)";
-    context.lineWidth = ratio;
-    const positions = points.map((point) => ({
-      x: point.x * width,
-      y: (point.y + Math.sin(time * 0.00035 + point.phase) * 0.015) * height,
-    }));
-    for (let index = 0; index < positions.length; index += 1) {
-      for (let other = index + 1; other < positions.length; other += 1) {
-        const dx = positions[index].x - positions[other].x;
-        const dy = positions[index].y - positions[other].y;
-        if (dx * dx + dy * dy < (width * 0.16) ** 2) {
-          context.beginPath();
-          context.moveTo(positions[index].x, positions[index].y);
-          context.lineTo(positions[other].x, positions[other].y);
-          context.stroke();
-        }
-      }
-      context.beginPath();
-      context.arc(positions[index].x, positions[index].y, 1.35 * ratio, 0, Math.PI * 2);
-      context.fill();
-    }
-    if (!reducedMotion) frame = requestAnimationFrame(draw);
-  }
-  draw();
-  window.addEventListener("pagehide", () => cancelAnimationFrame(frame), { once: true });
-}
-
 function setupDocs() {
   const panels = [...document.querySelectorAll("[data-guide-panel]")];
   const buttons = [...document.querySelectorAll("[data-guide]")];
@@ -327,7 +246,7 @@ function setupDocs() {
       const sidebar = selectedButton.closest(".docs-sidebar");
       sidebar.scrollLeft = Math.max(0, selectedButton.offsetLeft - ((sidebar.clientWidth - selectedButton.offsetWidth) / 2));
     }
-    window.scrollTo({ top: 0, behavior: reducedMotion ? "auto" : "smooth" });
+    window.scrollTo({ top: 0, behavior: "auto" });
   }
 
   buttons.forEach((button) => button.addEventListener("click", () => showGuide(button.dataset.guide)));
@@ -454,10 +373,7 @@ function setupDiagnosticBuilder() {
 setupNavigation();
 setupCopyButtons();
 setupSearch();
-setupReveals();
 setupSdkSwitcher();
-setupArtifactStage();
-setupSignalCanvas();
 setupDocs();
 setupPathFinder();
 setupPresetLab();

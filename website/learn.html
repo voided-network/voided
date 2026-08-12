@@ -25,20 +25,20 @@
 
   <main id="main">
     <section class="page-hero">
-      <div class="page-hero__inner reveal">
-        <span class="eyebrow">Architecture, without ceremony</span>
+      <div class="page-hero__inner">
+        <span class="eyebrow">Architecture</span>
         <h1>Know what owns each byte.</h1>
-        <p>Use the decision lab to find your integration path, then pull apart the artifact and recovery models until the boundaries are obvious.</p>
+        <p>Choose the right layer, inspect the artifact path, and identify the security responsibilities that remain in your application.</p>
       </div>
     </section>
 
     <section class="section" id="choose-api" aria-labelledby="choose-title" data-search-title="Choose a Voided API" data-search-summary="Interactive decision guide for runtime and ownership">
       <div class="section__inner">
-        <div class="section__intro reveal">
-          <div><span class="eyebrow">Decision lab</span><h2 class="section__title" id="choose-title">Tell us where you are.</h2></div>
-          <p>Two decisions are enough: where plaintext lives, and whether Voided should own the complete artifact.</p>
+        <div class="section__intro">
+          <div><span class="eyebrow">API selection</span><h2 class="section__title" id="choose-title">Choose the boundary.</h2></div>
+          <p>Select where plaintext lives, who owns the artifact, and whether the flow requires recovery.</p>
         </div>
-        <div class="learn-grid reveal" data-path-finder>
+        <div class="learn-grid" data-path-finder>
           <form class="learn-panel" aria-label="Integration choices">
             <span class="eyebrow">Your system</span>
             <h2>Choose the boundary.</h2>
@@ -70,8 +70,8 @@ const restored = await client.open(artifact);</code></pre></div>
 
     <section class="section section--light" aria-labelledby="anatomy-title" data-search-title="Anatomy of a protected artifact" data-search-summary="How plaintext becomes a VOF3 artifact and returns">
       <div class="section__inner">
-        <div class="section__intro reveal"><div><span class="eyebrow">Artifact anatomy</span><h2 class="section__title" id="anatomy-title">Follow one payload.</h2></div><p>Each stage has a job. Keeping those jobs separate is what makes the whole flow explainable.</p></div>
-        <div class="anatomy reveal">
+        <div class="section__intro"><div><span class="eyebrow">Artifact anatomy</span><h2 class="section__title" id="anatomy-title">Follow one payload.</h2></div><p>Each stage has a defined responsibility. Separation makes the format inspectable and failure behavior explicit.</p></div>
+        <div class="anatomy">
           <div class="anatomy-step"><span class="anatomy-step__node"></span><h3>Application bytes</h3><p>Your trusted input. Decide its maximum size and whether every byte shares one compression trust boundary.</p></div>
           <div class="anatomy-step"><span class="anatomy-step__node"></span><h3>Prepared bytes</h3><p>Optional gzip or Brotli under explicit bounds. Compression changes size, not confidentiality.</p></div>
           <div class="anatomy-step"><span class="anatomy-step__node"></span><h3>AEAD payload</h3><p>Ciphertext, nonce, tag, and authenticated context. Tampering becomes a hard failure.</p></div>
@@ -84,8 +84,8 @@ const restored = await client.open(artifact);</code></pre></div>
 
     <section class="section" id="preset-lab" aria-labelledby="preset-lab-title" data-search-title="Fuse preset lab" data-search-summary="Interactive comparison of compact, balanced, and concealed">
       <div class="section__inner">
-        <div class="section__intro reveal"><div><span class="eyebrow">Preset lab</span><h2 class="section__title" id="preset-lab-title">Change shape, not truth.</h2></div><p>This is a decision aid, not a synthetic benchmark. Measure actual bytes before tuning production.</p></div>
-        <div class="preset-lab reveal" data-preset-lab>
+        <div class="section__intro"><div><span class="eyebrow">Fuse presets</span><h2 class="section__title" id="preset-lab-title">Choose artifact shaping.</h2></div><p>Compare the intended overhead and variation of each preset. Measure representative data before changing production defaults.</p></div>
+        <div class="preset-lab" data-preset-lab>
           <div class="preset-controls" aria-label="Choose a Fuse preset"><button type="button" data-preset="compact" aria-pressed="false">compact</button><button type="button" data-preset="balanced" aria-pressed="true">balanced</button><button type="button" data-preset="concealed" aria-pressed="false">concealed</button></div>
           <div class="preset-output">
             <span class="eyebrow" data-preset-label>Balanced · recommended default</span>
@@ -103,8 +103,8 @@ const restored = await client.open(artifact);</code></pre></div>
 
     <section class="section" aria-labelledby="recovery-model-title" data-search-title="Recovery Deck mental model" data-search-summary="Understand deterministic recovery, stable roots, and rotation">
       <div class="section__inner recovery-spotlight">
-        <div class="recovery-copy reveal"><span class="eyebrow">Recovery model</span><h2 id="recovery-model-title">Recover the root. Leave the data alone.</h2><p>Application keys sit below a stable user/account root. A Recovery Deck unwraps that root; rotating the deck replaces only its wrapper.</p><div class="recovery-facts"><div class="recovery-fact"><strong>1 deck</strong><span>whole hierarchy</span></div><div class="recovery-fact"><strong>N apps</strong><span>isolated keys</span></div><div class="recovery-fact"><strong>0 decks</strong><span>stored by Voided</span></div><div class="recovery-fact"><strong>0 data</strong><span>re-encrypted on rotation</span></div></div><a class="button" href="./docs.html?guide=recovery">Build the recovery flow <span class="arrow" aria-hidden="true">→</span></a></div>
-        <div class="anatomy reveal" aria-label="Recovery hierarchy">
+        <div class="recovery-copy"><span class="eyebrow">Recovery model</span><h2 id="recovery-model-title">Recover the root, not the data.</h2><p>Application keys sit below a stable user/account root. A Recovery Deck unwraps that root; rotation replaces only the recovery wrapper.</p><div class="recovery-facts"><div class="recovery-fact"><strong>1 deck</strong><span>whole hierarchy</span></div><div class="recovery-fact"><strong>N apps</strong><span>isolated keys</span></div><div class="recovery-fact"><strong>0 decks</strong><span>stored by Voided</span></div><div class="recovery-fact"><strong>0 data</strong><span>re-encrypted on rotation</span></div></div><a class="button" href="./docs.html?guide=recovery">Build the recovery flow <span class="arrow" aria-hidden="true">→</span></a></div>
+        <div class="anatomy" aria-label="Recovery hierarchy">
           <div class="anatomy-step"><span class="anatomy-step__node"></span><h3>Physical deck</h3><p>The exact order is the secret. Generate it locally with a CSPRNG.</p></div>
           <div class="anatomy-step"><span class="anatomy-step__node"></span><h3>Canonical rank</h3><p>A unique 29-byte integer representation of one permutation.</p></div>
           <div class="anatomy-step"><span class="anatomy-step__node"></span><h3>Recovery Key</h3><p>Domain-separated 32-byte output. Useful only transiently.</p></div>
@@ -115,8 +115,8 @@ const restored = await client.open(artifact);</code></pre></div>
 
     <section class="section section--light" aria-labelledby="anti-pattern-title" data-search-title="Voided anti-patterns" data-search-summary="What not to do with encryption, compression, inspection, and recovery">
       <div class="section__inner">
-        <div class="section__intro reveal"><div><span class="eyebrow">Anti-patterns</span><h2 class="section__title" id="anti-pattern-title">The mistakes worth memorizing.</h2></div><p>Most failures happen around the cryptography: serialization, lifecycle, logs, concurrency, and false trust.</p></div>
-        <div class="principles reveal">
+        <div class="section__intro"><div><span class="eyebrow">Failure modes</span><h2 class="section__title" id="anti-pattern-title">Common integration errors.</h2></div><p>Most failures occur around the primitive: serialization, lifecycle, logs, concurrency, and misplaced trust.</p></div>
+        <div class="principles">
           <div class="principle"><span class="principle__number">×</span><h3>Authorize from inspection</h3><p>Keyless metadata is a preview, not authenticated truth. Route conservatively and trust only after open.</p></div>
           <div class="principle"><span class="principle__number">×</span><h3>Compress mixed secrets</h3><p>Shared compression context plus observable ciphertext length can become an oracle. Keep one trust boundary or leave compression off.</p></div>
           <div class="principle"><span class="principle__number">×</span><h3>Rotate by nudging a deck</h3><p>Nearby permutations are searchable after compromise. Secure recovery rotation starts over with a wholly fresh random deck.</p></div>
@@ -125,7 +125,7 @@ const restored = await client.open(artifact);</code></pre></div>
       </div>
     </section>
 
-    <section class="section section--signal final-cta" aria-labelledby="learn-final-title"><div class="final-cta__inner reveal"><span class="eyebrow">Ready to implement</span><h2 id="learn-final-title">Take the model into code.</h2><div class="final-cta__actions"><a class="button" href="./docs.html">Open the SDK guides <span class="arrow" aria-hidden="true">→</span></a><a class="button button--quiet" href="./support.html">Troubleshoot an integration</a></div></div></section>
+    <section class="section section--signal final-cta" aria-labelledby="learn-final-title"><div class="final-cta__inner"><span class="eyebrow">Implementation</span><h2 id="learn-final-title">Open the SDK guides.</h2><div class="final-cta__actions"><a class="button" href="./docs.html">Choose a runtime <span class="arrow" aria-hidden="true">→</span></a><a class="button button--quiet" href="./support.html">Troubleshoot an integration</a></div></div></section>
   </main>
 
   <footer class="site-footer"><div class="site-footer__inner"><div><a class="brand" href="./index.html"><span class="brand__mark" aria-hidden="true"></span>VOIDED</a><p class="site-footer__meta">MIT licensed · Learn the boundary, then ship it</p></div><nav aria-label="Footer navigation"><a href="./docs.html">Start</a><a href="./ai.html">AI</a><a href="./mcp.html">MCP</a><a href="./support.html">Support</a><a href="https://github.com/voided-network/voided">GitHub</a></nav></div></footer>

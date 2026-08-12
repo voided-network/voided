@@ -16,6 +16,7 @@ const contentTypes = {
   ".mjs": "text/javascript; charset=utf-8",
   ".svg": "image/svg+xml",
   ".txt": "text/plain; charset=utf-8",
+  ".wasm": "application/wasm",
   ".xml": "application/xml; charset=utf-8",
 };
 
@@ -39,7 +40,7 @@ createServer((request, response) => {
 
   response.setHeader("Content-Type", contentTypes[extname(filePath)] ?? "application/octet-stream");
   response.setHeader("Cache-Control", "no-store");
-  response.setHeader("Content-Security-Policy", "default-src 'self'; style-src 'self'; script-src 'self'; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'");
+  response.setHeader("Content-Security-Policy", "default-src 'self'; style-src 'self'; script-src 'self' 'wasm-unsafe-eval'; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'");
   createReadStream(filePath).pipe(response);
 }).listen(port, "127.0.0.1", () => {
   console.log(`[voided-site] http://127.0.0.1:${port}`);

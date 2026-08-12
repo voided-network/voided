@@ -13,6 +13,7 @@
   <link rel="alternate" href="./llms.txt" type="text/plain" title="Voided AI index">
   <link rel="alternate" href="./ai.json" type="application/json" title="Voided machine reference">
   <script src="./assets/site.js" defer></script>
+  <script src="./assets/demo.js" type="module"></script>
 </head>
 <body data-page="home">
   <a class="skip-link" href="#main">Skip to content</a>
@@ -35,23 +36,39 @@
     <section class="hero hero--focused" aria-labelledby="hero-title">
       <div class="hero__inner">
         <div class="hero__copy">
-          <div class="hero__brand">ONE ENCRYPTION CONTRACT</div>
-          <h1 id="hero-title">Protect data.<span>Get one artifact back.</span></h1>
-          <p class="hero__lede">Voided handles authenticated encryption, optional bounded compression, artifact shaping, and recovery through one stable contract. Your app stores the artifact.</p>
+          <div class="hero__brand">RUST · NODE.JS · BROWSER</div>
+          <h1 id="hero-title">Protect data.<span>Store one artifact.</span></h1>
+          <p class="hero__lede">Voided turns plaintext into a versioned, authenticated artifact. The same contract runs in Rust, Node.js, and browser WASM, with bounded compression, Fuse shaping, and stateless recovery available when needed.</p>
           <div class="hero__actions">
             <a class="button button--signal" href="./docs.html">Start building <span class="arrow" aria-hidden="true">→</span></a>
             <a class="button" href="./ai.html">Give Voided to an AI</a>
           </div>
-          <p class="hero__status"><span class="signal-dot" aria-hidden="true"></span> 1.0 release candidate · current writer: VOF3 · Windows execution pending</p>
+          <p class="hero__status"><span class="signal-dot" aria-hidden="true"></span> 1.0 release candidate · VOF3 writer · Windows verification pending</p>
         </div>
-        <div class="artifact-stage" data-artifact-stage aria-label="Interactive visualization of one authenticated Voided artifact">
-          <canvas id="signal-canvas" aria-hidden="true"></canvas>
-          <div class="artifact-core" aria-hidden="true">
-            <div class="artifact-core__grid"></div>
-            <div class="artifact-core__pulse"></div>
-            <div class="artifact-core__label"><span>VOF3</span><span>AUTHENTICATED</span></div>
+        <section class="function-lab" data-function-lab aria-labelledby="function-lab-title">
+          <header class="function-lab__header">
+            <div><span class="lab-kicker">Live WASM</span><h2 id="function-lab-title">Run the contract.</h2></div>
+            <span class="lab-state" data-lab-runtime>Runtime idle</span>
+          </header>
+          <div class="function-lab__key">
+            <div><span>Ephemeral test key</span><strong data-lab-key-status>Not generated</strong></div>
+            <button class="lab-button" type="button" data-lab-generate-key>Generate key</button>
           </div>
-        </div>
+          <label class="lab-field"><span>Plaintext</span><textarea data-lab-input maxlength="4096" rows="4">Data stays under your control.</textarea></label>
+          <fieldset class="lab-operation"><legend>Function</legend><div class="lab-segmented">
+            <button type="button" aria-pressed="true" data-lab-operation="protect">protect / open</button>
+            <button type="button" aria-pressed="false" data-lab-operation="fuse">fuse / unfuse</button>
+            <button type="button" aria-pressed="false" data-lab-operation="encrypt">encrypt / decrypt</button>
+          </div></fieldset>
+          <div class="function-lab__actions">
+            <label class="lab-select"><span>Preset</span><select data-lab-preset><option value="balanced">balanced</option><option value="compact">compact</option><option value="concealed">concealed</option></select></label>
+            <button class="button button--signal" type="button" data-lab-run disabled>Run round trip</button>
+          </div>
+          <output class="lab-output" data-lab-output aria-live="polite">
+            <span>Waiting for a test key.</span>
+          </output>
+          <p class="lab-note">Runs locally with Voided’s compiled Rust/WASM. Inputs, keys, and outputs are not sent or persisted by this site.</p>
+        </section>
       </div>
     </section>
 
@@ -63,12 +80,12 @@
 
     <section class="section section--compact" aria-labelledby="start-title" data-search-title="Voided quickstart" data-search-summary="Browser, Node.js, and Rust protect/open examples">
       <div class="section__inner">
-        <div class="section__intro reveal">
+        <div class="section__intro">
           <div><span class="eyebrow">Default path</span><h2 class="section__title" id="start-title">Use protect/open.</h2></div>
-          <p>Choose the runtime where plaintext already lives. The same Rust-owned behavior produces and opens the same stable artifact contract.</p>
+          <p>Choose the runtime where plaintext already exists. Each SDK produces and opens the same Rust-defined artifact format.</p>
         </div>
 
-        <div class="path-switcher reveal" data-sdk-switcher>
+        <div class="path-switcher" data-sdk-switcher>
           <div class="path-tabs" role="tablist" aria-label="SDK quickstarts">
             <button class="path-tab" type="button" role="tab" aria-selected="true" data-sdk="browser"><span><strong>Browser</strong><small>STATEFUL + WASM</small></span></button>
             <button class="path-tab" type="button" role="tab" aria-selected="false" data-sdk="node"><span><strong>Node.js</strong><small>NATIVE RUST</small></span></button>
@@ -96,46 +113,46 @@
       </div>
     </section>
 
-    <section class="section section--light section--compact" aria-labelledby="boundary-title" data-search-title="Voided security boundary" data-search-summary="What Voided owns and what the integrating application owns">
+    <section class="section section--light section--compact deck-lab-section" aria-labelledby="deck-lab-title" data-search-title="Recovery Deck UI demo" data-search-summary="Secure shuffle, card reordering, modal or inline presentation, and theme customization">
       <div class="section__inner">
-        <div class="section__intro reveal">
-          <div><span class="eyebrow">The boundary</span><h2 class="section__title" id="boundary-title">No magic. Clear ownership.</h2></div>
-          <p>Voided makes the cryptographic path narrow and repeatable. It does not pretend application security disappears.</p>
+        <div class="section__intro">
+          <div><span class="eyebrow">Recovery Deck UI</span><h2 class="section__title" id="deck-lab-title">Behavior is built in. Styling is yours.</h2></div>
+          <p>The generic component supports secure generation, card movement, modal or inline presentation, class hooks, label overrides, and custom card rendering.</p>
         </div>
-        <div class="boundary-grid reveal">
-          <section class="boundary-column" aria-labelledby="voided-owns-title">
-            <span class="boundary-label">VOIDED OWNS</span>
-            <h3 id="voided-owns-title">The artifact path</h3>
-            <ul class="plain-list">
-              <li>Cryptographically secure randomness</li>
-              <li>Authenticated encryption and stable formats</li>
-              <li>Explicit compression policy and output bounds</li>
-              <li>Deterministic Recovery Deck derivation</li>
-              <li>Fail-closed parsing and authentication</li>
-            </ul>
-          </section>
-          <section class="boundary-column" aria-labelledby="app-owns-title">
-            <span class="boundary-label">YOUR APP OWNS</span>
-            <h3 id="app-owns-title">The application boundary</h3>
-            <ul class="plain-list">
-              <li>Authentication and authorization</li>
-              <li>XSS prevention, CSP, and dependency hygiene</li>
-              <li>Key lifecycle coordination across tabs or processes</li>
-              <li>Where protected artifacts and root wrappers are stored</li>
-              <li>User experience and recovery instructions</li>
-            </ul>
-          </section>
+        <div class="deck-lab" data-deck-lab>
+          <div class="deck-lab__toolbar">
+            <div class="deck-lab__control"><span>Appearance</span><div class="deck-lab__choices" role="group" aria-label="Recovery Deck appearance">
+              <button type="button" aria-pressed="true" data-deck-theme="plain">Plain</button>
+              <button type="button" aria-pressed="false" data-deck-theme="editorial">Editorial</button>
+              <button type="button" aria-pressed="false" data-deck-theme="signal">Signal</button>
+            </div></div>
+            <div class="deck-lab__actions"><button class="button button--dark" type="button" data-deck-modal disabled>Open as modal</button></div>
+          </div>
+          <div class="deck-component-host" data-deck-component-host data-deck-appearance="plain"><p class="deck-component-loading" data-deck-status>Loading the generic Recovery Deck component…</p></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section section--compact" aria-labelledby="boundary-title" data-search-title="Voided security boundary" data-search-summary="What Voided owns and what the integrating application owns">
+      <div class="section__inner">
+        <div class="section__intro">
+          <div><span class="eyebrow">Responsibilities</span><h2 class="section__title" id="boundary-title">The security boundary.</h2></div>
+          <p>Voided owns the cryptographic artifact path. The integrating application still owns access control, runtime security, and storage policy.</p>
+        </div>
+        <div class="boundary-grid boundary-grid--dark">
+          <section class="boundary-column" aria-labelledby="voided-owns-title"><span class="boundary-label">VOIDED OWNS</span><h3 id="voided-owns-title">Artifact integrity</h3><ul class="plain-list"><li>Cryptographically secure randomness</li><li>Authenticated encryption and stable formats</li><li>Explicit compression policy and output bounds</li><li>Deterministic Recovery Deck derivation</li><li>Fail-closed parsing and authentication</li></ul></section>
+          <section class="boundary-column" aria-labelledby="app-owns-title"><span class="boundary-label">YOUR APP OWNS</span><h3 id="app-owns-title">Application security</h3><ul class="plain-list"><li>Authentication and authorization</li><li>XSS prevention, CSP, and dependency hygiene</li><li>Key lifecycle coordination across tabs or processes</li><li>Protected artifact and root-wrapper storage</li><li>Recovery instructions and user experience</li></ul></section>
         </div>
       </div>
     </section>
 
     <section class="section section--compact" id="ai-access" aria-labelledby="ai-title" data-search-title="AI access to Voided" data-search-summary="AI HTML, llms.txt, JSON, and the read-only Voided MCP server">
       <div class="section__inner">
-        <div class="section__intro reveal">
-          <div><span class="eyebrow">First-class AI access</span><h2 class="section__title" id="ai-title">No scraping gymnastics.</h2></div>
-          <p>Give an agent the smallest reference it needs. Every endpoint contains operational facts, not a second layer of marketing copy.</p>
+        <div class="section__intro">
+          <div><span class="eyebrow">AI access</span><h2 class="section__title" id="ai-title">Documentation for agents.</h2></div>
+          <p>Use a compact index, full reference, structured JSON, or the local MCP server. Each surface describes the same APIs and invariants.</p>
         </div>
-        <div class="endpoint-list reveal">
+        <div class="endpoint-list">
           <a class="endpoint-row" href="./ai.html"><span class="endpoint-row__kind">HTML</span><strong>/ai.html</strong><p>Human-readable, semantic implementation reference and pasteable agent prompt.</p><span class="arrow" aria-hidden="true">→</span></a>
           <a class="endpoint-row" href="./llms.txt"><span class="endpoint-row__kind">TEXT</span><strong>/llms.txt</strong><p>Compact routing index for agents deciding what to read next.</p><span class="arrow" aria-hidden="true">→</span></a>
           <a class="endpoint-row" href="./llms-full.txt"><span class="endpoint-row__kind">TEXT</span><strong>/llms-full.txt</strong><p>Complete standalone product, API, recovery, security, and release reference.</p><span class="arrow" aria-hidden="true">→</span></a>
@@ -147,11 +164,11 @@
 
     <section class="section section--compact" aria-labelledby="depth-title">
       <div class="section__inner">
-        <div class="section__intro reveal">
-          <div><span class="eyebrow">Optional depth</span><h2 class="section__title" id="depth-title">Go lower only when you need to.</h2></div>
-          <p>The normal path stays small. These layers exist for teams that own more of the surrounding architecture.</p>
+        <div class="section__intro">
+          <div><span class="eyebrow">Advanced APIs</span><h2 class="section__title" id="depth-title">Lower-level control, when required.</h2></div>
+          <p>Use these APIs when your application deliberately owns more of the surrounding data format or key hierarchy.</p>
         </div>
-        <div class="field-notes reveal">
+        <div class="field-notes">
           <a class="field-note" href="./docs.html?guide=fuse"><span class="field-note__type">Artifact</span><h3>Fuse and VOF3</h3><p>Shape already-prepared encrypted bytes, inspect untrusted metadata, or repack a current artifact.</p><span class="arrow" aria-hidden="true">→</span></a>
           <a class="field-note" href="./docs.html?guide=recovery"><span class="field-note__type">Recovery</span><h3>Recovery Deck</h3><p>Recover one stable root from a 52-card permutation without storing the deck or derived key.</p><span class="arrow" aria-hidden="true">→</span></a>
           <a class="field-note" href="./learn.html#choose-api"><span class="field-note__type">Primitives</span><h3>Own the outer format</h3><p>Use encrypt/decrypt only when your system deliberately owns serialization and lifecycle.</p><span class="arrow" aria-hidden="true">→</span></a>
@@ -160,9 +177,9 @@
     </section>
 
     <section class="section section--signal final-cta final-cta--compact" aria-labelledby="final-title">
-      <div class="final-cta__inner reveal">
-        <span class="eyebrow">The default is the product</span>
-        <h2 id="final-title">Protect. Store. Open.</h2>
+      <div class="final-cta__inner">
+        <span class="eyebrow">Implementation</span>
+        <h2 id="final-title">Start with protect/open.</h2>
         <div class="final-cta__actions"><a class="button" href="./docs.html">Start with one artifact <span class="arrow" aria-hidden="true">→</span></a><a class="button button--quiet" href="./ai.html">Open the AI reference</a></div>
       </div>
     </section>
