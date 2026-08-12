@@ -36,10 +36,20 @@
         "types": "./dist/crypto-backend.d.cts",
         "default": "./dist/crypto-backend.cjs"
       }
+    },
+    "./transport": {
+      "import": {
+        "types": "./dist/transport-crypto.d.ts",
+        "default": "./dist/transport-crypto.js"
+      },
+      "require": {
+        "types": "./dist/transport-crypto.d.cts",
+        "default": "./dist/transport-crypto.cjs"
+      }
     }
   },
   "scripts": {
-    "build": "tsup src/index.ts src/wasm/loader.ts src/crypto-backend.ts --format esm,cjs --dts --clean --treeshake --no-splitting --platform browser --target es2020 && npm run verify:loader-dist",
+    "build": "tsup src/index.ts src/wasm/loader.ts src/crypto-backend.ts src/transport-crypto.ts --format esm,cjs --dts --clean --treeshake --no-splitting --platform browser --target es2020 && npm run verify:loader-dist",
     "build:wasm": "node scripts/build-wasm-release.js",
     "build:all": "npm run build:wasm && npm run build",
     "test": "jest --testPathIgnorePatterns=gb-scale --testPathIgnorePatterns=benchmark-all",
