@@ -1,0 +1,37 @@
+# Voided
+
+> Voided protects application data as one authenticated artifact across Rust, Node.js, and browser WASM. The default API is protect/open.
+
+Voided is at 1.0 release-candidate state. Package publication has not happened. macOS arm64, Linux x64, browser WASM, CommonJS, and ESM release gates passed. Real Windows x64 execution remains pending.
+
+## Read first
+
+- [Direct AI reference](https://voidednetwork.com/ai.html): Semantic HTML with the core rule, API decision table, runtimes, artifact rules, Recovery Deck, security boundaries, and a pasteable agent prompt.
+- [Full standalone reference](https://voidednetwork.com/llms-full.txt): Complete plain-text context for agents that need to work without the website or MCP.
+- [Structured machine reference](https://voidednetwork.com/ai.json): JSON facts and invariants.
+- [Developer documentation](https://voidednetwork.com/docs.html): Human implementation guides and examples.
+- [Voided MCP](https://voidednetwork.com/mcp.html): Read-only local source-aware knowledge server.
+
+## Core routing rule
+
+- Use protect/open for normal application data.
+- Use fuse/unfuse only when the caller already owns and has prepared the inner bytes.
+- Use encrypt/decrypt only when the caller deliberately owns serialization, the outer format, and lifecycle.
+- Treat keyless inspection as attacker-controlled metadata until keyed open authenticates the artifact.
+- Never persist or log plaintext, raw keys, Recovery Deck order, the derived Recovery Key, or the stable root.
+
+## Runtime routes
+
+- Browser: https://voidednetwork.com/docs.html?guide=browser
+- Node.js: https://voidednetwork.com/docs.html?guide=node
+- Rust: https://voidednetwork.com/docs.html?guide=rust
+- VOF3 and Fuse: https://voidednetwork.com/docs.html?guide=fuse
+- Recovery Deck: https://voidednetwork.com/docs.html?guide=recovery
+- Security boundaries: https://voidednetwork.com/docs.html?guide=security
+
+## Source
+
+- Repository: https://github.com/voided-network/voided
+- Support: https://voidednetwork.com/support.html
+- MCP project descriptor: https://voidednetwork.com/mcp.json
+

@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="A direct, machine-friendly implementation reference for Voided runtimes, APIs, artifacts, Recovery Deck, and security boundaries.">
+  <meta name="theme-color" content="#080a0b">
+  <title>Voided for AI — Direct implementation reference</title>
+  <link rel="icon" href="./assets/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="./assets/styles.css">
+  <link rel="alternate" href="./llms.txt" type="text/plain" title="Voided AI index">
+  <link rel="alternate" href="./llms-full.txt" type="text/plain" title="Voided full AI reference">
+  <link rel="alternate" href="./ai.json" type="application/json" title="Voided machine reference">
+  <script src="./assets/site.js" defer></script>
+</head>
+<body data-page="ai">
+  <a class="skip-link" href="#main">Skip to content</a>
+  <header class="site-header">
+    <div class="site-header__inner">
+      <a class="brand" href="./index.html" aria-label="Voided home"><span class="brand__mark" aria-hidden="true"></span>VOIDED</a>
+      <button class="menu-toggle" type="button" aria-expanded="false" aria-controls="site-navigation"><span class="sr-only">Toggle navigation</span>Menu</button>
+      <nav class="site-nav" id="site-navigation" aria-label="Primary navigation"><a href="./docs.html">Start</a><a href="./ai.html" aria-current="page">AI</a><a href="./learn.html">Reference</a><a href="./support.html">Support</a><a href="https://github.com/voided-network/voided">GitHub</a><button class="header-search" type="button" data-search-open aria-label="Search documentation">Search <kbd>⌘K</kbd></button></nav>
+    </div>
+  </header>
+
+  <main id="main">
+    <section class="page-hero page-hero--utility">
+      <div class="page-hero__inner reveal">
+        <span class="eyebrow">Direct implementation reference</span>
+        <h1>Give an AI the facts.</h1>
+        <p>No product story required. This page states the runtime choices, safe default, protocol boundaries, recovery rules, and current release status directly in semantic HTML.</p>
+        <div class="hero__actions"><a class="button button--signal" href="./llms.txt">Open the compact index</a><a class="button" href="./llms-full.txt">Open the full text</a><a class="button" href="./ai.json">Open JSON</a></div>
+      </div>
+    </section>
+
+    <section class="utility-layout" aria-label="Voided machine reference">
+      <nav class="utility-index" aria-label="On this page">
+        <span class="utility-index__label">ON THIS PAGE</span>
+        <a href="#core-rule">Core rule</a><a href="#decision-table">Decision table</a><a href="#runtime-facts">Runtimes</a><a href="#artifact-facts">Artifact</a><a href="#recovery-facts">Recovery</a><a href="#security-facts">Security</a><a href="#agent-prompt">Agent prompt</a><a href="#machine-endpoints">Endpoints</a>
+      </nav>
+
+      <article class="utility-content">
+        <section class="utility-section" id="core-rule" data-search-title="Voided core rule for AI" data-search-summary="Use protect/open for normal application data">
+          <span class="eyebrow">Core rule</span>
+          <h2>Use protect/open for normal application data.</h2>
+          <p>Input plaintext bytes and a key. Voided applies the selected preparation policy, authenticated encryption, and VOF3 artifact shaping. Store the returned artifact. Call <code class="inline-code">open</code> with the correct key to recover plaintext.</p>
+          <div class="core-contract" aria-label="Core Voided data flow"><code>plaintext + key</code><span>→</span><strong>protect</strong><span>→</span><code>VOF3 artifact</code><span>→</span><strong>open</strong><span>→</span><code>plaintext</code></div>
+        </section>
+
+        <section class="utility-section" id="decision-table" data-search-title="Voided API decision table" data-search-summary="Choose protect/open, fuse/unfuse, or encrypt/decrypt">
+          <span class="eyebrow">API selection</span>
+          <h2>Choose by ownership.</h2>
+          <table class="decision-table"><thead><tr><th>Need</th><th>Use</th><th>Condition</th></tr></thead><tbody>
+            <tr><td>Normal application artifact</td><td><code>protect/open</code></td><td>Voided owns the complete safe sequence. This is the default.</td></tr>
+            <tr><td>Authenticated shell around prepared bytes</td><td><code>fuse/unfuse</code></td><td>The caller already owns and has prepared the inner bytes.</td></tr>
+            <tr><td>Authenticated encryption primitive only</td><td><code>encrypt/decrypt</code></td><td>The caller deliberately owns serialization, outer format, and lifecycle.</td></tr>
+            <tr><td>Stateless root recovery</td><td>Recovery Deck APIs</td><td>The system already has a stable user or account root to wrap.</td></tr>
+          </tbody></table>
+        </section>
+
+        <section class="utility-section" id="runtime-facts" data-search-title="Voided runtime facts" data-search-summary="Browser, Node.js, Rust, and native platform requirements">
+          <span class="eyebrow">Runtime facts</span>
+          <h2>Keep plaintext where it already lives.</h2>
+          <dl class="fact-list">
+            <div><dt>Browser</dt><dd><code>@voideddev/e2ee-client</code>. Stateful client and IndexedDB key storage. Verified Rust/WASM is required for Fuse, full VOF3 flows, bounded decompression, XChaCha20-Poly1305, and Recovery Deck. High-level browser compression is off unless explicitly enabled.</dd></div>
+            <div><dt>Node.js</dt><dd><code>@voideddev/enc-server</code>. Node 18 or newer. Native Rust-backed Buffer APIs. Release targets: macOS arm64, Linux x64 GNU with glibc 2.34 or newer, and Windows x64 MSVC.</dd></div>
+            <div><dt>Rust</dt><dd><code>voided-core</code>. Cryptographic source of truth with explicit feature and byte ownership.</dd></div>
+            <div><dt>Current validation</dt><dd>macOS arm64, Linux x64, browser WASM, CommonJS, and ESM release gates passed. Windows x64 artifact provenance and hashes are verified; real Windows execution remains pending before publication.</dd></div>
+          </dl>
+        </section>
+
+        <section class="utility-section" id="artifact-facts" data-search-title="VOF3 artifact facts" data-search-summary="Authenticated artifact format, presets, inspection, and failure behavior">
+          <span class="eyebrow">Artifact contract</span>
+          <h2>Current writers produce VOF3.</h2>
+          <ul class="plain-list plain-list--large">
+            <li>VOF3 is the stable current authenticated byte format; package version and wire-format version are independent.</li>
+            <li>XChaCha20-Poly1305 is the high-level default. AES-256-GCM is an explicit primitive option for interoperability.</li>
+            <li>Fuse presets are <code>compact</code>, <code>balanced</code>, and <code>concealed</code>. Start with <code>balanced</code>; presets change shell shape and overhead, not the underlying security primitive.</li>
+            <li>Keyless inspection returns attacker-controlled structural metadata. It is not trusted until keyed open authenticates the artifact.</li>
+            <li>Malformed structure, oversized declared work, incorrect keys, and authentication failure must fail before plaintext or unbounded output is released.</li>
+          </ul>
+        </section>
+
+        <section class="utility-section" id="recovery-facts" data-search-title="Recovery Deck machine facts" data-search-summary="52 cards, 29-byte rank, 32-byte key, 80-byte wrapper, and rotation rules">
+          <span class="eyebrow">Recovery Deck</span>
+          <h2>Reconstruct a key. Store only a wrapper.</h2>
+          <div class="machine-facts">
+            <div class="machine-fact"><strong>52 unique cards</strong><span>one uniformly random permutation</span></div>
+            <div class="machine-fact"><strong>225.58 bits</strong><span>approximate permutation entropy</span></div>
+            <div class="machine-fact"><strong>29 bytes</strong><span>canonical permutation rank</span></div>
+            <div class="machine-fact"><strong>32 bytes</strong><span>deterministically derived Recovery Key</span></div>
+            <div class="machine-fact"><strong>80 bytes</strong><span>opaque stable-root wrapper that may persist</span></div>
+            <div class="machine-fact"><strong>0 secret copies</strong><span>deck and derived key are never persisted</span></div>
+          </div>
+          <p>A valid deck contains every canonical card exactly once. The exact order deterministically derives the same Recovery Key. That key unwraps one stable user/account root, below which applications keep independent keys. Secure rotation generates a wholly fresh CSPRNG permutation and rewraps the same root; it does not change application keys or re-encrypt data.</p>
+        </section>
+
+        <section class="utility-section" id="security-facts" data-search-title="Voided security rules for AI" data-search-summary="Secret handling and application trust boundaries">
+          <span class="eyebrow">Security rules</span>
+          <h2>Never move secrets for convenience.</h2>
+          <ul class="plain-list plain-list--large">
+            <li>Never log, analyze, transmit, cache, or place in crash reports: plaintext, raw keys, Recovery Deck order, Recovery Key, or stable root.</li>
+            <li>Persist only normal protected artifacts and the opaque Recovery Deck root wrapper required by the application hierarchy.</li>
+            <li>Browser encryption cannot protect a key from fully compromised same-origin JavaScript. The application still owns XSS prevention, CSP, dependency hygiene, and lifecycle locking.</li>
+            <li>Compression can leak information when attacker-controlled and secret material share a context and output length is observable. Keep one trust boundary or leave compression off.</li>
+            <li>Do not authorize from inspected metadata. Authenticate the artifact first.</li>
+          </ul>
+        </section>
+
+        <section class="utility-section" id="agent-prompt" data-search-title="Voided agent prompt" data-search-summary="Pasteable instructions for an AI coding agent">
+          <span class="eyebrow">Pasteable agent context</span>
+          <h2>Start an implementation with this.</h2>
+          <div class="code-window"><div class="code-window__bar"><span>agent-prompt.txt</span><button class="copy-button" type="button" data-copy="#agent-prompt-code">Copy</button></div><pre><code id="agent-prompt-code">Use Voided to protect application data. Read https://voidednetwork.com/llms-full.txt before changing code. Default to protect/open in the runtime where plaintext already exists. Do not assemble primitives unless the application explicitly owns the outer format. Treat inspected metadata as untrusted until authenticated open. Never persist or log raw keys, Recovery Deck order, Recovery Key, stable root, or plaintext. Preserve the existing key hierarchy and application security boundary.</code></pre></div>
+        </section>
+
+        <section class="utility-section" id="machine-endpoints" data-search-title="Voided machine endpoints" data-search-summary="llms.txt, llms-full.txt, JSON, MCP, docs, and source">
+          <span class="eyebrow">Machine endpoints</span>
+          <h2>Pick the smallest useful surface.</h2>
+          <div class="endpoint-list endpoint-list--utility">
+            <a class="endpoint-row" href="./llms.txt"><span class="endpoint-row__kind">TEXT</span><strong>/llms.txt</strong><p>Routing index</p><span>→</span></a>
+            <a class="endpoint-row" href="./llms-full.txt"><span class="endpoint-row__kind">TEXT</span><strong>/llms-full.txt</strong><p>Standalone full reference</p><span>→</span></a>
+            <a class="endpoint-row" href="./ai.json"><span class="endpoint-row__kind">JSON</span><strong>/ai.json</strong><p>Structured implementation data</p><span>→</span></a>
+            <a class="endpoint-row" href="./mcp.json"><span class="endpoint-row__kind">JSON</span><strong>/mcp.json</strong><p>Project MCP descriptor</p><span>→</span></a>
+            <a class="endpoint-row endpoint-row--signal" href="./mcp.html"><span class="endpoint-row__kind">MCP</span><strong>Voided MCP</strong><p>Local source-aware knowledge server</p><span>→</span></a>
+          </div>
+        </section>
+      </article>
+    </section>
+  </main>
+
+  <footer class="site-footer"><div class="site-footer__inner"><div><a class="brand" href="./index.html"><span class="brand__mark" aria-hidden="true"></span>VOIDED</a><p class="site-footer__meta">Direct reference · last aligned to the 1.0 release candidate</p></div><nav aria-label="Footer navigation"><a href="./docs.html">Start</a><a href="./mcp.html">MCP</a><a href="./support.html">Support</a><a href="https://github.com/voided-network/voided">GitHub</a></nav></div></footer>
+  <dialog class="search-dialog" data-search-dialog aria-label="Search Voided documentation"><form class="search-form" method="dialog"><input type="search" data-search-input placeholder="Search guides, concepts, APIs…" autocomplete="off"><button class="search-close" value="cancel" aria-label="Close search">Esc</button></form><div class="search-results" data-search-results><p class="search-empty">Type a concept or API name.</p></div></dialog>
+  <div class="sr-only" aria-live="polite" data-live-region></div>
+</body>
+</html>

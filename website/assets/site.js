@@ -48,6 +48,11 @@ function setupCopyButtons() {
 
 const searchIndex = [
   { title: "Get started", summary: "Choose Browser, Node.js, or Rust and use the normal protect/open flow.", url: "./docs.html?guide=start" },
+  { title: "AI reference", summary: "Direct semantic HTML for agents: API choices, runtimes, artifacts, recovery, and security.", url: "./ai.html" },
+  { title: "AI compact index", summary: "llms.txt routing index for machine readers.", url: "./llms.txt" },
+  { title: "AI full reference", summary: "Standalone plain-text Voided context for agents without MCP.", url: "./llms-full.txt" },
+  { title: "Machine reference JSON", summary: "Structured Voided facts, invariants, release state, and endpoints.", url: "./ai.json" },
+  { title: "Voided MCP", summary: "Read-only local source knowledge, code search, symbols, modules, and file excerpts.", url: "./mcp.html" },
   { title: "Browser SDK", summary: "Stateful client, IndexedDB keys, WASM behavior, compression, and browser support.", url: "./docs.html?guide=browser" },
   { title: "Node.js SDK", summary: "Native Rust package, Buffer APIs, runtime verification, CJS, and ESM.", url: "./docs.html?guide=node" },
   { title: "Rust crate", summary: "voided-core source-of-truth APIs, feature flags, and native integration.", url: "./docs.html?guide=rust" },

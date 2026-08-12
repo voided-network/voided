@@ -1,0 +1,194 @@
+# Voided full reference
+
+Reference status: Voided 1.0 release candidate.
+Publication status: packages are not published yet.
+Final native gate: real Windows x64 MSVC execution remains pending. The Windows artifact has verified provenance and hashes.
+
+## What Voided does
+
+Voided protects application data as one authenticated artifact. Its primary surfaces resolve to one Rust source of truth:
+
+- Browser: @voideddev/e2ee-client
+- Node.js: @voideddev/enc-server
+- Rust: voided-core
+
+Normal flow:
+
+plaintext bytes + key
+-> protect
+-> optional explicit bounded compression
+-> authenticated encryption
+-> VOF3 artifact shaping
+-> one artifact to store
+
+artifact + correct key
+-> open
+-> structure and work-bound validation
+-> authentication
+-> bounded restoration
+-> plaintext bytes
+
+## API decision rule
+
+1. Use protect/open for normal application data. Voided owns the complete safe artifact sequence.
+2. Use fuse/unfuse only when the caller already owns and has prepared the bytes inside the authenticated shell.
+3. Use encrypt/decrypt only when the caller deliberately owns serialization, the outer wire format, and key lifecycle.
+4. Use Recovery Deck APIs only around an existing stable user or account root.
+
+Do not assemble a normal application artifact from low-level calls simply because primitives are available.
+
+## Runtime facts
+
+Browser:
+- Package: @voideddev/e2ee-client
+- Stateful client with IndexedDB key storage.
+- Verified first-party Rust/WASM is required for Fuse, full VOF3 protect/open, bounded decompression, XChaCha20-Poly1305, and Recovery Deck.
+- The TypeScript fallback does not silently reinterpret those protocols.
+- High-level browser compression is disabled unless explicitly enabled.
+- A generic framework-free Recovery Deck UI can be mounted as a modal or inline surface and restyled by the application.
+
+Node.js:
+- Package: @voideddev/enc-server
+- Node.js 18 or newer.
+- Native Rust-backed Buffer APIs.
+- Release targets: macOS arm64, Linux x64 GNU with glibc 2.34 or newer, and Windows x64 MSVC.
+- Native loaders verify the selected release artifact against the release manifest before loading.
+
+Rust:
+- Crate: voided-core
+- Source of truth for cryptographic and artifact behavior.
+- Use for native systems and explicit feature or byte ownership.
+
+## VOF3 and Fuse
+
+- Current writers produce VOF3.
+- Package version 1.0 and wire-format version 3 are deliberately independent.
+- VOF3 is the frozen authenticated byte format for the first stable package release.
+- Current writers produce VOF3. Treat a different future protocol as a separate version rather than silently changing VOF3 behavior.
+- Fuse is an authenticated outer artifact format and shaping layer. It is not another cipher.
+- XChaCha20-Poly1305 is the high-level default.
+- AES-256-GCM is an explicit primitive option when interoperability requires it.
+- Presets are compact, balanced, and concealed.
+- Start with balanced. Presets change shell shape and overhead, not the underlying security primitive.
+- Keyless inspection exposes untrusted structure only. Do not authorize, allocate unsafe work, or trust claims from inspection before keyed open succeeds.
+- Malformed structure, incorrect keys, authentication failure, and oversized declared work must fail before plaintext or unbounded output is released.
+
+## Recovery Deck
+
+Purpose: stateless recovery of one stable user or account root.
+
+Permanent model:
+- One standard 52-card deck.
+- Every canonical card appears exactly once.
+- The exact permutation is the secret.
+- Initial generation uses a CSPRNG and a uniform shuffle over all 52! permutations.
+- Approximate entropy: log2(52!) = 225.58 bits.
+- Canonical deck encoding is a 29-byte big-endian permutation rank.
+- Deterministic derivation formats the deck entropy as a 32-byte Recovery Key.
+- The stable root wrapper is exactly 80 bytes.
+- Only the opaque 80-byte wrapper may be persisted.
+- The deck, human-readable card order, permutation rank, Recovery Key, and stable root are not persisted.
+
+Recovery:
+same deck
+-> same canonical bytes
+-> same derivation
+-> same Recovery Key
+-> unwrap the same stable root
+-> recover independent application key hierarchies
+
+Validation happens before derivation. A valid deck contains exactly 52 known identifiers, every identifier exactly once, with no missing or duplicate cards.
+
+Rotation:
+- Derive the old Recovery Key and unwrap the stable root.
+- Generate a wholly fresh uniform CSPRNG deck.
+- Derive the new Recovery Key and rewrap the same root.
+- Replace or invalidate the old recovery wrapper.
+- Do not change application keys.
+- Do not re-encrypt user data.
+- Rearranging or slightly modifying a possibly compromised deck is not secure rotation.
+
+One Recovery Deck can recover the whole user key hierarchy. Applications beneath the stable root remain cryptographically isolated.
+
+## Security boundaries
+
+Never log, analyze, transmit, cache, or place in crash reports:
+- plaintext
+- raw encryption keys
+- Recovery Deck order
+- canonical permutation rank
+- derived Recovery Key
+- stable user or account root
+
+Persist only:
+- normal protected artifacts required by the application
+- opaque wrapped key hierarchy required by the application
+- the opaque Recovery Deck stable-root wrapper
+
+Browser limitations:
+- Browser encryption cannot protect a key from fully compromised same-origin JavaScript.
+- The integrating application owns XSS prevention, CSP, dependency hygiene, authorization, and lifecycle locking.
+- Truly concurrent key lifecycle writers require an application-level transactional lock.
+
+Compression limitations:
+- Compression can create an oracle when attacker-controlled and secret content share a context and ciphertext length is observable.
+- Keep compression within one trust boundary or leave it disabled.
+
+Inspection limitations:
+- Keyless inspection is unauthenticated.
+- Treat every inspected field as attacker-controlled until keyed open succeeds.
+
+## Ownership
+
+Voided owns:
+- cryptographically secure randomness
+- authenticated encryption behavior
+- stable artifact serialization
+- explicit compression policy and work bounds
+- Recovery Deck generation, validation, encoding, derivation, root wrapping, unwrapping, and rotation
+- fail-closed parsing and authentication
+
+The integrating application owns:
+- identity, authentication, and authorization
+- XSS prevention, CSP, and dependency hygiene
+- application key hierarchy design beneath the stable root
+- key lifecycle coordination across tabs or processes
+- artifact and wrapper persistence
+- Recovery Deck display, physical backup instructions, card interaction, warnings, and user flow
+
+Recovery Deck is not identity, login authentication, an application encryption key, or a device-transfer mechanism.
+
+## Voided MCP
+
+The Voided MCP server is a developer-facing, read-only local source knowledge server. It is not part of runtime cryptography or authentication.
+
+Download: https://voidednetwork.com/downloads/voided-mcp.mjs
+SHA-256: fd8ad4bdb0afde8d9d47d7a196dc88a473c3cc65a2494c4281cd4b5240f77354
+Runtime: Node.js 18 or newer
+Transport: stdio JSON-RPC
+Server name/version: voided-mcp 0.1.0
+Configuration environment: VOIDED_ROOT=/absolute/path/to/voided
+Registry status: @slipner/cli is not publicly available on npm; direct download is the current launch path.
+
+Tools:
+- voided_get_context: confirm checkout and discover crates and packages
+- voided_list_modules: list first-party module surfaces
+- voided_search_knowledge: search docs, READMEs, and examples
+- voided_search_code: search first-party Rust, TypeScript, and JavaScript
+- voided_find_symbol: locate a function, type, constant, or export
+- voided_read_file: read a bounded repository-relative text excerpt
+
+Recommended sequence: get context, search intended behavior in knowledge, find the concrete symbol, then read the smallest relevant excerpt.
+
+The MCP server does not need keys, deck order, plaintext, derived recovery material, or user data. Normal tool operation makes no Voided backend call.
+
+## Machine and human endpoints
+
+- Compact index: https://voidednetwork.com/llms.txt
+- Semantic HTML: https://voidednetwork.com/ai.html
+- Structured JSON: https://voidednetwork.com/ai.json
+- MCP page: https://voidednetwork.com/mcp.html
+- MCP project descriptor: https://voidednetwork.com/mcp.json
+- Human docs: https://voidednetwork.com/docs.html
+- Source: https://github.com/voided-network/voided
+- Support: https://voidednetwork.com/support.html

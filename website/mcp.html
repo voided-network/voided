@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Install the read-only Voided MCP server for local source-aware architecture, API, symbol, and file knowledge.">
+  <meta name="theme-color" content="#080a0b">
+  <title>Voided MCP — Source-aware knowledge for AI</title>
+  <link rel="icon" href="./assets/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="./assets/styles.css">
+  <link rel="alternate" href="./mcp.json" type="application/json" title="Voided MCP descriptor">
+  <script src="./assets/site.js" defer></script>
+</head>
+<body data-page="mcp">
+  <a class="skip-link" href="#main">Skip to content</a>
+  <header class="site-header"><div class="site-header__inner"><a class="brand" href="./index.html" aria-label="Voided home"><span class="brand__mark" aria-hidden="true"></span>VOIDED</a><button class="menu-toggle" type="button" aria-expanded="false" aria-controls="site-navigation"><span class="sr-only">Toggle navigation</span>Menu</button><nav class="site-nav" id="site-navigation" aria-label="Primary navigation"><a href="./docs.html">Start</a><a href="./ai.html" aria-current="page">AI</a><a href="./learn.html">Reference</a><a href="./support.html">Support</a><a href="https://github.com/voided-network/voided">GitHub</a><button class="header-search" type="button" data-search-open aria-label="Search documentation">Search <kbd>⌘K</kbd></button></nav></div></header>
+
+  <main id="main">
+    <section class="page-hero page-hero--utility">
+      <div class="page-hero__inner reveal">
+        <span class="eyebrow">Voided MCP · read only</span>
+        <h1>Give an AI the source.</h1>
+        <p>The Voided MCP server lets an agent inspect local Voided architecture, modules, symbols, code, and knowledge files without sending keys, deck order, plaintext, or repository content to a Voided backend.</p>
+        <div class="hero__actions"><a class="button button--signal" href="./downloads/voided-mcp.mjs" download>Download voided-mcp.mjs</a><a class="button" href="./mcp.json">Open MCP descriptor</a></div>
+        <p class="status-line"><span class="signal-dot" aria-hidden="true"></span> Source-ready direct download · npm registry publication pending</p>
+      </div>
+    </section>
+
+    <section class="utility-layout utility-layout--single">
+      <article class="utility-content">
+        <section class="utility-section" id="install" data-search-title="Install Voided MCP" data-search-summary="Download, verify, and configure the read-only local MCP server">
+          <span class="eyebrow">Install</span>
+          <h2>One file. Node 18+.</h2>
+          <p>The current launch path is this versioned direct artifact. <code class="inline-code">@slipner/cli</code> is not public on the npm registry yet, so do not use an npm install command.</p>
+          <div class="code-window"><div class="code-window__bar"><span>terminal</span><button class="copy-button" type="button" data-copy="#mcp-install-code">Copy</button></div><pre><code id="mcp-install-code">curl -fsSLo voided-mcp.mjs https://voidednetwork.com/downloads/voided-mcp.mjs
+shasum -a 256 voided-mcp.mjs
+VOIDED_ROOT=/absolute/path/to/voided node /absolute/path/to/voided-mcp.mjs</code></pre></div>
+          <dl class="fact-list fact-list--compact"><div><dt>SHA-256</dt><dd><code>fd8ad4bdb0afde8d9d47d7a196dc88a473c3cc65a2494c4281cd4b5240f77354</code></dd></div><div><dt>Transport</dt><dd>stdio JSON-RPC</dd></div><div><dt>Server</dt><dd><code>voided-mcp</code> version <code>0.1.0</code></dd></div><div><dt>License</dt><dd><a class="text-link" href="./downloads/LICENSE.txt">MIT</a></dd></div></dl>
+        </section>
+
+        <section class="utility-section" id="configure" data-search-title="Configure Voided MCP" data-search-summary="Generic MCP client configuration with VOIDED_ROOT">
+          <span class="eyebrow">Client configuration</span>
+          <h2>Point it at a local checkout.</h2>
+          <p><code class="inline-code">VOIDED_ROOT</code> must be an absolute path to the Voided source checkout the agent should know. Add this server entry using your MCP client’s normal configuration surface.</p>
+          <div class="code-window"><div class="code-window__bar"><span>mcp-config.json</span><button class="copy-button" type="button" data-copy="#mcp-config-code">Copy</button></div><pre><code id="mcp-config-code">{
+  "mcpServers": {
+    "voided": {
+      "command": "node",
+      "args": ["/absolute/path/to/voided-mcp.mjs"],
+      "env": {
+        "VOIDED_ROOT": "/absolute/path/to/voided"
+      }
+    }
+  }
+}</code></pre></div>
+        </section>
+
+        <section class="utility-section" id="tools" data-search-title="Voided MCP tools" data-search-summary="Context, module, knowledge, code, symbol, and file tools">
+          <span class="eyebrow">Six tools</span>
+          <h2>Ask from broad to exact.</h2>
+          <div class="mcp-tool-list">
+            <div><code>voided_get_context</code><p>Confirm the checkout, discover crates and packages, and get a compact repository orientation.</p></div>
+            <div><code>voided_list_modules</code><p>List first-party Rust, Node.js, browser, and knowledge surfaces.</p></div>
+            <div><code>voided_search_knowledge</code><p>Search docs, READMEs, and examples for concepts and integration rules.</p></div>
+            <div><code>voided_search_code</code><p>Search first-party Rust, TypeScript, and JavaScript source.</p></div>
+            <div><code>voided_find_symbol</code><p>Locate a named function, type, constant, or export.</p></div>
+            <div><code>voided_read_file</code><p>Read a bounded excerpt from a repository-relative text file.</p></div>
+          </div>
+          <div class="callout"><strong>Recommended sequence</strong><p>Call context first, search knowledge for intended behavior, find the concrete symbol, then read the smallest relevant excerpt. Search results are capped at 25 and file excerpts at 400 lines.</p></div>
+        </section>
+
+        <section class="utility-section" id="boundary" data-search-title="Voided MCP security boundary" data-search-summary="Read-only local repository knowledge with no secret handling">
+          <span class="eyebrow">Boundary</span>
+          <h2>Knowledge server, not crypto runtime.</h2>
+          <ul class="plain-list plain-list--large">
+            <li>The server is read-only. It does not edit source or execute cryptographic operations.</li>
+            <li>It reads the local Voided checkout configured by <code>VOIDED_ROOT</code>.</li>
+            <li>It does not need Recovery Deck order, plaintext, raw keys, derived keys, or user data.</li>
+            <li>It makes no Voided backend or network request during normal tool operation.</li>
+            <li>It is developer knowledge infrastructure, not authentication, recovery, or Slipner-specific product behavior.</li>
+          </ul>
+        </section>
+      </article>
+    </section>
+  </main>
+
+  <footer class="site-footer"><div class="site-footer__inner"><div><a class="brand" href="./index.html"><span class="brand__mark" aria-hidden="true"></span>VOIDED</a><p class="site-footer__meta">MCP 0.1.0 · read-only · local source knowledge</p></div><nav aria-label="Footer navigation"><a href="./ai.html">AI reference</a><a href="./docs.html">Start</a><a href="./support.html">Support</a><a href="https://github.com/voided-network/voided">GitHub</a></nav></div></footer>
+  <dialog class="search-dialog" data-search-dialog aria-label="Search Voided documentation"><form class="search-form" method="dialog"><input type="search" data-search-input placeholder="Search guides, concepts, APIs…" autocomplete="off"><button class="search-close" value="cancel" aria-label="Close search">Esc</button></form><div class="search-results" data-search-results><p class="search-empty">Type a concept or API name.</p></div></dialog>
+  <div class="sr-only" aria-live="polite" data-live-region></div>
+</body>
+</html>

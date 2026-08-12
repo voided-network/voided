@@ -1,0 +1,37 @@
+{
+  "descriptor_type": "voided_project_mcp",
+  "descriptor_version": 1,
+  "name": "voided-mcp",
+  "version": "0.1.0",
+  "description": "Read-only local source-aware knowledge server for Voided.",
+  "license": "MIT",
+  "runtime": {"name": "Node.js", "minimum_version": "18"},
+  "transport": "stdio",
+  "protocol_versions": ["2025-11-25", "2025-06-18", "2025-03-26", "2024-11-05"],
+  "download": {
+    "url": "https://voidednetwork.com/downloads/voided-mcp.mjs",
+    "sha256": "fd8ad4bdb0afde8d9d47d7a196dc88a473c3cc65a2494c4281cd4b5240f77354",
+    "registry_published": false
+  },
+  "configuration": {
+    "environment": {
+      "VOIDED_ROOT": {"required": true, "description": "Absolute path to a local Voided source checkout"}
+    }
+  },
+  "capabilities": {"tools": true, "resources": false, "prompts": false, "logging": false},
+  "tools": [
+    {"name": "voided_get_context", "purpose": "Confirm the checkout and discover crates and packages"},
+    {"name": "voided_list_modules", "purpose": "List first-party module surfaces"},
+    {"name": "voided_search_knowledge", "purpose": "Search documentation, READMEs, and examples"},
+    {"name": "voided_search_code", "purpose": "Search first-party Rust, TypeScript, and JavaScript source"},
+    {"name": "voided_find_symbol", "purpose": "Locate a function, type, constant, or export"},
+    {"name": "voided_read_file", "purpose": "Read a bounded repository-relative text excerpt"}
+  ],
+  "limits": {"maximum_search_results": 25, "maximum_file_excerpt_lines": 400},
+  "security": {
+    "read_only": true,
+    "requires_secret_material": false,
+    "normal_operation_requires_voided_backend": false,
+    "not_a_crypto_runtime": true
+  }
+}

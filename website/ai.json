@@ -1,0 +1,86 @@
+{
+  "schema": "https://voidednetwork.com/schemas/ai-reference-v1",
+  "schema_version": 1,
+  "product": {
+    "name": "Voided",
+    "summary": "Protect application data as one authenticated artifact across Rust, Node.js, and browser WASM.",
+    "license": "MIT",
+    "source": "https://github.com/voided-network/voided"
+  },
+  "release": {
+    "version": "1.0.0",
+    "status": "release_candidate",
+    "published": false,
+    "current_writer_format": "VOF3",
+    "validated": ["macos-arm64", "linux-x64-gnu-glibc-2.34+", "browser-wasm", "commonjs", "esm"],
+    "pending": ["windows-x64-msvc-real-execution"]
+  },
+  "core_rule": "Use protect/open for normal application data.",
+  "api_layers": [
+    {"name": "full_flow", "calls": ["protect", "open"], "use_when": "Voided should own the standard artifact end to end", "default": true},
+    {"name": "shell_only", "calls": ["fuse", "unfuse"], "use_when": "The caller already owns and has prepared the inner bytes", "default": false},
+    {"name": "primitive", "calls": ["encrypt", "decrypt"], "use_when": "The caller deliberately owns serialization, outer format, and lifecycle", "default": false}
+  ],
+  "surfaces": [
+    {"runtime": "browser", "package": "@voideddev/e2ee-client", "backend": "verified Rust/WASM", "notes": ["stateful client", "IndexedDB key storage", "high-level compression is opt-in"]},
+    {"runtime": "node", "package": "@voideddev/enc-server", "minimum_runtime": "Node.js 18", "backend": "native Rust"},
+    {"runtime": "rust", "package": "voided-core", "backend": "source of truth"}
+  ],
+  "artifact": {
+    "current_format": "VOF3",
+    "high_level_default_aead": "XChaCha20-Poly1305",
+    "explicit_interoperability_aead": "AES-256-GCM",
+    "presets": ["compact", "balanced", "concealed"],
+    "recommended_preset": "balanced",
+    "inspection_authenticated": false,
+    "rules": [
+      "Treat inspected metadata as attacker-controlled until keyed open authenticates the artifact",
+      "Reject malformed structure and oversized declared work before expensive work",
+      "Authenticate before releasing plaintext"
+    ]
+  },
+  "recovery_deck": {
+    "purpose": "Stateless recovery of one stable user or account root",
+    "card_count": 52,
+    "generation": "uniform CSPRNG permutation",
+    "approximate_entropy_bits": 225.58,
+    "canonical_card_order": {"suits": ["S", "H", "D", "C"], "ranks": ["A", "2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K"]},
+    "encoding": "zero-based Lehmer permutation rank as exactly 29 big-endian bytes",
+    "canonical_rank_bytes": 29,
+    "derived_key_bytes": 32,
+    "derivation": {"kdf": "HKDF-SHA256", "salt": null, "info_ascii": "voided/recovery/deck"},
+    "root_wrapper_bytes": 80,
+    "root_wrapper": {"aead": "XChaCha20-Poly1305", "aad_ascii": "voided/recovery/deck/root-wrap"},
+    "persist": ["opaque root wrapper"],
+    "never_persist": ["deck", "human-readable card sequence", "permutation rank", "Recovery Key", "stable root"],
+    "validation": ["exactly 52 cards", "every canonical card exactly once", "no duplicates", "no missing cards", "no unknown identifiers"],
+    "rotation": "Generate a wholly fresh uniform CSPRNG deck and rewrap the same stable root",
+    "rotation_does_not": ["change application keys", "re-encrypt user data"]
+  },
+  "security": {
+    "never_log_or_transmit": ["plaintext", "raw keys", "Recovery Deck order", "Recovery Key", "stable root"],
+    "application_owns": ["authentication", "authorization", "XSS prevention", "CSP", "dependency hygiene", "key lifecycle coordination", "artifact persistence", "recovery UX"],
+    "compression_warning": "Do not share a compression context between attacker-controlled and secret material when output length is observable"
+  },
+  "mcp": {
+    "name": "voided-mcp",
+    "version": "0.1.0",
+    "status": "direct_download_available_registry_pending",
+    "read_only": true,
+    "minimum_runtime": "Node.js 18",
+    "transport": "stdio JSON-RPC",
+    "download": "https://voidednetwork.com/downloads/voided-mcp.mjs",
+    "sha256": "fd8ad4bdb0afde8d9d47d7a196dc88a473c3cc65a2494c4281cd4b5240f77354",
+    "configuration_environment": "VOIDED_ROOT",
+    "tools": ["voided_get_context", "voided_list_modules", "voided_search_knowledge", "voided_search_code", "voided_find_symbol", "voided_read_file"]
+  },
+  "endpoints": {
+    "html": "https://voidednetwork.com/ai.html",
+    "compact_text": "https://voidednetwork.com/llms.txt",
+    "full_text": "https://voidednetwork.com/llms-full.txt",
+    "json": "https://voidednetwork.com/ai.json",
+    "mcp": "https://voidednetwork.com/mcp.html",
+    "mcp_descriptor": "https://voidednetwork.com/mcp.json",
+    "docs": "https://voidednetwork.com/docs.html"
+  }
+}

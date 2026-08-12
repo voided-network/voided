@@ -13,6 +13,7 @@ const contentTypes = {
   ".ico": "image/x-icon",
   ".js": "text/javascript; charset=utf-8",
   ".json": "application/json; charset=utf-8",
+  ".mjs": "text/javascript; charset=utf-8",
   ".svg": "image/svg+xml",
   ".txt": "text/plain; charset=utf-8",
   ".xml": "application/xml; charset=utf-8",
@@ -43,4 +44,3 @@ createServer((request, response) => {
 }).listen(port, "127.0.0.1", () => {
   console.log(`[voided-site] http://127.0.0.1:${port}`);
 });
-
