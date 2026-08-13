@@ -15,9 +15,13 @@ headers. Do not enable cross-origin embedding.
 The interactive homepage uses byte-identical copies of the built browser
 package and verified WASM assets from `packages/e2ee-client/` under
 `website/runtime/`. The Recovery Deck preview mounts the package's exported
-generic component rather than duplicating it. `npm run site:check` fails if
-those copies drift. Production CSP must include
-`'wasm-unsafe-eval'` in `script-src`; all scripts and WASM remain self-hosted.
+generic component rather than duplicating it. Its three showcase designs use
+only the component's public class and card-rendering hooks. The function lab
+shows its full ephemeral test key, generated artifact, and form-driven WASM
+invocation so the example is inspectable; it does not persist or transmit any
+of them. `npm run site:check` fails if the runtime copies drift. Production CSP
+must include `'wasm-unsafe-eval'` in `script-src`; all scripts and WASM remain
+self-hosted.
 
 The human and machine reference surfaces are deliberately first-class:
 

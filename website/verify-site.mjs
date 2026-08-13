@@ -35,7 +35,7 @@ for (const page of pages) {
 }
 
 const home = readFileSync(join(root, "index.html"), "utf8");
-for (const required of ["data-function-lab", "data-deck-lab", "./assets/demo.js"]) {
+for (const required of ["data-function-lab", "data-lab-key-raw", "data-lab-usage", "data-lab-artifact-raw", "data-deck-lab", 'data-deck-theme="plain"', 'data-deck-theme="editorial"', 'data-deck-theme="signal"', "./assets/demo.js"]) {
   if (!home.includes(required)) failures.push(`index.html: missing ${required} live demo surface`);
 }
 
@@ -75,10 +75,18 @@ const demoScript = readFileSync(join(root, "assets", "demo.js"), "utf8");
 for (const required of ["generateKey", "protect", "open", "fuse", "unfuse", "encrypt", "decrypt"]) {
   if (!demoScript.includes(required)) failures.push(`demo.js: missing live ${required} integration`);
 }
+for (const required of ["bytesToBase64", "showArtifact", "updateUsage", "renderCardContent", "generateRecoveryDeck"]) {
+  if (!demoScript.includes(required)) failures.push(`demo.js: missing ${required} transparent demo behavior`);
+}
 if (!demoScript.includes("../runtime/voided_wasm.js")) failures.push("demo.js: missing self-hosted WASM runtime import");
 if (!demoScript.includes("../runtime/e2ee-client.js") || !demoScript.includes("createRecoveryDeckUI")) failures.push("demo.js: Recovery Deck preview must use the shipped generic component");
 if (demoScript.includes("innerHTML")) failures.push("demo.js: output must use text-safe DOM construction");
 if (siteScript.includes("IntersectionObserver") || siteScript.includes("setupReveals")) failures.push("site.js: scroll-triggered reveal behavior must remain disabled");
+
+const siteStyles = readFileSync(join(root, "assets", "styles.css"), "utf8");
+for (const required of ["deck-deal", "signal-scan", 'data-voideddev-color="black"', ".deck-card-art--editorial", ".deck-card-art--signal"]) {
+  if (!siteStyles.includes(required)) failures.push(`styles.css: missing ${required} deck showcase behavior`);
+}
 
 const wasmGlue = readFileSync(join(root, "runtime", "voided_wasm.js"));
 const wasmBinary = readFileSync(join(root, "runtime", "voided_wasm_bg.wasm"));

@@ -54,12 +54,20 @@
             <div><span>Ephemeral test key</span><strong data-lab-key-status>Not generated</strong></div>
             <button class="lab-button" type="button" data-lab-generate-key>Generate key</button>
           </div>
+          <div class="lab-raw lab-raw--key" data-lab-key-panel hidden>
+            <div class="lab-raw__header"><span>Full key · Base64</span><button type="button" data-copy="#lab-key-raw">Copy</button></div>
+            <pre><code id="lab-key-raw" data-lab-key-raw></code></pre>
+          </div>
           <label class="lab-field"><span>Plaintext</span><textarea data-lab-input maxlength="4096" rows="4">Data stays under your control.</textarea></label>
           <fieldset class="lab-operation"><legend>Function</legend><div class="lab-segmented">
             <button type="button" aria-pressed="true" data-lab-operation="protect">protect / open</button>
             <button type="button" aria-pressed="false" data-lab-operation="fuse">fuse / unfuse</button>
             <button type="button" aria-pressed="false" data-lab-operation="encrypt">encrypt / decrypt</button>
           </div></fieldset>
+          <div class="lab-invocation">
+            <div class="lab-invocation__header"><span>Function usage</span><span>Updates from this form</span></div>
+            <pre><code data-lab-usage></code></pre>
+          </div>
           <div class="function-lab__actions">
             <label class="lab-select"><span>Preset</span><select data-lab-preset><option value="balanced">balanced</option><option value="compact">compact</option><option value="concealed">concealed</option></select></label>
             <button class="button button--signal" type="button" data-lab-run disabled>Run round trip</button>
@@ -67,7 +75,11 @@
           <output class="lab-output" data-lab-output aria-live="polite">
             <span>Waiting for a test key.</span>
           </output>
-          <p class="lab-note">Runs locally with Voided’s compiled Rust/WASM. Inputs, keys, and outputs are not sent or persisted by this site.</p>
+          <div class="lab-raw lab-raw--artifact" data-lab-artifact-panel hidden>
+            <div class="lab-raw__header"><span data-lab-artifact-label>Full encrypted artifact · Base64</span><button type="button" data-copy="#lab-artifact-raw">Copy</button></div>
+            <pre><code id="lab-artifact-raw" data-lab-artifact-raw></code></pre>
+          </div>
+          <p class="lab-note">This is an inspectable example. Everything runs locally in compiled Rust/WASM; nothing is sent or persisted, and refreshing clears the displayed key and artifact.</p>
         </section>
       </div>
     </section>
@@ -121,11 +133,11 @@
         </div>
         <div class="deck-lab" data-deck-lab>
           <div class="deck-lab__toolbar">
-            <div class="deck-lab__control"><span>Appearance</span><div class="deck-lab__choices" role="group" aria-label="Recovery Deck appearance">
-              <button type="button" aria-pressed="true" data-deck-theme="plain">Plain</button>
-              <button type="button" aria-pressed="false" data-deck-theme="editorial">Editorial</button>
+            <div class="deck-lab__control"><span>Design system</span><div class="deck-lab__choices" role="group" aria-label="Recovery Deck appearance">
+              <button type="button" aria-pressed="true" data-deck-theme="plain">System</button>
+              <button type="button" aria-pressed="false" data-deck-theme="editorial">Cutout</button>
               <button type="button" aria-pressed="false" data-deck-theme="signal">Signal</button>
-            </div></div>
+            </div><p class="deck-lab__theme-note" data-deck-theme-note>Quiet utility grid. The host owns every visual decision.</p></div>
             <div class="deck-lab__actions"><button class="button button--dark" type="button" data-deck-modal disabled>Open as modal</button></div>
           </div>
           <div class="deck-component-host" data-deck-component-host data-deck-appearance="plain"><p class="deck-component-loading" data-deck-status>Loading the generic Recovery Deck component…</p></div>
