@@ -47,7 +47,8 @@ function setupCopyButtons() {
 }
 
 const searchIndex = [
-  { title: "Get started", summary: "Choose Browser, Node.js, or Rust and use the normal protect/open flow.", url: "./docs.html?guide=start" },
+  { title: "Developer Lab", summary: "Choose a runtime, run interactive architecture labs, and inspect the complete library.", url: "./docs.html?guide=lab" },
+  { title: "Updates", summary: "Release status, changelog, compatibility notes, and project news.", url: "./updates.html" },
   { title: "AI reference", summary: "Direct semantic HTML for agents: API choices, runtimes, artifacts, recovery, and security.", url: "./ai.html" },
   { title: "AI compact index", summary: "llms.txt routing index for machine readers.", url: "./llms.txt" },
   { title: "AI full reference", summary: "Standalone plain-text Voided context for agents without MCP.", url: "./llms-full.txt" },
@@ -59,9 +60,10 @@ const searchIndex = [
   { title: "Artifact model", summary: "VOF3, Fuse, protect/open, inspection, repacking, and presets.", url: "./docs.html?guide=fuse" },
   { title: "Recovery Deck", summary: "52-card generation, deterministic derivation, root wrapping, UI, and rotation.", url: "./docs.html?guide=recovery" },
   { title: "Security boundaries", summary: "Authentication, inspection, bounded work, key lifecycle, and reporting.", url: "./docs.html?guide=security" },
-  { title: "Choose an API", summary: "Interactive decision guide for runtime and artifact ownership.", url: "./learn.html#choose-api" },
-  { title: "Fuse preset lab", summary: "Compare compact, balanced, and concealed intent.", url: "./learn.html#preset-lab" },
-  { title: "Developer support", summary: "Generate diagnostic commands and a safe issue report.", url: "./support.html" },
+  { title: "Choose an API", summary: "Interactive decision guide for runtime and artifact ownership.", url: "./docs.html?guide=lab#choose-api" },
+  { title: "Fuse preset lab", summary: "Compare compact, balanced, and concealed intent.", url: "./docs.html?guide=lab#preset-lab" },
+  { title: "Complete library map", summary: "High-level, shell, primitive, recovery, utility, and lifecycle APIs.", url: "./docs.html?guide=library" },
+  { title: "Developer support", summary: "Generate diagnostic commands and a safe issue report.", url: "./docs.html?guide=operations" },
   { title: "Compatibility", summary: "Safari, Chromium, Firefox policy, Node.js, macOS, Linux, and Windows.", url: "./support.html#compat-title" },
   { title: "Report a vulnerability", summary: "Open a private GitHub Security Advisory without exposing secret material.", url: "https://github.com/voided-network/voided/security/advisories/new" },
 ];
@@ -241,7 +243,7 @@ function setupDocs() {
       url.searchParams.set("guide", selected.dataset.guidePanel);
       history.pushState({ guide: selected.dataset.guidePanel }, "", url);
     }
-    document.title = `${selected.querySelector("h1").textContent} — Voided Docs`;
+    document.title = `${selected.querySelector("h1").textContent} — Voided Developer`;
     if (selectedButton && window.matchMedia("(max-width: 780px)").matches) {
       const sidebar = selectedButton.closest(".docs-sidebar");
       sidebar.scrollLeft = Math.max(0, selectedButton.offsetLeft - ((sidebar.clientWidth - selectedButton.offsetWidth) / 2));
@@ -370,6 +372,71 @@ function setupDiagnosticBuilder() {
   render();
 }
 
+function setupDevMode() {
+  const switcher = document.querySelector("[data-dev-mode-switch]");
+  if (!switcher) return;
+  const page = document.body;
+  const explanation = document.querySelector("[data-dev-mode-description]");
+  const descriptions = {
+    guided: "Plain-language reasoning, recommended defaults, and visible security boundaries.",
+    expert: "Contracts, byte ownership, protocol facts, and API surface without the introductory layer.",
+  };
+  function setMode(mode) {
+    page.dataset.devMode = mode;
+    switcher.querySelectorAll("[data-dev-mode]").forEach((button) => button.setAttribute("aria-pressed", String(button.dataset.devMode === mode)));
+    if (explanation) explanation.textContent = descriptions[mode];
+    announce(`${mode === "expert" ? "Expert" : "Guided"} developer mode selected`);
+  }
+  switcher.querySelectorAll("[data-dev-mode]").forEach((button) => button.addEventListener("click", () => setMode(button.dataset.devMode)));
+  setMode("guided");
+}
+
+const artifactStages = {
+  input: { index: "01", title: "Application bytes", owner: "Your application", fact: "Define the plaintext trust boundary and size limit before invoking crypto.", bytes: "UTF-8 or caller-owned bytes" },
+  prepare: { index: "02", title: "Prepared payload", owner: "Voided policy", fact: "Optional bounded compression runs only under an explicit policy. Browser high-level compression defaults off.", bytes: "none · gzip · brotli" },
+  encrypt: { index: "03", title: "AEAD payload", owner: "voided-core", fact: "XChaCha20-Poly1305 authenticates the payload and context. Tampering becomes a hard failure.", bytes: "nonce + ciphertext + tag" },
+  shape: { index: "04", title: "VOF3 artifact", owner: "Fuse writer", fact: "The complete authenticated plan becomes one versioned monolith under compact, balanced, or concealed intent.", bytes: "one persistent byte artifact" },
+  inspect: { index: "05", title: "Structural inspection", owner: "Untrusted caller", fact: "Keyless metadata is attacker-controlled. It may guide bounded routing, never authorization.", bytes: "public shape metadata" },
+  open: { index: "06", title: "Authenticated open", owner: "voided-core", fact: "Parsing and work bounds precede tag verification; plaintext is released only after authentication and bounded decompression.", bytes: "original application bytes" },
+};
+
+function setupArtifactExplorer() {
+  const explorer = document.querySelector("[data-artifact-explorer]");
+  if (!explorer) return;
+  const fields = {
+    index: explorer.querySelector("[data-artifact-index]"),
+    title: explorer.querySelector("[data-artifact-title]"),
+    owner: explorer.querySelector("[data-artifact-owner]"),
+    fact: explorer.querySelector("[data-artifact-fact]"),
+    bytes: explorer.querySelector("[data-artifact-bytes]"),
+  };
+  explorer.querySelectorAll("[data-artifact-stage]").forEach((button) => button.addEventListener("click", () => {
+    const stage = artifactStages[button.dataset.artifactStage];
+    explorer.querySelectorAll("[data-artifact-stage]").forEach((candidate) => candidate.setAttribute("aria-pressed", String(candidate === button)));
+    Object.entries(fields).forEach(([key, element]) => { element.textContent = stage[key]; });
+  }));
+}
+
+function setupRecoverySimulator() {
+  const simulator = document.querySelector("[data-recovery-simulator]");
+  if (!simulator) return;
+  const state = simulator.querySelector("[data-recovery-state]");
+  const wrapper = simulator.querySelector("[data-recovery-wrapper]");
+  const root = simulator.querySelector("[data-recovery-root]");
+  const apps = [...simulator.querySelectorAll("[data-recovery-app]")];
+  let generation = 1;
+  simulator.querySelector("[data-recovery-rotate]").addEventListener("click", () => {
+    generation += 1;
+    simulator.classList.remove("is-rotating");
+    void simulator.offsetWidth;
+    simulator.classList.add("is-rotating");
+    wrapper.textContent = `WRAPPER ${String(generation).padStart(2, "0")} · NEW`;
+    root.textContent = "STABLE ROOT · UNCHANGED";
+    apps.forEach((app) => { app.textContent = `${app.dataset.recoveryApp} KEY · UNCHANGED`; });
+    state.textContent = `Rotation ${generation - 1}: a fresh CSPRNG deck replaced only the recovery wrapper. No application key or protected artifact changed.`;
+  });
+}
+
 setupNavigation();
 setupCopyButtons();
 setupSearch();
@@ -378,3 +445,6 @@ setupDocs();
 setupPathFinder();
 setupPresetLab();
 setupDiagnosticBuilder();
+setupDevMode();
+setupArtifactExplorer();
+setupRecoverySimulator();

@@ -15,10 +15,11 @@ headers. Do not enable cross-origin embedding.
 The interactive homepage uses byte-identical copies of the built browser
 package and verified WASM assets from `packages/e2ee-client/` under
 `website/runtime/`. The Recovery Deck preview mounts the package's exported
-generic component rather than duplicating it. Its three showcase designs use
+generic component rather than duplicating it. Its thirteen showcase designs use
 the component's stable classes, card-rendering hook, lifecycle callbacks, and
-behavior-owning card buttons to demonstrate a full order grid, four physical
-hands, and a 52-card cipher orbit with a selectable exact-order reader. The
+behavior-owning card buttons to demonstrate grids, hands, rings, tables,
+spatial maps, scrollable sequences, stacks, and printable groupings without
+changing or copying the recovery model. The
 function lab switches between valid Node.js and Rust usage while showing the
 normal string path alongside a complete raw trace: input text and UTF-8 bytes, ephemeral key,
 generated output, public structure, restored bytes, restored text, and exact
@@ -29,6 +30,9 @@ self-hosted.
 
 The human and machine reference surfaces are deliberately first-class:
 
+- `index.html`, `docs.html`, and `updates.html` are the three primary human pages.
+- `docs.html` is the Guided/Expert Developer Lab, complete library map, runtime reference, and support workbench.
+- `legal.html`, `support.html`, and the earlier learning surface remain contextual secondary routes.
 - `ai.html` is the semantic direct implementation reference.
 - `llms.txt` routes an agent to the smallest relevant source.
 - `llms-full.txt` is a standalone complete context file.

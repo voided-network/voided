@@ -81,6 +81,9 @@
     "json": "https://voidednetwork.com/ai.json",
     "mcp": "https://voidednetwork.com/mcp.html",
     "mcp_descriptor": "https://voidednetwork.com/mcp.json",
-    "docs": "https://voidednetwork.com/docs.html"
+    "docs": "https://voidednetwork.com/docs.html",
+    "developer_lab": "https://voidednetwork.com/docs.html?guide=lab",
+    "library_map": "https://voidednetwork.com/docs.html?guide=library",
+    "updates": "https://voidednetwork.com/updates.html"
   }
 }

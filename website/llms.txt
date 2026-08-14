@@ -10,6 +10,9 @@ Voided is at 1.0 release-candidate state. Package publication has not happened. 
 - [Full standalone reference](https://voidednetwork.com/llms-full.txt): Complete plain-text context for agents that need to work without the website or MCP.
 - [Structured machine reference](https://voidednetwork.com/ai.json): JSON facts and invariants.
 - [Developer documentation](https://voidednetwork.com/docs.html): Human implementation guides and examples.
+- [Interactive developer lab](https://voidednetwork.com/docs.html?guide=lab): API selection, artifact stages, Fuse presets, and recovery rotation.
+- [Complete library map](https://voidednetwork.com/docs.html?guide=library): Layered public API and runtime capability map.
+- [Updates](https://voidednetwork.com/updates.html): Current release state, changelog, and compatibility notices.
 - [Voided MCP](https://voidednetwork.com/mcp.html): Read-only local source-aware knowledge server.
 
 ## Core routing rule
@@ -28,10 +31,10 @@ Voided is at 1.0 release-candidate state. Package publication has not happened. 
 - VOF3 and Fuse: https://voidednetwork.com/docs.html?guide=fuse
 - Recovery Deck: https://voidednetwork.com/docs.html?guide=recovery
 - Security boundaries: https://voidednetwork.com/docs.html?guide=security
+- Support and verification: https://voidednetwork.com/docs.html?guide=operations
 
 ## Source
 
 - Repository: https://github.com/voided-network/voided
 - Support: https://voidednetwork.com/support.html
 - MCP project descriptor: https://voidednetwork.com/mcp.json
-

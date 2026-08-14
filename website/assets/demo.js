@@ -323,6 +323,19 @@ async function setupDeckLab() {
     plain: "All 52 positions at once: the sensible default integration.",
     editorial: "The same ordered deck dealt into four physical 13-card hands.",
     signal: "A four-ring visualization paired with an exact, selectable 01–52 order reader.",
+    dealer: "A green-felt table that deals the exact order across four readable player lanes.",
+    spiral: "A numbered permutation spirals from the stable root outward to position 52.",
+    timeline: "The full order becomes a horizontal inspection tape with four indexed chapters.",
+    vault: "Four independently readable 13-card dials surround the stable-root lock.",
+    cascade: "Four vertical, overlapping runs expose the deck like a physical card waterfall.",
+    map: "The order becomes four transit lines with every card rendered as a readable station.",
+    archive: "Thirteen archival trays hold four consecutive positions each for fast transcription.",
+    wave: "All 52 cards ride one scrollable signal waveform without losing exact position labels.",
+    constellation: "A spatial star map turns the permutation into a navigable field of 52 nodes.",
+    folio: "Thirteen printable-style folios group four consecutive positions into physical spreads.",
+  };
+  const themeNames = {
+    plain: "Order grid", editorial: "Four hands", signal: "Cipher orbit", dealer: "Dealer table", spiral: "Spiral index", timeline: "Order tape", vault: "Vault dial", cascade: "Cascade", map: "Route map", archive: "Archive", wave: "Signal wave", constellation: "Constellation", folio: "Folio",
   };
 
   const labels = {
@@ -336,8 +349,16 @@ async function setupDeckLab() {
     close: "Close preview",
   };
 
+  function appendTextParts(parent, parts) {
+    parts.forEach(([tagName, value]) => {
+      const element = document.createElement(tagName);
+      element.textContent = value;
+      parent.append(element);
+    });
+  }
+
   function renderCardContent(card, state, documentRef) {
-    if (activeTheme === "plain") return null;
+    if (!["editorial", "signal"].includes(activeTheme)) return null;
     const art = documentRef.createElement("span");
     art.className = `deck-card-art deck-card-art--${activeTheme}`;
     art.style.setProperty("--deck-index", String(state.position));
@@ -513,6 +534,178 @@ async function setupDeckLab() {
       reader.append(readerHeader, readerFocus, order, readerNote);
       grid.append(orbit, reader);
       readCard(cards[0], 0);
+    } else if (activeTheme === "dealer") {
+      grid.replaceChildren();
+      const table = document.createElement("div");
+      table.className = "deck-dealer-table";
+      const shoe = document.createElement("div");
+      shoe.className = "deck-dealer-shoe";
+      appendTextParts(shoe, [["strong", "52"], ["span", "SECURE DEAL"]]);
+      table.append(shoe);
+      for (let laneIndex = 0; laneIndex < 4; laneIndex += 1) {
+        const lane = document.createElement("section");
+        lane.className = "deck-dealer-lane";
+        const heading = document.createElement("header");
+        heading.textContent = `PLAYER ${laneIndex + 1} · ${String(laneIndex * 13 + 1).padStart(2, "0")}—${String(laneIndex * 13 + 13).padStart(2, "0")}`;
+        const cardsHost = document.createElement("div");
+        cardsHost.className = "deck-dealer-cards";
+        cards.slice(laneIndex * 13, laneIndex * 13 + 13).forEach((card, index) => {
+          card.style.setProperty("--lane-index", String(index));
+          cardsHost.append(card);
+        });
+        lane.append(heading, cardsHost);
+        table.append(lane);
+      }
+      grid.append(table);
+    } else if (activeTheme === "spiral") {
+      grid.replaceChildren();
+      const stage = document.createElement("div");
+      stage.className = "deck-spiral-stage";
+      const core = document.createElement("div");
+      core.className = "deck-spiral-core";
+      appendTextParts(core, [["strong", "ROOT"], ["span", "01 → 52"]]);
+      stage.append(core);
+      cards.forEach((card, index) => {
+        const angle = index * 0.73 - Math.PI / 2;
+        const radius = 7 + index * 0.78;
+        card.style.setProperty("--spiral-left", `${50 + Math.cos(angle) * radius}%`);
+        card.style.setProperty("--spiral-top", `${50 + Math.sin(angle) * radius}%`);
+        card.style.setProperty("--spiral-angle", `${angle * 57.2958 + 90}deg`);
+        card.style.setProperty("--order-index", String(index));
+        stage.append(card);
+      });
+      grid.append(stage);
+    } else if (activeTheme === "timeline") {
+      grid.replaceChildren();
+      const viewport = document.createElement("div");
+      viewport.className = "deck-order-tape";
+      const track = document.createElement("div");
+      track.className = "deck-order-tape__track";
+      cards.forEach((card, index) => {
+        if (index % 13 === 0) {
+          const marker = document.createElement("span");
+          marker.className = "deck-order-tape__marker";
+          marker.textContent = `CHAPTER ${index / 13 + 1}`;
+          track.append(marker);
+        }
+        card.style.setProperty("--order-index", String(index));
+        track.append(card);
+      });
+      viewport.append(track);
+      grid.append(viewport);
+    } else if (activeTheme === "vault") {
+      grid.replaceChildren();
+      const dial = document.createElement("div");
+      dial.className = "deck-vault-dial";
+      const lock = document.createElement("div");
+      lock.className = "deck-vault-lock";
+      appendTextParts(lock, [["span", "RECOVERY"], ["strong", "52"], ["span", "POSITIONS"]]);
+      dial.append(lock);
+      for (let ringIndex = 0; ringIndex < 4; ringIndex += 1) {
+        const ring = document.createElement("section");
+        ring.className = `deck-vault-ring deck-vault-ring--${ringIndex + 1}`;
+        ring.setAttribute("aria-label", `Vault dial ${ringIndex + 1}`);
+        cards.slice(ringIndex * 13, ringIndex * 13 + 13).forEach((card, index) => {
+          const angle = index * (360 / 13);
+          card.style.setProperty("--dial-angle", `${angle}deg`);
+          card.style.setProperty("--dial-counter", `${-angle}deg`);
+          ring.append(card);
+        });
+        dial.append(ring);
+      }
+      grid.append(dial);
+    } else if (activeTheme === "cascade") {
+      grid.replaceChildren();
+      const cascade = document.createElement("div");
+      cascade.className = "deck-cascade";
+      for (let columnIndex = 0; columnIndex < 4; columnIndex += 1) {
+        const column = document.createElement("section");
+        column.className = "deck-cascade-column";
+        const heading = document.createElement("header");
+        heading.textContent = `${String(columnIndex * 13 + 1).padStart(2, "0")}—${String(columnIndex * 13 + 13).padStart(2, "0")}`;
+        const stack = document.createElement("div");
+        stack.className = "deck-cascade-stack";
+        cards.slice(columnIndex * 13, columnIndex * 13 + 13).forEach((card, index) => {
+          card.style.setProperty("--cascade-index", String(index));
+          stack.append(card);
+        });
+        column.append(heading, stack);
+        cascade.append(column);
+      }
+      grid.append(cascade);
+    } else if (activeTheme === "map") {
+      grid.replaceChildren();
+      const routeMap = document.createElement("div");
+      routeMap.className = "deck-route-map";
+      ["NORTH", "EAST", "SOUTH", "WEST"].forEach((name, lineIndex) => {
+        const route = document.createElement("section");
+        route.className = `deck-route deck-route--${lineIndex + 1}`;
+        const heading = document.createElement("header");
+        appendTextParts(heading, [["strong", `${name} LINE`], ["span", `${String(lineIndex * 13 + 1).padStart(2, "0")}—${String(lineIndex * 13 + 13).padStart(2, "0")}`]]);
+        const stations = document.createElement("div");
+        stations.className = "deck-route__stations";
+        cards.slice(lineIndex * 13, lineIndex * 13 + 13).forEach((card) => stations.append(card));
+        route.append(heading, stations);
+        routeMap.append(route);
+      });
+      grid.append(routeMap);
+    } else if (activeTheme === "archive") {
+      grid.replaceChildren();
+      const archive = document.createElement("div");
+      archive.className = "deck-archive";
+      for (let trayIndex = 0; trayIndex < 13; trayIndex += 1) {
+        const tray = document.createElement("section");
+        tray.className = "deck-archive-tray";
+        const label = document.createElement("span");
+        label.textContent = `TRAY ${String(trayIndex + 1).padStart(2, "0")}`;
+        tray.append(label);
+        cards.slice(trayIndex * 4, trayIndex * 4 + 4).forEach((card) => tray.append(card));
+        archive.append(tray);
+      }
+      grid.append(archive);
+    } else if (activeTheme === "wave") {
+      grid.replaceChildren();
+      const viewport = document.createElement("div");
+      viewport.className = "deck-wave-viewport";
+      const wave = document.createElement("div");
+      wave.className = "deck-wave";
+      cards.forEach((card, index) => {
+        card.style.setProperty("--wave-x", `${index * 74}px`);
+        card.style.setProperty("--wave-y", `${88 + Math.sin(index * 0.58) * 65}px`);
+        card.style.setProperty("--wave-angle", `${Math.cos(index * 0.58) * 15}deg`);
+        wave.append(card);
+      });
+      viewport.append(wave);
+      grid.append(viewport);
+    } else if (activeTheme === "constellation") {
+      grid.replaceChildren();
+      const sky = document.createElement("div");
+      sky.className = "deck-constellation";
+      cards.forEach((card, index) => {
+        const x = 4 + ((index * 37) % 92);
+        const y = 7 + ((index * 53) % 84);
+        card.style.setProperty("--star-x", `${x}%`);
+        card.style.setProperty("--star-y", `${y}%`);
+        card.style.setProperty("--star-delay", `${-(index * 0.11)}s`);
+        sky.append(card);
+      });
+      grid.append(sky);
+    } else if (activeTheme === "folio") {
+      grid.replaceChildren();
+      const folios = document.createElement("div");
+      folios.className = "deck-folios";
+      for (let pageIndex = 0; pageIndex < 13; pageIndex += 1) {
+        const page = document.createElement("section");
+        page.className = "deck-folio";
+        const heading = document.createElement("header");
+        appendTextParts(heading, [["span", "RECOVERY DECK"], ["strong", `FOLIO ${String(pageIndex + 1).padStart(2, "0")}`]]);
+        const pageCards = document.createElement("div");
+        pageCards.className = "deck-folio__cards";
+        cards.slice(pageIndex * 4, pageIndex * 4 + 4).forEach((card) => pageCards.append(card));
+        page.append(heading, pageCards);
+        folios.append(page);
+      }
+      grid.append(folios);
     }
   }
 
@@ -525,7 +718,7 @@ async function setupDeckLab() {
     const roots = [...document.querySelectorAll(".site-recovery-ui")];
     roots.forEach((root) => root.classList.add("is-secure-shuffling"));
     shuffleButton.disabled = true;
-    shuffleButton.textContent = activeTheme === "editorial" ? "Collecting + dealing…" : activeTheme === "signal" ? "Scrambling orbit…" : "Shuffling securely…";
+    shuffleButton.textContent = activeTheme === "editorial" || activeTheme === "dealer" ? "Collecting + dealing…" : ["signal", "vault", "spiral"].includes(activeTheme) ? "Reindexing layout…" : "Shuffling securely…";
     status.textContent = "Generating a completely fresh CSPRNG permutation…";
     try {
       await new Promise((resolve) => setTimeout(resolve, 820));
@@ -598,10 +791,10 @@ async function setupDeckLab() {
         candidate.setAttribute("aria-pressed", String(candidate === button));
       });
       lab.querySelector("[data-deck-theme-note]").textContent = themeNotes[activeTheme];
-      status.textContent = `Building the ${button.textContent} design…`;
+      status.textContent = `Building the ${themeNames[activeTheme]} design…`;
       try {
         await mountInlineTheme();
-        status.textContent = `${button.textContent} rebuilt from the same 52-card component and current deck order.`;
+        status.textContent = `${themeNames[activeTheme]} rebuilt from the same 52-card component and current deck order.`;
       } catch (error) {
         status.textContent = `Could not apply the design: ${error instanceof Error ? error.message : String(error)}`;
       } finally {

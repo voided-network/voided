@@ -190,5 +190,8 @@ The MCP server does not need keys, deck order, plaintext, derived recovery mater
 - MCP page: https://voidednetwork.com/mcp.html
 - MCP project descriptor: https://voidednetwork.com/mcp.json
 - Human docs: https://voidednetwork.com/docs.html
+- Interactive developer lab: https://voidednetwork.com/docs.html?guide=lab
+- Complete library map: https://voidednetwork.com/docs.html?guide=library
+- Updates and release ledger: https://voidednetwork.com/updates.html
 - Source: https://github.com/voided-network/voided
 - Support: https://voidednetwork.com/support.html

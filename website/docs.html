@@ -3,39 +3,38 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="Voided developer documentation for browser, Node.js, Rust, Fuse artifacts, Recovery Deck, and security boundaries.">
+  <meta name="description" content="The Voided Developer Lab: guided and expert documentation, interactive architecture tools, complete API maps, real implementations, recovery, security, and support.">
   <meta name="theme-color" content="#080a0b">
-  <title>Voided Docs — Build from the right layer</title>
+  <title>Voided Developer — Learn, inspect, and implement</title>
   <link rel="icon" href="./assets/favicon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="./assets/styles.css?v=20260813.3">
-  <script src="./assets/site.js?v=20260813.3" defer></script>
+  <link rel="stylesheet" href="./assets/styles.css?v=20260813.4">
+  <script src="./assets/site.js?v=20260813.4" defer></script>
 </head>
-<body data-page="docs">
+<body data-page="docs" data-dev-mode="guided">
   <a class="skip-link" href="#main">Skip to content</a>
   <header class="site-header">
     <div class="site-header__inner">
       <a class="brand" href="./index.html" aria-label="Voided home"><span class="brand__mark" aria-hidden="true"></span>VOIDED</a>
       <button class="menu-toggle" type="button" aria-expanded="false" aria-controls="site-navigation"><span class="sr-only">Toggle navigation</span>Menu</button>
       <nav class="site-nav" id="site-navigation" aria-label="Primary navigation">
-        <a href="./docs.html" aria-current="page">Start</a>
-        <a href="./ai.html">AI</a>
-        <a href="./learn.html">Reference</a>
-        <a href="./support.html">Support</a>
-        <a href="https://github.com/voided-network/voided">GitHub</a>
+        <a href="./index.html">Home</a>
+        <a href="./docs.html" aria-current="page">Developer</a>
+        <a href="./updates.html">Updates</a>
         <button class="header-search" type="button" data-search-open aria-label="Search documentation">Search <kbd>⌘K</kbd></button>
       </nav>
     </div>
   </header>
   <div class="status-band">
-    <div class="status-band__inner"><strong><span class="signal-dot" aria-hidden="true"></span> 1.0 RELEASE CANDIDATE</strong><p>Docs match the audited 1.0 source. Windows native execution remains before publication.</p></div>
+    <div class="status-band__inner"><strong><span class="signal-dot" aria-hidden="true"></span> DEVELOPER LAB</strong><p data-dev-mode-description>Plain-language reasoning, recommended defaults, and visible security boundaries.</p><div class="dev-mode-switch" data-dev-mode-switch role="group" aria-label="Documentation depth"><button type="button" data-dev-mode="guided" aria-pressed="true">Guided</button><button type="button" data-dev-mode="expert" aria-pressed="false">Expert</button></div></div>
   </div>
 
   <main id="main" class="docs-shell">
     <aside class="docs-sidebar" aria-label="Documentation guides">
       <div class="docs-sidebar__group">
-        <div class="docs-sidebar__label">Begin</div>
+        <div class="docs-sidebar__label">Build</div>
         <button class="docs-nav-button" type="button" data-guide="start" aria-current="page">Get started</button>
-        <button class="docs-nav-button" type="button" data-guide="fuse">Artifact model</button>
+        <button class="docs-nav-button" type="button" data-guide="lab">Interactive lab</button>
+        <button class="docs-nav-button" type="button" data-guide="library">Library map</button>
       </div>
       <div class="docs-sidebar__group">
         <div class="docs-sidebar__label">SDKs</div>
@@ -45,8 +44,10 @@
       </div>
       <div class="docs-sidebar__group">
         <div class="docs-sidebar__label">Protocols</div>
+        <button class="docs-nav-button" type="button" data-guide="fuse">Artifact model</button>
         <button class="docs-nav-button" type="button" data-guide="recovery">Recovery Deck</button>
         <button class="docs-nav-button" type="button" data-guide="security">Security</button>
+        <button class="docs-nav-button" type="button" data-guide="operations">Support + verification</button>
       </div>
     </aside>
 
@@ -104,6 +105,60 @@ key.fill(0);</code></pre></div>
           <p>The source tree and docs are at 1.0.0 release-candidate state. macOS arm64 and Linux x64 native packages, browser WASM, CJS, and ESM paths have passed their release gates. The Windows x64 prebuild has verified provenance and hashes; real Windows execution is the final native gate before publication.</p>
           <div class="callout callout--danger"><strong>Do not pin an unpublished package</strong><p>Until the 1.0 tags and packages exist, use the audited source commit rather than assuming the npm or crates.io release is live.</p></div>
         </section>
+      </article>
+
+      <article class="docs-guide" data-guide-panel="lab" hidden data-search-title="Voided interactive developer lab" data-search-summary="API decision tool, artifact explorer, Fuse preset comparison, and Recovery Deck rotation simulator">
+        <header class="docs-guide__header"><span class="eyebrow">Runnable workbench</span><h1>Interactive lab.</h1><p data-mode-guided>Start with what your application is trying to protect. Each tool explains the choice while it exposes the exact contract underneath.</p><p data-mode-expert>Resolve ownership, inspect the VOF3 pipeline, compare shell intent, and verify root-wrapper rotation invariants.</p></header>
+
+        <section class="docs-section" id="choose-api" data-doc-heading="Choose the API">
+          <h2>Choose the API</h2>
+          <p data-mode-guided>Answer three questions. The result updates to the smallest safe surface for your system.</p>
+          <div class="learn-grid dev-lab-block" data-path-finder>
+            <form class="learn-panel" aria-label="Integration choices">
+              <fieldset class="choice-group" data-choice-group="runtime"><legend>Where does plaintext live?</legend><div class="choice-row"><button class="choice-button" type="button" aria-pressed="true" data-choice="browser">Browser</button><button class="choice-button" type="button" aria-pressed="false" data-choice="node">Node.js</button><button class="choice-button" type="button" aria-pressed="false" data-choice="rust">Rust</button></div></fieldset>
+              <fieldset class="choice-group" data-choice-group="ownership"><legend>Who owns the final artifact?</legend><div class="choice-row"><button class="choice-button" type="button" aria-pressed="true" data-choice="full">Voided</button><button class="choice-button" type="button" aria-pressed="false" data-choice="shell">Prepared bytes</button><button class="choice-button" type="button" aria-pressed="false" data-choice="primitive">My format</button></div></fieldset>
+              <fieldset class="choice-group" data-choice-group="need"><legend>What are you building?</legend><div class="choice-row"><button class="choice-button" type="button" aria-pressed="true" data-choice="artifact">Protected data</button><button class="choice-button" type="button" aria-pressed="false" data-choice="recovery">Root recovery</button></div></fieldset>
+            </form>
+            <div class="learn-panel recommendation" aria-live="polite"><span class="recommendation__package" data-recommendation-package>@voideddev/e2ee-client</span><h3 data-recommendation-title>Use protect/open.</h3><p data-recommendation-copy>Let the stateful browser client own key persistence and the complete VOF3 artifact lifecycle.</p><div class="code-window"><div class="code-window__bar"><span data-recommendation-file>browser.ts</span><button class="copy-button" type="button" data-copy="#developer-recommendation-code">Copy</button></div><pre><code id="developer-recommendation-code" data-recommendation-code></code></pre></div></div>
+          </div>
+        </section>
+
+        <section class="docs-section" id="artifact-explorer" data-doc-heading="Trace the artifact">
+          <h2>Trace the artifact</h2><p data-mode-guided>Move through one payload. The owner, byte shape, and trust rule change at every boundary.</p>
+          <div class="artifact-explorer" data-artifact-explorer>
+            <div class="artifact-explorer__rail" role="group" aria-label="Artifact stages"><button type="button" data-artifact-stage="input" aria-pressed="true">01 Input</button><button type="button" data-artifact-stage="prepare" aria-pressed="false">02 Prepare</button><button type="button" data-artifact-stage="encrypt" aria-pressed="false">03 AEAD</button><button type="button" data-artifact-stage="shape" aria-pressed="false">04 VOF3</button><button type="button" data-artifact-stage="inspect" aria-pressed="false">05 Inspect</button><button type="button" data-artifact-stage="open" aria-pressed="false">06 Open</button></div>
+            <div class="artifact-explorer__output" aria-live="polite"><span data-artifact-index>01</span><h3 data-artifact-title>Application bytes</h3><dl><div><dt>Owner</dt><dd data-artifact-owner>Your application</dd></div><div><dt>Representation</dt><dd data-artifact-bytes>UTF-8 or caller-owned bytes</dd></div></dl><p data-artifact-fact>Define the plaintext trust boundary and size limit before invoking crypto.</p></div>
+          </div>
+        </section>
+
+        <section class="docs-section" id="preset-lab" data-doc-heading="Compare Fuse presets">
+          <h2>Compare Fuse presets</h2><p>Presets change shell overhead and variation. They do not replace or strengthen the authenticated-encryption primitive.</p>
+          <div class="preset-lab dev-lab-block" data-preset-lab><div class="preset-controls" aria-label="Choose a Fuse preset"><button type="button" data-preset="compact" aria-pressed="false">compact</button><button type="button" data-preset="balanced" aria-pressed="true">balanced</button><button type="button" data-preset="concealed" aria-pressed="false">concealed</button></div><div class="preset-output"><span class="eyebrow" data-preset-label>Balanced · recommended default</span><h3 class="mt-24" data-preset-title>Start here.</h3><p class="mt-24" data-preset-copy>General-purpose artifact shaping for most applications.</p><div class="preset-meter" aria-hidden="true"><span data-preset-meter></span></div><div class="preset-stats"><div class="preset-stat"><span>Shell overhead</span><strong data-preset-overhead>medium</strong></div><div class="preset-stat"><span>Shape variation</span><strong data-preset-variation>medium</strong></div><div class="preset-stat"><span>Decision</span><strong data-preset-use>default</strong></div></div><div class="code-window mt-40"><div class="code-window__bar"><span>options.ts</span><button class="copy-button" type="button" data-copy="#developer-preset-code">Copy</button></div><pre><code id="developer-preset-code" data-preset-code>const { artifact } = protect(data, key, {
+  preset: "balanced",
+});</code></pre></div></div></div>
+        </section>
+
+        <section class="docs-section" id="rotation-lab" data-doc-heading="Rotate recovery">
+          <h2>Rotate recovery</h2><p data-mode-guided>Press rotate to see what changes. A recovery credential is a wrapper path to the stable root—not the root itself.</p>
+          <div class="recovery-simulator" data-recovery-simulator>
+            <div class="recovery-simulator__flow"><div class="recovery-sim-node recovery-sim-node--deck">FRESH CSPRNG DECK</div><span>derives</span><div class="recovery-sim-node" data-recovery-wrapper>WRAPPER 01 · ACTIVE</div><span>unwraps</span><div class="recovery-sim-node recovery-sim-node--root" data-recovery-root>STABLE ROOT</div></div>
+            <div class="recovery-simulator__apps"><div data-recovery-app="APP A">APP A KEY</div><div data-recovery-app="APP B">APP B KEY</div><div data-recovery-app="APP C">APP C KEY</div></div>
+            <button class="button button--signal" type="button" data-recovery-rotate>Generate fresh deck + rotate wrapper</button><p data-recovery-state>Ready. The stable root and all application keys are unchanged.</p>
+          </div>
+        </section>
+
+        <section class="docs-section" id="real-implementations" data-doc-heading="Real implementations">
+          <h2>Real implementations</h2>
+          <div class="implementation-scenarios"><article><span>LOCAL-FIRST NOTES</span><h3>Browser owns plaintext</h3><p>Use the stateful client, persist the VOF3 artifact beside application metadata, and keep account recovery below a stable root.</p><a class="text-link" href="?guide=browser">Open browser implementation →</a></article><article><span>SERVER DOCUMENT PIPELINE</span><h3>Node owns plaintext</h3><p>Use the native package in the trusted process. Stream large inputs and verify the packaged native binary in release automation.</p><a class="text-link" href="?guide=node">Open Node implementation →</a></article><article><span>NATIVE DATA SYSTEM</span><h3>Rust owns every byte</h3><p>Call voided-core directly, choose feature flags deliberately, and preserve the authenticated artifact boundary at storage.</p><a class="text-link" href="?guide=rust">Open Rust implementation →</a></article></div>
+        </section>
+      </article>
+
+      <article class="docs-guide" data-guide-panel="library" hidden data-search-title="Complete Voided library map" data-search-summary="Every main library layer across browser, Node.js, Rust, artifacts, recovery, lifecycle, and utilities">
+        <header class="docs-guide__header"><span class="eyebrow">Surface map</span><h1>Library map.</h1><p data-mode-guided>Start at the highest layer that matches your ownership. Lower layers expose more control and more ways to build an unsafe surrounding system.</p><p data-mode-expert>Public surfaces grouped by contract and runtime. Package-version and wire-format version are independent.</p></header>
+        <section class="docs-section" id="library-layers" data-doc-heading="Layers"><h2>Layers</h2><table class="decision-table library-table"><thead><tr><th>Layer</th><th>Main APIs</th><th>Caller owns</th></tr></thead><tbody><tr><td>Stateful browser</td><td><code>VoidedE2EEClient</code>, top-level <code>protect</code>, <code>open</code>, <code>inspectProtected</code>, <code>exportKey</code>, <code>importKey</code>, <code>rotateKey</code></td><td>App access and browser runtime</td></tr><tr><td>Complete artifact</td><td><code>protect</code>, <code>open</code>, <code>inspectArtifact</code>, <code>repackArtifact</code></td><td>Plaintext input, key, persistence</td></tr><tr><td>Fuse shell</td><td><code>fuse</code>, <code>unfuse</code>, <code>inspectFused</code></td><td>Already-prepared inner bytes</td></tr><tr><td>AEAD primitive</td><td><code>generateKey</code>, <code>encrypt</code>, <code>decrypt</code>, AAD variants</td><td>Serialization, nonce/context lifecycle, outer format</td></tr><tr><td>Recovery</td><td><code>generateRecoveryDeck</code>, <code>validateRecoveryDeck</code>, <code>encodeRecoveryDeck</code>, <code>deriveRecoveryKey</code>, wrap/unwrap/create/rotate</td><td>Stable root hierarchy and wrapper storage</td></tr></tbody></table></section>
+        <section class="docs-section" id="library-utilities" data-doc-heading="Utilities"><h2>Utilities</h2><div class="api-groups"><article><span>DERIVATION</span><h3>HKDF + PBKDF2</h3><p><code>deriveKeyHkdf</code>, <code>deriveKeyPbkdf2</code>, password-derivation records, explicit salt and work parameters.</p></article><article><span>INTEGRITY</span><h3>Hash + HMAC</h3><p>SHA-256/SHA-512 hashing, salted hashes, comparison, HMAC generation and verification.</p></article><article><span>IDENTIFIERS</span><h3>Fingerprint + safety display</h3><p>Fingerprints and grouped safety-number display. They are not a complete identity-binding protocol.</p></article><article><span>COMPRESSION</span><h3>Bounded codecs</h3><p>gzip/Brotli compression, bounded decompression, exact-length guards, and explicit browser policy.</p></article><article><span>RANDOMNESS</span><h3>Random bytes + UUID</h3><p>Cryptographically secure random bytes and runtime-safe utilities from the native or verified WASM backend.</p></article><article><span>SERVER STREAMS</span><h3>Large input pipelines</h3><p>Compression, decompression, encryption, decryption, chunking, line splitting, and byte-limit guards.</p></article></div></section>
+        <section class="docs-section" id="library-runtimes" data-doc-heading="Runtime matrix"><h2>Runtime matrix</h2><table class="decision-table"><thead><tr><th>Capability</th><th>Browser</th><th>Node.js</th><th>Rust</th></tr></thead><tbody><tr><td>VOF3 protect/open</td><td>Verified WASM</td><td>Native Rust binding</td><td>Direct</td></tr><tr><td>Stateful key storage</td><td>IndexedDB client</td><td>Application owned</td><td>Application owned</td></tr><tr><td>Recovery Deck UI</td><td>Framework-free component</td><td>—</td><td>—</td></tr><tr><td>Recovery primitive</td><td>Verified WASM</td><td>Native binding</td><td>Direct</td></tr><tr><td>Large streaming helpers</td><td>Application owned</td><td>Available</td><td>Application owned</td></tr></tbody></table></section>
+        <section class="docs-section" id="library-navigation" data-doc-heading="Open a deep guide"><h2>Open a deep guide</h2><div class="implementation-scenarios"><article><span>RUNTIME</span><h3>Browser</h3><p>WASM loading, stateful lifecycle, IndexedDB, compression policy, and UI.</p><a class="text-link" href="?guide=browser">Read →</a></article><article><span>RUNTIME</span><h3>Node.js</h3><p>Native binding, Buffer contracts, platform verification, and streams.</p><a class="text-link" href="?guide=node">Read →</a></article><article><span>SOURCE OF TRUTH</span><h3>Rust</h3><p>Feature flags, shell APIs, explicit byte ownership, and native integration.</p><a class="text-link" href="?guide=rust">Read →</a></article><article><span>PROTOCOL</span><h3>VOF3 + Fuse</h3><p>Artifact model, presets, inspection, repacking, and failure behavior.</p><a class="text-link" href="?guide=fuse">Read →</a></article><article><span>PROTOCOL</span><h3>Recovery Deck</h3><p>Permanent mapping, wrappers, hierarchy, UI boundary, and rotation.</p><a class="text-link" href="?guide=recovery">Read →</a></article><article><span>BOUNDARY</span><h3>Security</h3><p>Trust rules, size limits, lifecycle hazards, and private reporting.</p><a class="text-link" href="?guide=security">Read →</a></article></div></section>
       </article>
 
       <article class="docs-guide" data-guide-panel="browser" hidden data-search-title="Voided browser SDK" data-search-summary="Stateful browser client, WASM loading, key storage, compression, and Recovery Deck UI">
@@ -276,12 +331,19 @@ await deckUI.show();       // modal
         <section class="docs-section" id="security-failure" data-doc-heading="Failure behavior"><h2>Failure behavior</h2><p>Wrong keys, malformed structure, non-canonical inputs, oversized work, tampered tags, invalid algorithms, and unavailable required backends throw. Authenticated decryption does not stream plaintext before the tag verifies.</p><div class="callout"><strong>Errors are part of the API</strong><p>Catch them at your trust boundary and return a generic failure to untrusted callers. Keep detailed internal diagnostics free of key material and plaintext.</p></div></section>
         <section class="docs-section" id="security-report" data-doc-heading="Report a vulnerability"><h2>Report a vulnerability</h2><p>Use a private GitHub Security Advisory for suspected vulnerabilities. Include the affected package and version, platform, minimal reproduction, security impact, and whether any secret material was exposed. Do not post exploitable details in a public issue.</p><a class="button mt-24" href="https://github.com/voided-network/voided/security/advisories/new">Open a private advisory <span class="arrow" aria-hidden="true">→</span></a></section>
       </article>
+
+      <article class="docs-guide" data-guide-panel="operations" hidden data-search-title="Voided support and release verification" data-search-summary="Diagnostic builder, compatibility, package verification, and safe vulnerability reporting">
+        <header class="docs-guide__header"><span class="eyebrow">Operations</span><h1>Support + verification.</h1><p>Select the actual failing boundary, run the narrow checks, and share a report containing evidence but no secret material.</p></header>
+        <section class="docs-section" id="operations-diagnostic" data-doc-heading="Build a diagnostic"><h2>Build a diagnostic</h2><form class="support-form support-form--embedded" data-diagnostic-form><div class="support-question"><label for="dev-diag-runtime">Runtime</label><select id="dev-diag-runtime" name="runtime"><option value="browser">Browser / WASM</option><option value="node">Node.js native package</option><option value="rust">Rust crate</option></select></div><div class="support-question"><label for="dev-diag-symptom">Symptom</label><select id="dev-diag-symptom" name="symptom"><option value="load">Backend or native module will not load</option><option value="open">A protected artifact will not open</option><option value="recovery">Recovery Deck reconstruction fails</option><option value="performance">Performance or memory regression</option><option value="package">Package contents or release verification fails</option></select></div><div class="support-question"><label for="dev-diag-context">Safe context</label><textarea id="dev-diag-context" name="context" rows="4" placeholder="OS, runtime, version, and exact public error. No secrets."></textarea></div><div class="code-window"><div class="code-window__bar"><span>diagnostic-report.txt</span><button class="copy-button" type="button" data-copy="#developer-diagnostic-code">Copy report</button></div><pre><code id="developer-diagnostic-code" data-diagnostic-output></code></pre></div></form></section>
+        <section class="docs-section" id="operations-compat" data-doc-heading="Compatibility"><h2>Compatibility</h2><div class="compat-table" role="table" aria-label="Compatibility matrix"><div class="compat-row" role="row"><strong role="cell">Safari / WebKit</strong><span class="compat-status" role="cell">Supported</span><p role="cell">Current releases; verified browser WASM path.</p></div><div class="compat-row" role="row"><strong role="cell">Chromium</strong><span class="compat-status" role="cell">Supported</span><p role="cell">Current releases; verified browser WASM path.</p></div><div class="compat-row" role="row"><strong role="cell">Firefox</strong><span class="compat-status compat-status--muted" role="cell">Best effort</span><p role="cell">Not a 1.0 release gate.</p></div><div class="compat-row" role="row"><strong role="cell">Node.js</strong><span class="compat-status" role="cell">18+</span><p role="cell">CJS and ESM native package entry points.</p></div><div class="compat-row" role="row"><strong role="cell">macOS / Linux</strong><span class="compat-status" role="cell">Verified</span><p role="cell">macOS arm64 and Linux x64 GNU release paths.</p></div><div class="compat-row" role="row"><strong role="cell">Windows</strong><span class="compat-status compat-status--muted" role="cell">RC</span><p role="cell">x64 MSVC provenance and hashes verified; real Windows execution pending.</p></div></div></section>
+        <section class="docs-section" id="operations-secrets" data-doc-heading="Safe support boundary"><h2>Safe support boundary</h2><div class="callout callout--danger"><strong>Never attach secret material</strong><p>Do not include plaintext, raw keys, Recovery Deck order, Recovery Key, stable root, unredacted environments, or crash dumps that may contain them.</p></div><p class="mt-24">Public integration failures belong in a minimal issue. Suspected vulnerabilities belong in a private security advisory.</p><div class="hero__actions"><a class="button" href="https://github.com/voided-network/voided/issues/new">Open issue</a><a class="button" href="https://github.com/voided-network/voided/security/advisories/new">Private advisory</a></div></section>
+      </article>
     </div>
 
     <aside class="docs-toc" aria-label="On this page"><h2>On this page</h2><nav data-doc-toc></nav></aside>
   </main>
 
-  <footer class="site-footer"><div class="site-footer__inner"><div><a class="brand" href="./index.html"><span class="brand__mark" aria-hidden="true"></span>VOIDED</a><p class="site-footer__meta">MIT licensed · Documentation for Voided 1.0</p></div><nav aria-label="Footer navigation"><a href="./ai.html">AI</a><a href="./mcp.html">MCP</a><a href="./learn.html">Reference</a><a href="./support.html">Support</a><a href="https://github.com/voided-network/voided">GitHub</a></nav></div></footer>
+  <footer class="site-footer"><div class="site-footer__inner"><div><a class="brand" href="./index.html"><span class="brand__mark" aria-hidden="true"></span>VOIDED</a><p class="site-footer__meta">MIT licensed · Developer reference for Voided 1.0</p></div><nav aria-label="Footer navigation"><a href="./index.html">Home</a><a href="./updates.html">Updates</a><a href="./ai.html">AI reference</a><a href="./mcp.html">MCP</a><a href="./support.html">Support</a><a href="./legal.html">Legal</a><a href="https://github.com/voided-network/voided">Source</a></nav></div></footer>
 
   <dialog class="search-dialog" data-search-dialog aria-label="Search Voided documentation"><form class="search-form" method="dialog"><input type="search" data-search-input placeholder="Search guides, concepts, APIs…" autocomplete="off"><button class="search-close" value="cancel" aria-label="Close search">Esc</button></form><div class="search-results" data-search-results><p class="search-empty">Type a concept or API name.</p></div></dialog>
   <div class="sr-only" aria-live="polite" data-live-region></div>
