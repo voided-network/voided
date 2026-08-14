@@ -49,6 +49,19 @@ function stringifyRaw(value) {
   } : nested, 2);
 }
 
+function stringToRustLiteral(value) {
+  const escaped = [...value].map((character) => {
+    if (character === "\\") return "\\\\";
+    if (character === '"') return '\\"';
+    if (character === "\n") return "\\n";
+    if (character === "\r") return "\\r";
+    if (character === "\t") return "\\t";
+    const codePoint = character.codePointAt(0);
+    return codePoint < 0x20 ? `\\u{${codePoint.toString(16)}}` : character;
+  }).join("");
+  return `"${escaped}"`;
+}
+
 function setBusy(button, busy, idleLabel) {
   button.disabled = busy;
   button.textContent = busy ? "Running…" : idleLabel;
@@ -105,13 +118,26 @@ function setupFunctionLab() {
   const traceRestoredText = lab.querySelector("[data-lab-restored-text]");
   let key = null;
   let operation = "protect";
+  let language = "node";
 
   function updateUsage() {
+    if (language === "rust") {
+      const text = stringToRustLiteral(input.value);
+      const presetName = `${preset.value[0].toUpperCase()}${preset.value.slice(1)}`;
+      if (operation === "encrypt") {
+        usage.textContent = `use voided_core::encryption;\n\nfn main() -> Result<(), Box<dyn std::error::Error>> {\n    let key = encryption::generate_key();\n    let encrypted_data = encryption::encrypt(\n        ${text}.as_bytes(),\n        &key,\n        None,\n    )?;\n    let restored_text = String::from_utf8(\n        encryption::decrypt(&encrypted_data, &key)?\n    )?;\n\n    println!("{restored_text}");\n    Ok(())\n}`;
+      } else {
+        const safetyNote = operation === "fuse" ? "    // The safe text path applies AEAD before the Fuse shell.\n" : "";
+        usage.textContent = `use voided_core::{\n    encryption,\n    shell::{self, FusedPreset, ProtectOptions},\n};\n\nfn main() -> Result<(), Box<dyn std::error::Error>> {\n    let key = encryption::generate_key();\n${safetyNote}    let protected_data = shell::protect(\n        ${text}.as_bytes(),\n        &key,\n        Some(ProtectOptions {\n            preset: FusedPreset::${presetName},\n            ..Default::default()\n        }),\n    )?;\n    let restored_text = String::from_utf8(\n        shell::open(&protected_data.artifact, &key)?\n    )?;\n\n    println!("{restored_text}");\n    Ok(())\n}`;
+      }
+      return;
+    }
+
     const text = JSON.stringify(input.value);
     if (operation === "protect") {
       usage.textContent = `import { protect, open } from "@voideddev/e2ee-client";\n\nconst protectedData = await protect(${text}, {\n  preset: ${JSON.stringify(preset.value)},\n});\nconst restoredText = await open(protectedData);`;
     } else if (operation === "fuse") {
-      usage.textContent = `import { protect, open } from "@voideddev/e2ee-client";\n\n// Safe text path: encoding, AEAD, and Fuse are handled for you.\nconst protectedData = await protect(${text}, {\n  preset: ${JSON.stringify(preset.value)},\n});\nconst restoredText = await open(protectedData);`;
+      usage.textContent = `import { protect, open } from "@voideddev/e2ee-client";\n\n// Encoding, AEAD, and Fuse are handled for you.\nconst protectedData = await protect(${text}, {\n  preset: ${JSON.stringify(preset.value)},\n});\nconst restoredText = await open(protectedData);`;
     } else {
       usage.textContent = `import { encrypt, decrypt } from "@voideddev/e2ee-client";\n\nconst encryptedData = await encrypt(${text});\nconst restoredText = await decrypt(encryptedData);`;
     }
@@ -176,6 +202,14 @@ function setupFunctionLab() {
       clearRoundtrip();
       updateUsage();
       setOutputMessage(output, "", operation === "protect" ? "Creates a complete VOF3 artifact, then opens it." : operation === "fuse" ? "Isolates the Fuse shell for inspection. Normal text callers should still use protect/open." : "Runs the lower-level AEAD primitive and verifies the result.");
+    });
+  });
+
+  lab.querySelectorAll("[data-lab-language]").forEach((button) => {
+    button.addEventListener("click", () => {
+      language = button.dataset.labLanguage;
+      lab.querySelectorAll("[data-lab-language]").forEach((candidate) => candidate.setAttribute("aria-pressed", String(candidate === button)));
+      updateUsage();
     });
   });
 
@@ -288,7 +322,7 @@ async function setupDeckLab() {
   const themeNotes = {
     plain: "All 52 positions at once: the sensible default integration.",
     editorial: "The same ordered deck dealt into four physical 13-card hands.",
-    signal: "All 52 cards orbit a live cipher core in four independently moving rings.",
+    signal: "A four-ring visualization paired with an exact, selectable 01–52 order reader.",
   };
 
   const labels = {
@@ -384,6 +418,8 @@ async function setupDeckLab() {
       }
     } else if (activeTheme === "signal") {
       grid.replaceChildren();
+      const orbit = document.createElement("div");
+      orbit.className = "cipher-orbit";
       const core = document.createElement("div");
       core.className = "cipher-core";
       core.setAttribute("aria-hidden", "true");
@@ -392,7 +428,7 @@ async function setupDeckLab() {
       const label = document.createElement("span");
       label.textContent = "ORDER LOCKED";
       core.append(count, label);
-      grid.append(core);
+      orbit.append(core);
       for (let ringIndex = 0; ringIndex < 4; ringIndex += 1) {
         const ring = document.createElement("div");
         ring.className = `cipher-ring cipher-ring--${ringIndex + 1}`;
@@ -405,8 +441,78 @@ async function setupDeckLab() {
           card.style.setProperty("--orbit-delay", `${-(cardIndex * 0.18)}s`);
           ring.append(card);
         }
-        grid.append(ring);
+        orbit.append(ring);
       }
+
+      const reader = document.createElement("aside");
+      reader.className = "cipher-reader";
+      reader.setAttribute("aria-label", "Readable Recovery Deck order");
+      const readerHeader = document.createElement("header");
+      const readerHeading = document.createElement("strong");
+      readerHeading.textContent = "EXACT ORDER";
+      const readerHint = document.createElement("span");
+      readerHint.textContent = "SELECT ANY POSITION";
+      readerHeader.append(readerHeading, readerHint);
+
+      const readerFocus = document.createElement("div");
+      readerFocus.className = "cipher-reader__focus";
+      readerFocus.setAttribute("aria-live", "polite");
+      const readerPosition = document.createElement("span");
+      readerPosition.className = "cipher-reader__position";
+      const readerName = document.createElement("strong");
+      readerName.className = "cipher-reader__name";
+      const readerMark = document.createElement("span");
+      readerMark.className = "cipher-reader__mark";
+      const readerId = document.createElement("code");
+      readerId.className = "cipher-reader__id";
+      readerFocus.append(readerPosition, readerName, readerMark, readerId);
+
+      const order = document.createElement("ol");
+      order.className = "cipher-reader__order";
+      const orderButtons = [];
+      const suitSymbols = { S: "♠", H: "♥", D: "♦", C: "♣" };
+      const readCard = (card, index) => {
+        const cardId = card.dataset.voideddevCardId;
+        const cardName = card.getAttribute("aria-label")?.replace(/^Position \d+:\s*/, "") ?? cardId;
+        const color = card.dataset.voideddevColor;
+        readerFocus.dataset.color = color;
+        readerPosition.textContent = `POSITION ${String(index + 1).padStart(2, "0")} / 52`;
+        readerName.textContent = cardName;
+        readerMark.textContent = suitSymbols[card.dataset.voideddevSuit] ?? "";
+        readerId.textContent = cardId;
+        orderButtons.forEach((button, buttonIndex) => button.setAttribute("aria-pressed", String(buttonIndex === index)));
+      };
+
+      cards.forEach((card, index) => {
+        const cardId = card.dataset.voideddevCardId;
+        const cardName = card.getAttribute("aria-label")?.replace(/^Position \d+:\s*/, "") ?? cardId;
+        const item = document.createElement("li");
+        const button = document.createElement("button");
+        button.type = "button";
+        button.dataset.color = card.dataset.voideddevColor;
+        button.setAttribute("aria-label", `Position ${index + 1}: ${cardName}`);
+        button.setAttribute("aria-pressed", "false");
+        const position = document.createElement("span");
+        position.textContent = String(index + 1).padStart(2, "0");
+        const identifier = document.createElement("strong");
+        identifier.textContent = cardId;
+        button.append(position, identifier);
+        button.addEventListener("click", () => {
+          readCard(card, index);
+          card.focus({ preventScroll: true });
+        });
+        card.addEventListener("focus", () => readCard(card, index));
+        card.addEventListener("pointerenter", () => readCard(card, index), { passive: true });
+        item.append(button);
+        order.append(item);
+        orderButtons.push(button);
+      });
+
+      const readerNote = document.createElement("p");
+      readerNote.textContent = "Every position remains readable without exporting or persisting the recovery order.";
+      reader.append(readerHeader, readerFocus, order, readerNote);
+      grid.append(orbit, reader);
+      readCard(cards[0], 0);
     }
   }
 

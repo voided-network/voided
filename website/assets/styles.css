@@ -256,7 +256,7 @@
   .lab-invocation__header, .lab-raw__header { min-height: 30px; padding: 0 10px; display: flex; align-items: center; justify-content: space-between; gap: 12px; border-bottom: 1px solid var(--line); color: var(--muted); font-family: var(--mono); font-size: .61rem; letter-spacing: .07em; text-transform: uppercase; }
   .lab-invocation pre, .lab-raw pre { max-width: 100%; margin: 0; overflow: auto; }
   .lab-invocation code, .lab-raw code { display: block; min-width: max-content; padding: 10px 11px; color: var(--paper-soft); font-family: var(--mono); font-size: .66rem; line-height: 1.45; white-space: pre-wrap; overflow-wrap: anywhere; }
-  .lab-invocation code { max-height: 122px; color: #cce69b; }
+  .lab-invocation code { max-height: 330px; color: #cce69b; }
   .lab-raw { margin: 0 20px 12px; border: 1px solid var(--line); background: #060809; }
   .lab-raw[hidden] { display: none; }
   .lab-raw--key { margin-top: 12px; }
@@ -930,8 +930,7 @@
   .lab-segmented button { min-height: 52px; border-right: 0; border-bottom: 1px solid var(--line); font-size: .57rem; line-height: 1.2; }
   .lab-segmented button:last-child { border-right: 1px solid var(--line); }
   .lab-invocation, .lab-raw { margin-inline: 14px; }
-  .lab-invocation code { max-height: 136px; }
-  .lab-invocation__header span:last-child { display: none; }
+  .lab-invocation code { max-height: 360px; }
   .lab-raw code { min-width: 0; max-height: 128px; }
   .function-lab__actions { display: grid; grid-template-columns: minmax(0,.85fr) minmax(0,1.15fr); align-items: end; gap: 9px; padding: 12px 14px; }
   .lab-select { align-items: stretch; flex-direction: column; gap: 5px; }
@@ -988,9 +987,13 @@
 }
 
 /* The live trace exposes the complete byte path instead of summarizing it. */
-.lab-invocation__header > div { display: flex; align-items: center; gap: 12px; }
+.lab-invocation__header { min-height: 38px; padding-left: 0; }
+.lab-invocation__header > div { display: flex; align-items: stretch; align-self: stretch; gap: 0; }
 .lab-invocation__header button,
 .lab-roundtrip button { border: 0; background: transparent; color: var(--signal); font: inherit; cursor: pointer; text-transform: uppercase; }
+.lab-language-switch button { min-width: 76px; padding: 0 12px; border-right: 1px solid var(--line); color: var(--muted); }
+.lab-language-switch button[aria-pressed="true"] { background: var(--signal); color: #071006; }
+.lab-invocation__header > button { padding-inline: 8px 2px; }
 .lab-roundtrip { margin: 0 20px 14px; border: 1px solid var(--line-strong); background: #040607; }
 .lab-roundtrip[hidden] { display: none; }
 .lab-roundtrip__header { min-height: 58px; display: flex; align-items: center; justify-content: space-between; gap: 18px; padding: 11px 14px; border-bottom: 1px solid var(--line); }
@@ -1033,26 +1036,44 @@
 .site-recovery-ui--editorial.is-secure-shuffling .deck-hand .voideddev-recovery-card { animation: collect-hand 760ms cubic-bezier(.68,-.2,.32,1.25) both; animation-delay: calc(var(--fan-depth) * 8ms); }
 
 .site-recovery-ui--signal .voideddev-recovery-panel { overflow: hidden; }
-.site-recovery-ui--signal .voideddev-recovery-deck-grid[data-deck-layout="signal"] { position: relative; min-height: 720px; display: block; margin-top: 28px; padding: 0; overflow: hidden; border: 1px solid #174b36; border-radius: 50%; background: radial-gradient(circle,rgba(186,255,88,.08) 0 1px,transparent 2px 14%,rgba(82,255,171,.05) 14.2%,transparent 14.6% 100%),#020705; }
+.site-recovery-ui--signal .voideddev-recovery-deck-grid[data-deck-layout="signal"] { position: relative; min-height: 0; display: grid; grid-template-columns: minmax(0,720px) minmax(280px,1fr); align-items: start; gap: 18px; margin-top: 28px; padding: 18px; overflow: visible; border: 1px solid #174b36; background: #020705; }
+.cipher-orbit { position: relative; min-width: 0; aspect-ratio: 1; overflow: hidden; border: 1px solid #174b36; border-radius: 50%; background: radial-gradient(circle,rgba(186,255,88,.08) 0 1px,transparent 2px 14%,rgba(82,255,171,.05) 14.2%,transparent 14.6% 100%),#020705; }
 .cipher-core { position: absolute; z-index: 8; left: 50%; top: 50%; width: 142px; aspect-ratio: 1; display: grid; place-content: center; border: 1px solid #baff58; border-radius: 50%; background: radial-gradient(circle,rgba(186,255,88,.19),rgba(3,8,6,.94) 64%); color: #baff58; text-align: center; box-shadow: 0 0 42px rgba(82,255,171,.32),inset 0 0 28px rgba(82,255,171,.12); transform: translate(-50%,-50%); }
 .cipher-core::before,.cipher-core::after { content: ""; position: absolute; inset: -15px; border: 1px dashed rgba(82,255,171,.44); border-radius: 50%; animation: cipher-core-spin 10s linear infinite; }
 .cipher-core::after { inset: -31px; border-style: solid; border-color: rgba(255,111,145,.24); animation-direction: reverse; animation-duration: 16s; }
 .cipher-core strong,.cipher-core span { display: block; }
 .cipher-core strong { font-size: 3.6rem; line-height: .9; text-shadow: 0 0 20px currentColor; }
 .cipher-core span { margin-top: 9px; font-size: .55rem; letter-spacing: .14em; }
-.cipher-ring { --orbit-radius: -105px; position: absolute; inset: 0; animation: cipher-ring-spin 28s linear infinite; }
-.cipher-ring--2 { --orbit-radius: -180px; animation-duration: 38s; animation-direction: reverse; }
-.cipher-ring--3 { --orbit-radius: -255px; animation-duration: 48s; }
-.cipher-ring--4 { --orbit-radius: -326px; animation-duration: 58s; animation-direction: reverse; }
+.cipher-ring { --orbit-radius: -105px; position: absolute; inset: 0; animation: cipher-ring-drift 8s ease-in-out infinite alternate; }
+.cipher-ring--2 { --orbit-radius: -180px; animation-duration: 10s; animation-direction: alternate-reverse; }
+.cipher-ring--3 { --orbit-radius: -255px; animation-duration: 12s; }
+.cipher-ring--4 { --orbit-radius: -326px; animation-duration: 14s; animation-direction: alternate-reverse; }
 .site-recovery-ui--signal .cipher-ring .voideddev-recovery-card { position: absolute; left: 50%; top: 50%; width: 60px; height: 76px; min-height: 76px; aspect-ratio: auto; transform: translate(-50%,-50%) rotate(var(--orbit-angle)) translateY(var(--orbit-radius)) rotate(var(--orbit-counter)); animation: signal-card-pulse 4.2s ease-in-out infinite; animation-delay: var(--orbit-delay); }
 .site-recovery-ui--signal .cipher-ring .voideddev-recovery-card:hover,
 .site-recovery-ui--signal .cipher-ring .voideddev-recovery-card:focus-visible { z-index: 12; border-color: currentColor; transform: translate(-50%,-50%) rotate(var(--orbit-angle)) translateY(var(--orbit-radius)) rotate(var(--orbit-counter)) scale(1.45); box-shadow: 0 0 26px currentColor; }
 .site-recovery-ui--signal.is-secure-shuffling .cipher-ring { animation-duration: 650ms; }
 .site-recovery-ui--signal.is-secure-shuffling .cipher-ring .voideddev-recovery-card { animation: orbit-collapse 760ms cubic-bezier(.7,0,.3,1) both; }
 
+.cipher-reader { min-width: 0; padding: 14px; border: 1px solid #174b36; background: linear-gradient(rgba(65,255,153,.026) 1px,transparent 1px),linear-gradient(90deg,rgba(65,255,153,.026) 1px,transparent 1px),#030806; background-size: 18px 18px; }
+.cipher-reader > header { min-height: 34px; display: flex; align-items: center; justify-content: space-between; gap: 12px; border-bottom: 1px solid #174b36; color: #52ffab; font-size: .61rem; letter-spacing: .09em; }
+.cipher-reader > header span { color: #88a99a; font-size: .52rem; }
+.cipher-reader__focus { position: relative; min-height: 142px; display: grid; align-content: end; margin-top: 12px; padding: 16px; overflow: hidden; border: 1px solid #24664a; background: radial-gradient(circle at 82% 24%,rgba(82,255,171,.17),transparent 30%),#06110c; color: #efffe8; }
+.cipher-reader__focus[data-color="red"] { border-color: #73404f; background: radial-gradient(circle at 82% 24%,rgba(255,85,130,.18),transparent 30%),#13090d; color: #ff89a7; }
+.cipher-reader__position,.cipher-reader__name,.cipher-reader__id { position: relative; z-index: 1; display: block; }
+.cipher-reader__position { align-self: start; color: #88a99a; font-size: .55rem; letter-spacing: .1em; }
+.cipher-reader__name { max-width: 72%; margin-top: 34px; font-size: clamp(1.05rem,1.7vw,1.55rem); line-height: 1; text-transform: uppercase; }
+.cipher-reader__mark { position: absolute; top: -18px; right: 8px; color: currentColor; font-family: Georgia,serif; font-size: 8.2rem; line-height: 1; opacity: .16; }
+.cipher-reader__id { margin-top: 7px; color: currentColor; font-size: .73rem; }
+.cipher-reader__order { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 4px; margin: 12px 0 0; padding: 0; list-style: none; }
+.cipher-reader__order button { width: 100%; min-height: 29px; display: flex; align-items: center; justify-content: space-between; gap: 4px; padding: 0 6px; border: 1px solid #174b36; background: #020705; color: #efffe8; font: inherit; font-size: .55rem; cursor: pointer; }
+.cipher-reader__order button[data-color="red"] { border-color: #4d2834; color: #ff89a7; }
+.cipher-reader__order button span { color: #6f9684; font-size: .48rem; }
+.cipher-reader__order button:hover,.cipher-reader__order button:focus-visible,.cipher-reader__order button[aria-pressed="true"] { border-color: #baff58; background: rgba(186,255,88,.12); color: #baff58; outline: 0; }
+.cipher-reader > p { margin: 12px 0 0; color: #88a99a; font-size: .58rem; line-height: 1.55; }
+
 @keyframes collect-hand { 0% { opacity: 1; } 52% { transform: translateX(-50%) translateY(-34px) rotate(0) scale(.7); } 100% { opacity: 0; transform: translateX(-50%) translateY(-58px) rotate(0) scale(.18); } }
 @keyframes system-shuffle-stack { 0% { opacity: 1; } 50% { opacity: .78; transform: translate(18px,-12px) rotate(5deg) scale(.82); } 100% { opacity: 0; transform: translate(0,-18px) rotate(-3deg) scale(.3); } }
-@keyframes cipher-ring-spin { to { rotate: 360deg; } }
+@keyframes cipher-ring-drift { from { rotate: -1.5deg; } to { rotate: 1.5deg; } }
 @keyframes cipher-core-spin { to { transform: rotate(360deg); } }
 @keyframes signal-card-pulse { 0%,100% { filter: brightness(.9); } 50% { filter: brightness(1.28); } }
 @keyframes orbit-collapse { to { opacity: 0; transform: translate(-50%,-50%) rotate(var(--orbit-angle)) translateY(-18px) rotate(var(--orbit-counter)) scale(.08); } }
@@ -1062,17 +1083,17 @@
   .lab-stage,.lab-stage:nth-child(2n),.lab-stage--wide { grid-column: auto; border-right: 0; }
   .site-recovery-ui--editorial .voideddev-recovery-deck-grid[data-deck-layout="editorial"] { grid-template-columns: minmax(0,1fr); grid-template-rows: none; grid-auto-flow: row; grid-auto-columns: auto; gap: 16px; padding: 16px; }
   .deck-hand__fan { height: 214px; }
-  .site-recovery-ui--signal .voideddev-recovery-deck-grid[data-deck-layout="signal"] { min-height: 610px; }
-  .cipher-ring { --orbit-radius: -86px; }
-  .cipher-ring--2 { --orbit-radius: -150px; }
-  .cipher-ring--3 { --orbit-radius: -214px; }
-  .cipher-ring--4 { --orbit-radius: -278px; }
+  .site-recovery-ui--signal .voideddev-recovery-deck-grid[data-deck-layout="signal"] { grid-template-columns: minmax(0,1fr); }
+  .cipher-ring { --orbit-radius: calc(-13vw); }
+  .cipher-ring--2 { --orbit-radius: calc(-22vw); }
+  .cipher-ring--3 { --orbit-radius: calc(-32vw); }
+  .cipher-ring--4 { --orbit-radius: calc(-40vw); }
   .site-recovery-ui--signal .cipher-ring .voideddev-recovery-card { width: 48px; height: 62px; min-height: 62px; }
 }
 
 @media (max-width: 520px) {
-  .lab-invocation__header > div > span { display: none; }
-  .lab-invocation__header button { display: block; }
+  .lab-language-switch button { min-width: 70px; padding-inline: 9px; }
+  .lab-invocation__header > button { display: block; }
   .lab-roundtrip { margin-inline: 14px; }
   .lab-roundtrip__header { align-items: flex-start; }
   .lab-roundtrip__header > span { padding-top: 2px; text-align: right; }
@@ -1086,18 +1107,22 @@
   .site-recovery-ui--editorial .deck-hand .voideddev-recovery-card:hover,
   .site-recovery-ui--editorial .deck-hand .voideddev-recovery-card:focus-visible { transform: translateX(calc(-50% + var(--fan-x-mobile))) translateY(-18px) rotate(0) scale(1.08); }
   .site-recovery-ui--signal .voideddev-recovery-panel { margin-inline: -6px; padding-inline: 10px; }
-  .site-recovery-ui--signal .voideddev-recovery-deck-grid[data-deck-layout="signal"] { min-height: 390px; margin-inline: -2px; }
-  .cipher-core { width: 82px; }
+  .site-recovery-ui--signal .voideddev-recovery-deck-grid[data-deck-layout="signal"] { margin-inline: -2px; padding: 7px; }
+  .cipher-core { width: 74px; }
   .cipher-core strong { font-size: 2.2rem; }
   .cipher-core span { font-size: .4rem; }
-  .cipher-ring { --orbit-radius: -54px; }
-  .cipher-ring--2 { --orbit-radius: -94px; }
-  .cipher-ring--3 { --orbit-radius: -134px; }
-  .cipher-ring--4 { --orbit-radius: -174px; }
-  .site-recovery-ui--signal .cipher-ring .voideddev-recovery-card { width: 32px; height: 43px; min-height: 43px; }
+  .cipher-ring { --orbit-radius: -46px; }
+  .cipher-ring--2 { --orbit-radius: -83px; }
+  .cipher-ring--3 { --orbit-radius: -120px; }
+  .cipher-ring--4 { --orbit-radius: -157px; }
+  .site-recovery-ui--signal .cipher-ring .voideddev-recovery-card { width: 30px; height: 41px; min-height: 41px; }
   .site-recovery-ui--signal .deck-card-art__address { display: none; }
   .site-recovery-ui--signal .deck-card-art__sigil { inset: 10% 0 auto; font-size: 1rem; }
   .site-recovery-ui--signal .deck-card-art__signal-rank { inset: auto 2px 3px; font-size: .31rem; }
+  .cipher-reader { padding: 10px; }
+  .cipher-reader__focus { min-height: 126px; }
+  .cipher-reader__order { gap: 3px; }
+  .cipher-reader__order button { min-height: 28px; padding-inline: 5px; }
 }
 
 @media (prefers-reduced-motion: reduce) {

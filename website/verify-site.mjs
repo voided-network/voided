@@ -19,7 +19,7 @@ for (const page of pages) {
   if (duplicateIds.length > 0) failures.push(`${page}: duplicate ids ${[...new Set(duplicateIds)].join(", ")}`);
   if (!html.includes('<meta name="viewport"')) failures.push(`${page}: missing viewport metadata`);
   if (!html.includes("skip-link")) failures.push(`${page}: missing skip link`);
-  if (!html.includes('href="./assets/styles.css?v=20260813.2"')) failures.push(`${page}: missing release-versioned shared stylesheet`);
+  if (!html.includes('href="./assets/styles.css?v=20260813.3"')) failures.push(`${page}: missing release-versioned shared stylesheet`);
   if (/\s(?:href|src)="\//.test(html)) failures.push(`${page}: local links must remain file-preview compatible`);
 
   for (const match of html.matchAll(/(?:href|src)="((?:\.\/|\/)[^"#?]+)"/g)) {
@@ -35,7 +35,7 @@ for (const page of pages) {
 }
 
 const home = readFileSync(join(root, "index.html"), "utf8");
-for (const required of ["data-function-lab", "data-lab-key-raw", "data-lab-usage", "lab-usage-code", "data-lab-input-hex", "data-lab-artifact-raw", "data-lab-artifact-meta", "data-lab-restored-hex", "data-lab-match", "data-deck-lab", "data-deck-shuffle", 'data-deck-theme="plain"', 'data-deck-theme="editorial"', 'data-deck-theme="signal"', "./assets/demo.js"]) {
+for (const required of ["data-function-lab", "data-lab-key-raw", "data-lab-usage", "lab-usage-code", 'data-lab-language="node"', 'data-lab-language="rust"', "data-lab-input-hex", "data-lab-artifact-raw", "data-lab-artifact-meta", "data-lab-restored-hex", "data-lab-match", "data-deck-lab", "data-deck-shuffle", 'data-deck-theme="plain"', 'data-deck-theme="editorial"', 'data-deck-theme="signal"', "./assets/demo.js"]) {
   if (!home.includes(required)) failures.push(`index.html: missing ${required} live demo surface`);
 }
 
@@ -75,7 +75,7 @@ const demoScript = readFileSync(join(root, "assets", "demo.js"), "utf8");
 for (const required of ["generateKey", "protect", "open", "fuse", "unfuse", "encrypt", "decrypt"]) {
   if (!demoScript.includes(required)) failures.push(`demo.js: missing live ${required} integration`);
 }
-for (const required of ["bytesToBase64", "bytesToHex", "showRoundtrip", "updateUsage", "renderCardContent", "decorateLayout", "secureShuffle", "generateRecoveryDeck"]) {
+for (const required of ["bytesToBase64", "bytesToHex", "stringToRustLiteral", "showRoundtrip", "updateUsage", "data-lab-language", "renderCardContent", "decorateLayout", "cipher-reader", "secureShuffle", "generateRecoveryDeck"]) {
   if (!demoScript.includes(required)) failures.push(`demo.js: missing ${required} transparent demo behavior`);
 }
 if (!demoScript.includes("../runtime/voided_wasm.js")) failures.push("demo.js: missing self-hosted WASM runtime import");
@@ -84,7 +84,7 @@ if (demoScript.includes("innerHTML")) failures.push("demo.js: output must use te
 if (siteScript.includes("IntersectionObserver") || siteScript.includes("setupReveals")) failures.push("site.js: scroll-triggered reveal behavior must remain disabled");
 
 const siteStyles = readFileSync(join(root, "assets", "styles.css"), "utf8");
-for (const required of ["deck-deal", "collect-hand", "cipher-ring-spin", "orbit-collapse", "system-shuffle-stack", "signal-scan", 'data-voideddev-color="black"', ".deck-hand", ".cipher-ring", ".deck-card-art--editorial", ".deck-card-art--signal"]) {
+for (const required of ["deck-deal", "collect-hand", "cipher-ring-drift", "orbit-collapse", "system-shuffle-stack", "signal-scan", 'data-voideddev-color="black"', ".deck-hand", ".cipher-ring", ".cipher-reader", ".deck-card-art--editorial", ".deck-card-art--signal"]) {
   if (!siteStyles.includes(required)) failures.push(`styles.css: missing ${required} deck showcase behavior`);
 }
 

@@ -18,8 +18,9 @@ package and verified WASM assets from `packages/e2ee-client/` under
 generic component rather than duplicating it. Its three showcase designs use
 the component's stable classes, card-rendering hook, lifecycle callbacks, and
 behavior-owning card buttons to demonstrate a full order grid, four physical
-hands, and a 52-card cipher orbit. The function lab shows the normal string API
-alongside a complete raw trace: input text and UTF-8 bytes, ephemeral key,
+hands, and a 52-card cipher orbit with a selectable exact-order reader. The
+function lab switches between valid Node.js and Rust usage while showing the
+normal string path alongside a complete raw trace: input text and UTF-8 bytes, ephemeral key,
 generated output, public structure, restored bytes, restored text, and exact
 match state. It does not persist or transmit any of them. `npm run site:check`
 fails if the runtime copies drift. Production CSP
