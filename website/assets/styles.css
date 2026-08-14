@@ -987,6 +987,119 @@
   .deck-card-art__signal-rank { font-size: .4rem; }
 }
 
+/* The live trace exposes the complete byte path instead of summarizing it. */
+.lab-invocation__header > div { display: flex; align-items: center; gap: 12px; }
+.lab-invocation__header button,
+.lab-roundtrip button { border: 0; background: transparent; color: var(--signal); font: inherit; cursor: pointer; text-transform: uppercase; }
+.lab-roundtrip { margin: 0 20px 14px; border: 1px solid var(--line-strong); background: #040607; }
+.lab-roundtrip[hidden] { display: none; }
+.lab-roundtrip__header { min-height: 58px; display: flex; align-items: center; justify-content: space-between; gap: 18px; padding: 11px 14px; border-bottom: 1px solid var(--line); }
+.lab-roundtrip__header div > span,
+.lab-roundtrip__header div > strong { display: block; }
+.lab-roundtrip__header div > span { color: var(--muted); font-family: var(--mono); font-size: .58rem; letter-spacing: .1em; text-transform: uppercase; }
+.lab-roundtrip__header div > strong { margin-top: 2px; color: var(--paper); font-size: .84rem; }
+.lab-roundtrip__header > span { color: var(--signal); font-family: var(--mono); font-size: .65rem; text-transform: uppercase; }
+.lab-roundtrip__stages { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); }
+.lab-stage { min-width: 0; border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+.lab-stage:nth-child(2n) { border-right: 0; }
+.lab-stage--wide { grid-column: 1 / -1; border-right: 0; }
+.lab-stage > header { min-height: 34px; display: flex; align-items: center; gap: 9px; padding: 7px 10px; border-bottom: 1px solid var(--line); background: rgba(199,255,94,.035); }
+.lab-stage > header span { color: var(--signal); font-family: var(--mono); font-size: .57rem; }
+.lab-stage > header strong { color: var(--paper-soft); font-family: var(--mono); font-size: .62rem; letter-spacing: .06em; text-transform: uppercase; }
+.lab-value { position: relative; min-width: 0; padding: 9px 10px; border-bottom: 1px solid rgba(241,239,231,.08); }
+.lab-value:last-child { border-bottom: 0; }
+.lab-value > span { display: block; margin-bottom: 5px; color: var(--muted); font-family: var(--mono); font-size: .54rem; letter-spacing: .05em; text-transform: uppercase; }
+.lab-value code { display: block; min-width: 0; padding-right: 48px; overflow-wrap: anywhere; color: var(--paper); font-family: var(--mono); font-size: .61rem; line-height: 1.48; white-space: pre-wrap; }
+.lab-value button { position: absolute; top: 8px; right: 10px; font-size: .54rem; }
+.lab-value--raw code { max-height: none; padding: 10px 48px 10px 0; color: #d8eeb1; }
+
+/* The three deck examples change composition and motion, not only card skins. */
+.deck-component-loading { margin-bottom: 10px; padding: 10px 0; border: 0; font-family: var(--mono); font-size: .7rem; }
+.site-recovery-ui .voideddev-recovery-actions { order: 0; justify-content: flex-start; margin: 20px 0 0; padding: 13px 0; border-block: 1px solid var(--deck-border); }
+.site-recovery-ui .voideddev-recovery-deck-grid { order: 1; }
+.site-recovery-ui--plain.is-secure-shuffling .voideddev-recovery-card { animation: system-shuffle-stack 760ms cubic-bezier(.7,0,.3,1) both; }
+.site-recovery-ui--plain.is-secure-shuffling .voideddev-recovery-card:nth-child(3n+1) { animation-delay: 35ms; }
+.site-recovery-ui--plain.is-secure-shuffling .voideddev-recovery-card:nth-child(3n+2) { animation-delay: 70ms; }
+
+.site-recovery-ui--editorial .voideddev-recovery-panel { overflow: visible; }
+.site-recovery-ui--editorial .voideddev-recovery-deck-grid[data-deck-layout="editorial"] { min-height: 0; display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 28px; margin-top: 30px; padding: 26px; overflow: visible; background: #d8c49e; transform: none; }
+.deck-hand { min-width: 0; padding: 14px 14px 0; border: 1px solid rgba(38,30,23,.32); background: rgba(255,250,240,.28); }
+.deck-hand > header { display: flex; align-items: center; justify-content: space-between; gap: 12px; color: #5f4e40; font-family: var(--mono); font-size: .62rem; letter-spacing: .08em; }
+.deck-hand > header strong { color: #261e17; }
+.deck-hand__fan { position: relative; height: 236px; margin-top: 8px; overflow: hidden; }
+.site-recovery-ui--editorial .deck-hand .voideddev-recovery-card { position: absolute; left: 50%; bottom: 13px; z-index: var(--fan-depth); width: 94px; height: 148px; min-height: 148px; margin: 0; transform-origin: 50% 125%; transform: translateX(calc(-50% + var(--fan-x))) rotate(var(--fan-angle)); transition: transform 180ms ease,filter 180ms ease,box-shadow 180ms ease; }
+.site-recovery-ui--editorial .deck-hand .voideddev-recovery-card:hover,
+.site-recovery-ui--editorial .deck-hand .voideddev-recovery-card:focus-visible { z-index: 30; transform: translateX(calc(-50% + var(--fan-x))) translateY(-24px) rotate(0) scale(1.08); }
+.site-recovery-ui--editorial.is-secure-shuffling .deck-hand .voideddev-recovery-card { animation: collect-hand 760ms cubic-bezier(.68,-.2,.32,1.25) both; animation-delay: calc(var(--fan-depth) * 8ms); }
+
+.site-recovery-ui--signal .voideddev-recovery-panel { overflow: hidden; }
+.site-recovery-ui--signal .voideddev-recovery-deck-grid[data-deck-layout="signal"] { position: relative; min-height: 720px; display: block; margin-top: 28px; padding: 0; overflow: hidden; border: 1px solid #174b36; border-radius: 50%; background: radial-gradient(circle,rgba(186,255,88,.08) 0 1px,transparent 2px 14%,rgba(82,255,171,.05) 14.2%,transparent 14.6% 100%),#020705; }
+.cipher-core { position: absolute; z-index: 8; left: 50%; top: 50%; width: 142px; aspect-ratio: 1; display: grid; place-content: center; border: 1px solid #baff58; border-radius: 50%; background: radial-gradient(circle,rgba(186,255,88,.19),rgba(3,8,6,.94) 64%); color: #baff58; text-align: center; box-shadow: 0 0 42px rgba(82,255,171,.32),inset 0 0 28px rgba(82,255,171,.12); transform: translate(-50%,-50%); }
+.cipher-core::before,.cipher-core::after { content: ""; position: absolute; inset: -15px; border: 1px dashed rgba(82,255,171,.44); border-radius: 50%; animation: cipher-core-spin 10s linear infinite; }
+.cipher-core::after { inset: -31px; border-style: solid; border-color: rgba(255,111,145,.24); animation-direction: reverse; animation-duration: 16s; }
+.cipher-core strong,.cipher-core span { display: block; }
+.cipher-core strong { font-size: 3.6rem; line-height: .9; text-shadow: 0 0 20px currentColor; }
+.cipher-core span { margin-top: 9px; font-size: .55rem; letter-spacing: .14em; }
+.cipher-ring { --orbit-radius: -105px; position: absolute; inset: 0; animation: cipher-ring-spin 28s linear infinite; }
+.cipher-ring--2 { --orbit-radius: -180px; animation-duration: 38s; animation-direction: reverse; }
+.cipher-ring--3 { --orbit-radius: -255px; animation-duration: 48s; }
+.cipher-ring--4 { --orbit-radius: -326px; animation-duration: 58s; animation-direction: reverse; }
+.site-recovery-ui--signal .cipher-ring .voideddev-recovery-card { position: absolute; left: 50%; top: 50%; width: 60px; height: 76px; min-height: 76px; aspect-ratio: auto; transform: translate(-50%,-50%) rotate(var(--orbit-angle)) translateY(var(--orbit-radius)) rotate(var(--orbit-counter)); animation: signal-card-pulse 4.2s ease-in-out infinite; animation-delay: var(--orbit-delay); }
+.site-recovery-ui--signal .cipher-ring .voideddev-recovery-card:hover,
+.site-recovery-ui--signal .cipher-ring .voideddev-recovery-card:focus-visible { z-index: 12; border-color: currentColor; transform: translate(-50%,-50%) rotate(var(--orbit-angle)) translateY(var(--orbit-radius)) rotate(var(--orbit-counter)) scale(1.45); box-shadow: 0 0 26px currentColor; }
+.site-recovery-ui--signal.is-secure-shuffling .cipher-ring { animation-duration: 650ms; }
+.site-recovery-ui--signal.is-secure-shuffling .cipher-ring .voideddev-recovery-card { animation: orbit-collapse 760ms cubic-bezier(.7,0,.3,1) both; }
+
+@keyframes collect-hand { 0% { opacity: 1; } 52% { transform: translateX(-50%) translateY(-34px) rotate(0) scale(.7); } 100% { opacity: 0; transform: translateX(-50%) translateY(-58px) rotate(0) scale(.18); } }
+@keyframes system-shuffle-stack { 0% { opacity: 1; } 50% { opacity: .78; transform: translate(18px,-12px) rotate(5deg) scale(.82); } 100% { opacity: 0; transform: translate(0,-18px) rotate(-3deg) scale(.3); } }
+@keyframes cipher-ring-spin { to { rotate: 360deg; } }
+@keyframes cipher-core-spin { to { transform: rotate(360deg); } }
+@keyframes signal-card-pulse { 0%,100% { filter: brightness(.9); } 50% { filter: brightness(1.28); } }
+@keyframes orbit-collapse { to { opacity: 0; transform: translate(-50%,-50%) rotate(var(--orbit-angle)) translateY(-18px) rotate(var(--orbit-counter)) scale(.08); } }
+
+@media (max-width: 780px) {
+  .lab-roundtrip__stages { grid-template-columns: minmax(0,1fr); }
+  .lab-stage,.lab-stage:nth-child(2n),.lab-stage--wide { grid-column: auto; border-right: 0; }
+  .site-recovery-ui--editorial .voideddev-recovery-deck-grid[data-deck-layout="editorial"] { grid-template-columns: minmax(0,1fr); grid-template-rows: none; grid-auto-flow: row; grid-auto-columns: auto; gap: 16px; padding: 16px; }
+  .deck-hand__fan { height: 214px; }
+  .site-recovery-ui--signal .voideddev-recovery-deck-grid[data-deck-layout="signal"] { min-height: 610px; }
+  .cipher-ring { --orbit-radius: -86px; }
+  .cipher-ring--2 { --orbit-radius: -150px; }
+  .cipher-ring--3 { --orbit-radius: -214px; }
+  .cipher-ring--4 { --orbit-radius: -278px; }
+  .site-recovery-ui--signal .cipher-ring .voideddev-recovery-card { width: 48px; height: 62px; min-height: 62px; }
+}
+
+@media (max-width: 520px) {
+  .lab-invocation__header > div > span { display: none; }
+  .lab-invocation__header button { display: block; }
+  .lab-roundtrip { margin-inline: 14px; }
+  .lab-roundtrip__header { align-items: flex-start; }
+  .lab-roundtrip__header > span { padding-top: 2px; text-align: right; }
+  .lab-value code { padding-right: 0; font-size: .58rem; }
+  .lab-value button { position: static; display: block; margin-top: 7px; }
+  .site-recovery-ui--editorial .voideddev-recovery-panel { padding-inline: 10px; }
+  .site-recovery-ui--editorial .voideddev-recovery-deck-grid[data-deck-layout="editorial"] { margin-inline: -3px; padding: 10px; }
+  .deck-hand { padding-inline: 8px; }
+  .deck-hand__fan { height: 182px; }
+  .site-recovery-ui--editorial .deck-hand .voideddev-recovery-card { width: 70px; height: 112px; min-height: 112px; transform: translateX(calc(-50% + var(--fan-x-mobile))) rotate(var(--fan-angle)); }
+  .site-recovery-ui--editorial .deck-hand .voideddev-recovery-card:hover,
+  .site-recovery-ui--editorial .deck-hand .voideddev-recovery-card:focus-visible { transform: translateX(calc(-50% + var(--fan-x-mobile))) translateY(-18px) rotate(0) scale(1.08); }
+  .site-recovery-ui--signal .voideddev-recovery-panel { margin-inline: -6px; padding-inline: 10px; }
+  .site-recovery-ui--signal .voideddev-recovery-deck-grid[data-deck-layout="signal"] { min-height: 390px; margin-inline: -2px; }
+  .cipher-core { width: 82px; }
+  .cipher-core strong { font-size: 2.2rem; }
+  .cipher-core span { font-size: .4rem; }
+  .cipher-ring { --orbit-radius: -54px; }
+  .cipher-ring--2 { --orbit-radius: -94px; }
+  .cipher-ring--3 { --orbit-radius: -134px; }
+  .cipher-ring--4 { --orbit-radius: -174px; }
+  .site-recovery-ui--signal .cipher-ring .voideddev-recovery-card { width: 32px; height: 43px; min-height: 43px; }
+  .site-recovery-ui--signal .deck-card-art__address { display: none; }
+  .site-recovery-ui--signal .deck-card-art__sigil { inset: 10% 0 auto; font-size: 1rem; }
+  .site-recovery-ui--signal .deck-card-art__signal-rank { inset: auto 2px 3px; font-size: .31rem; }
+}
+
 @media (prefers-reduced-motion: reduce) {
   html { scroll-behavior: auto; }
   *, *::before, *::after { animation-duration: .001ms !important; animation-iteration-count: 1 !important; transition-duration: .001ms !important; }

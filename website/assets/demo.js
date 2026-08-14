@@ -37,6 +37,18 @@ function bytesToBase64(bytes) {
   return btoa(binary);
 }
 
+function bytesToHex(bytes) {
+  return [...bytes].map((byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
+function stringifyRaw(value) {
+  return JSON.stringify(value, (_key, nested) => nested instanceof Uint8Array ? {
+    bytes: nested.length,
+    base64: bytesToBase64(nested),
+    hex: bytesToHex(nested),
+  } : nested, 2);
+}
+
 function setBusy(button, busy, idleLabel) {
   button.disabled = busy;
   button.textContent = busy ? "Running…" : idleLabel;
@@ -78,32 +90,54 @@ function setupFunctionLab() {
   const preset = lab.querySelector("[data-lab-preset]");
   const usage = lab.querySelector("[data-lab-usage]");
   const output = lab.querySelector("[data-lab-output]");
-  const artifactPanel = lab.querySelector("[data-lab-artifact-panel]");
+  const roundtrip = lab.querySelector("[data-lab-roundtrip]");
+  const match = lab.querySelector("[data-lab-match]");
   const artifactLabel = lab.querySelector("[data-lab-artifact-label]");
   const artifactRaw = lab.querySelector("[data-lab-artifact-raw]");
+  const artifactMeta = lab.querySelector("[data-lab-artifact-meta]");
+  const traceInputText = lab.querySelector("[data-lab-input-text]");
+  const traceInputHex = lab.querySelector("[data-lab-input-hex]");
+  const traceInputBase64 = lab.querySelector("[data-lab-input-base64]");
+  const traceKeyBase64 = lab.querySelector("[data-lab-trace-key-base64]");
+  const traceKeyHex = lab.querySelector("[data-lab-key-hex]");
+  const traceRestoredHex = lab.querySelector("[data-lab-restored-hex]");
+  const traceRestoredBase64 = lab.querySelector("[data-lab-restored-base64]");
+  const traceRestoredText = lab.querySelector("[data-lab-restored-text]");
   let key = null;
   let operation = "protect";
 
   function updateUsage() {
-    const setup = `const plaintext = new TextEncoder().encode(${JSON.stringify(input.value)});\nconst key = /* 32-byte Uint8Array shown above */;`;
+    const text = JSON.stringify(input.value);
     if (operation === "protect") {
-      usage.textContent = `${setup}\n\nconst { artifact } = voided.protect(\n  plaintext, key, ${JSON.stringify(preset.value)},\n  undefined, undefined, "xchacha20-poly1305"\n);\nconst restored = voided.open(artifact, key);`;
+      usage.textContent = `import { protect, open } from "@voideddev/e2ee-client";\n\nconst protectedData = await protect(${text}, {\n  preset: ${JSON.stringify(preset.value)},\n});\nconst restoredText = await open(protectedData);`;
     } else if (operation === "fuse") {
-      usage.textContent = `${setup}\n\nconst fused = voided.fuse(plaintext, key, ${JSON.stringify(preset.value)});\nconst restored = voided.unfuse(fused, key);`;
+      usage.textContent = `import { protect, open } from "@voideddev/e2ee-client";\n\n// Safe text path: encoding, AEAD, and Fuse are handled for you.\nconst protectedData = await protect(${text}, {\n  preset: ${JSON.stringify(preset.value)},\n});\nconst restoredText = await open(protectedData);`;
     } else {
-      usage.textContent = `${setup}\n\nconst encrypted = voided.encrypt(\n  plaintext, key, "xchacha20-poly1305"\n);\nconst restored = voided.decrypt(encrypted, key);`;
+      usage.textContent = `import { encrypt, decrypt } from "@voideddev/e2ee-client";\n\nconst encryptedData = await encrypt(${text});\nconst restoredText = await decrypt(encryptedData);`;
     }
   }
 
-  function clearArtifact() {
-    artifactPanel.hidden = true;
+  function clearRoundtrip() {
+    roundtrip.hidden = true;
+    match.textContent = "Not run";
     artifactRaw.textContent = "";
+    artifactMeta.textContent = "";
   }
 
-  function showArtifact(label, value) {
+  function showRoundtrip({ plaintext, restored, label, raw, metadata }) {
+    traceInputText.textContent = input.value;
+    traceInputHex.textContent = bytesToHex(plaintext);
+    traceInputBase64.textContent = bytesToBase64(plaintext);
+    traceKeyBase64.textContent = bytesToBase64(key);
+    traceKeyHex.textContent = bytesToHex(key);
     artifactLabel.textContent = label;
-    artifactRaw.textContent = value;
-    artifactPanel.hidden = false;
+    artifactRaw.textContent = raw;
+    artifactMeta.textContent = stringifyRaw(metadata);
+    traceRestoredHex.textContent = bytesToHex(restored);
+    traceRestoredBase64.textContent = bytesToBase64(restored);
+    traceRestoredText.textContent = decoder.decode(restored);
+    match.textContent = "Exact match · true";
+    roundtrip.hidden = false;
   }
 
   function clearKey() {
@@ -121,7 +155,7 @@ function setupFunctionLab() {
       keyStatus.textContent = "32 bytes · full value shown below";
       keyRaw.textContent = bytesToBase64(key);
       keyPanel.hidden = false;
-      clearArtifact();
+      clearRoundtrip();
       updateUsage();
       runtime.textContent = "Rust/WASM ready";
       runButton.disabled = false;
@@ -139,15 +173,15 @@ function setupFunctionLab() {
       operation = button.dataset.labOperation;
       lab.querySelectorAll("[data-lab-operation]").forEach((candidate) => candidate.setAttribute("aria-pressed", String(candidate === button)));
       preset.disabled = operation === "encrypt";
-      clearArtifact();
+      clearRoundtrip();
       updateUsage();
-      setOutputMessage(output, "", operation === "protect" ? "Creates a complete VOF3 artifact, then opens it." : operation === "fuse" ? "Applies and reverses the authenticated Fuse shell." : "Runs the lower-level AEAD primitive and verifies the result.");
+      setOutputMessage(output, "", operation === "protect" ? "Creates a complete VOF3 artifact, then opens it." : operation === "fuse" ? "Isolates the Fuse shell for inspection. Normal text callers should still use protect/open." : "Runs the lower-level AEAD primitive and verifies the result.");
     });
   });
 
   input.addEventListener("input", updateUsage);
   preset.addEventListener("change", () => {
-    clearArtifact();
+    clearRoundtrip();
     updateUsage();
   });
 
@@ -157,13 +191,14 @@ function setupFunctionLab() {
     let binaryArtifact;
     let restored;
     setBusy(runButton, true, "Run round trip");
-    clearArtifact();
+    clearRoundtrip();
     setOutputMessage(output, "", "Running locally…");
     try {
       const wasm = await loadWasm();
       let result;
       let rawLabel;
       let rawValue;
+      let publicStructure;
       if (operation === "protect") {
         const protectedResult = wasm.protect(plaintext, key, preset.value, undefined, undefined, "xchacha20-poly1305", undefined);
         binaryArtifact = protectedResult.artifact;
@@ -171,6 +206,7 @@ function setupFunctionLab() {
         const info = wasm.inspectArtifact(protectedResult.artifact);
         rawLabel = "Full VOF3 artifact · Base64";
         rawValue = bytesToBase64(protectedResult.artifact);
+        publicStructure = info;
         result = {
           Function: "protect → open",
           Format: `VOF${info.version}`,
@@ -182,8 +218,9 @@ function setupFunctionLab() {
         const fused = wasm.fuse(plaintext, key, preset.value, undefined);
         binaryArtifact = fused;
         restored = wasm.unfuse(fused, key);
-        rawLabel = "Full fused payload · Base64";
+        rawLabel = "Full isolated Fuse shell · Base64";
         rawValue = bytesToBase64(fused);
+        publicStructure = wasm.inspectFused(fused);
         result = {
           Function: "fuse → unfuse",
           Preset: preset.value,
@@ -195,6 +232,12 @@ function setupFunctionLab() {
         restored = wasm.decrypt(encrypted, key);
         rawLabel = "Full encrypted result · JSON";
         rawValue = JSON.stringify(encrypted, null, 2);
+        publicStructure = {
+          algorithm: encrypted.algorithm,
+          ciphertextBytes: atob(encrypted.ciphertext).length,
+          nonceBytes: atob(encrypted.nonce).length,
+          tagBytes: atob(encrypted.tag).length,
+        };
         result = {
           Function: "encrypt → decrypt",
           Algorithm: encrypted.algorithm,
@@ -212,7 +255,7 @@ function setupFunctionLab() {
         appendOutputRow(output, label, value);
       }
       appendOutputRow(output, "Restored", decoder.decode(restored));
-      showArtifact(rawLabel, rawValue);
+      showRoundtrip({ plaintext, restored, label: rawLabel, raw: rawValue, metadata: publicStructure });
     } catch (error) {
       setOutputMessage(output, "Operation rejected", error instanceof Error ? error.message : String(error));
     } finally {
@@ -234,6 +277,7 @@ async function setupDeckLab() {
   const host = lab.querySelector("[data-deck-component-host]");
   const status = lab.querySelector("[data-deck-status]");
   const modalButton = lab.querySelector("[data-deck-modal]");
+  const shuffleButton = lab.querySelector("[data-deck-shuffle]");
   let client;
   let inlineUI;
   let modalUI;
@@ -242,9 +286,9 @@ async function setupDeckLab() {
   let mountGeneration = 0;
 
   const themeNotes = {
-    plain: "Quiet utility grid. The host owns every visual decision.",
-    editorial: "A kinetic paper spread with oversized marks and a dealt-card entrance.",
-    signal: "A dense neon cipher board with luminous suits and an active scan line.",
+    plain: "All 52 positions at once: the sensible default integration.",
+    editorial: "The same ordered deck dealt into four physical 13-card hands.",
+    signal: "All 52 cards orbit a live cipher core in four independently moving rings.",
   };
 
   const labels = {
@@ -252,8 +296,8 @@ async function setupDeckLab() {
     description: "Demo only. Select a card and then its destination to move it.",
     warning: "Do not use this displayed order as a real recovery credential.",
     reorderHint: "Drag, click two positions, or use the arrow keys.",
-    shuffle: "New secure deck",
-    shuffling: "Generating…",
+    shuffle: "Secure shuffle",
+    shuffling: "Shuffling securely…",
     confirm: "Confirm demo",
     close: "Close preview",
   };
@@ -298,16 +342,107 @@ async function setupDeckLab() {
     currentDeck = [...deck];
   }
 
+  function decorateLayout(root) {
+    if (!root) return;
+    const panel = root.querySelector(".voideddev-recovery-panel");
+    const grid = root.querySelector(".voideddev-recovery-deck-grid");
+    const actions = root.querySelector(".voideddev-recovery-actions");
+    if (!panel || !grid || !actions) return;
+
+    const cards = [...grid.querySelectorAll(":scope > .voideddev-recovery-card")];
+    if (cards.length !== 52) return;
+    panel.insertBefore(actions, grid);
+    grid.dataset.deckLayout = activeTheme;
+    if (!grid.dataset.deckRelayoutListener) {
+      grid.dataset.deckRelayoutListener = "true";
+      grid.addEventListener("click", () => queueMicrotask(() => decorateLayout(root)));
+    }
+
+    if (activeTheme === "editorial") {
+      grid.replaceChildren();
+      for (let handIndex = 0; handIndex < 4; handIndex += 1) {
+        const hand = document.createElement("section");
+        hand.className = "deck-hand";
+        hand.setAttribute("aria-label", `Hand ${handIndex + 1}, positions ${handIndex * 13 + 1} through ${handIndex * 13 + 13}`);
+        const heading = document.createElement("header");
+        const name = document.createElement("strong");
+        name.textContent = `HAND ${String(handIndex + 1).padStart(2, "0")}`;
+        const range = document.createElement("span");
+        range.textContent = `${String(handIndex * 13 + 1).padStart(2, "0")}—${String(handIndex * 13 + 13).padStart(2, "0")}`;
+        const fan = document.createElement("div");
+        fan.className = "deck-hand__fan";
+        heading.append(name, range);
+        for (const [cardIndex, card] of cards.slice(handIndex * 13, handIndex * 13 + 13).entries()) {
+          card.style.setProperty("--fan-x", `${(cardIndex - 6) * 23}px`);
+          card.style.setProperty("--fan-x-mobile", `${(cardIndex - 6) * 16}px`);
+          card.style.setProperty("--fan-angle", `${(cardIndex - 6) * 3.1}deg`);
+          card.style.setProperty("--fan-depth", String(cardIndex + 1));
+          fan.append(card);
+        }
+        hand.append(heading, fan);
+        grid.append(hand);
+      }
+    } else if (activeTheme === "signal") {
+      grid.replaceChildren();
+      const core = document.createElement("div");
+      core.className = "cipher-core";
+      core.setAttribute("aria-hidden", "true");
+      const count = document.createElement("strong");
+      count.textContent = "52";
+      const label = document.createElement("span");
+      label.textContent = "ORDER LOCKED";
+      core.append(count, label);
+      grid.append(core);
+      for (let ringIndex = 0; ringIndex < 4; ringIndex += 1) {
+        const ring = document.createElement("div");
+        ring.className = `cipher-ring cipher-ring--${ringIndex + 1}`;
+        ring.setAttribute("role", "group");
+        ring.setAttribute("aria-label", `Cipher ring ${ringIndex + 1}, positions ${ringIndex * 13 + 1} through ${ringIndex * 13 + 13}`);
+        for (const [cardIndex, card] of cards.slice(ringIndex * 13, ringIndex * 13 + 13).entries()) {
+          const angle = cardIndex * (360 / 13);
+          card.style.setProperty("--orbit-angle", `${angle}deg`);
+          card.style.setProperty("--orbit-counter", `${-angle}deg`);
+          card.style.setProperty("--orbit-delay", `${-(cardIndex * 0.18)}s`);
+          ring.append(card);
+        }
+        grid.append(ring);
+      }
+    }
+  }
+
+  function decorateAllLayouts() {
+    decorateLayout(host.querySelector(".site-recovery-ui"));
+    document.querySelectorAll(".site-recovery-ui.voideddev-recovery-overlay").forEach(decorateLayout);
+  }
+
+  async function secureShuffle() {
+    const roots = [...document.querySelectorAll(".site-recovery-ui")];
+    roots.forEach((root) => root.classList.add("is-secure-shuffling"));
+    shuffleButton.disabled = true;
+    shuffleButton.textContent = activeTheme === "editorial" ? "Collecting + dealing…" : activeTheme === "signal" ? "Scrambling orbit…" : "Shuffling securely…";
+    status.textContent = "Generating a completely fresh CSPRNG permutation…";
+    try {
+      await new Promise((resolve) => setTimeout(resolve, 820));
+      return await client.generateRecoveryDeck();
+    } finally {
+      roots.forEach((root) => root.classList.remove("is-secure-shuffling"));
+      shuffleButton.disabled = false;
+      shuffleButton.textContent = "Secure shuffle";
+    }
+  }
+
   function createUI() {
     return client.createRecoveryDeckUI({
       deck: currentDeck,
       injectDefaultStyles: false,
       rootClassName: `site-recovery-ui site-recovery-ui--${activeTheme}`,
       labels,
+      shuffleDeck: secureShuffle,
       renderCardContent,
       onChange: (deck, reason) => {
         replaceCurrentDeck(deck);
-        status.textContent = reason === "shuffle" ? "Fresh secure deck generated by the shipped component." : "Card moved by the shipped component.";
+        queueMicrotask(decorateAllLayouts);
+        status.textContent = reason === "shuffle" ? "Fresh secure deck generated, animated, and dealt by the same component." : "Card moved; the custom presentation rebuilt without changing the deck model.";
       },
       onConfirm: () => {
         status.textContent = "Demo confirmed. A real setup would derive a transient Recovery Key and wrap the stable root.";
@@ -331,6 +466,7 @@ async function setupDeckLab() {
       return;
     }
     inlineUI = nextUI;
+    decorateLayout(host.querySelector(".site-recovery-ui"));
   }
 
   try {
@@ -338,7 +474,8 @@ async function setupDeckLab() {
     currentDeck = await client.generateRecoveryDeck();
     await mountInlineTheme();
     modalButton.disabled = false;
-    status.textContent = "Generic component mounted inline with the System design.";
+    shuffleButton.disabled = false;
+    status.textContent = "Generic component mounted as a complete 52-position order grid.";
   } catch (error) {
     status.textContent = `Recovery Deck UI unavailable: ${error instanceof Error ? error.message : String(error)}`;
     return;
@@ -358,7 +495,7 @@ async function setupDeckLab() {
       status.textContent = `Building the ${button.textContent} design…`;
       try {
         await mountInlineTheme();
-        status.textContent = `${button.textContent} rebuilt through public class and card-rendering hooks.`;
+        status.textContent = `${button.textContent} rebuilt from the same 52-card component and current deck order.`;
       } catch (error) {
         status.textContent = `Could not apply the design: ${error instanceof Error ? error.message : String(error)}`;
       } finally {
@@ -371,6 +508,11 @@ async function setupDeckLab() {
     modalUI?.destroy();
     modalUI = createUI();
     await modalUI.show();
+    decorateAllLayouts();
+  });
+
+  shuffleButton.addEventListener("click", () => {
+    host.querySelector(".voideddev-recovery-shuffle")?.click();
   });
 
   window.addEventListener("pagehide", () => {

@@ -9,11 +9,11 @@
   <meta property="og:description" content="A narrow encryption contract for browsers, Node.js, and Rust. Human docs and first-class AI references included.">
   <title>Voided — Protect data. Get one artifact back.</title>
   <link rel="icon" href="./assets/favicon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="./assets/styles.css?v=20260813.1">
+  <link rel="stylesheet" href="./assets/styles.css?v=20260813.2">
   <link rel="alternate" href="./llms.txt" type="text/plain" title="Voided AI index">
   <link rel="alternate" href="./ai.json" type="application/json" title="Voided machine reference">
-  <script src="./assets/site.js?v=20260813.1" defer></script>
-  <script src="./assets/demo.js?v=20260813.1" type="module"></script>
+  <script src="./assets/site.js?v=20260813.2" defer></script>
+  <script src="./assets/demo.js?v=20260813.2" type="module"></script>
 </head>
 <body data-page="home">
   <a class="skip-link" href="#main">Skip to content</a>
@@ -65,8 +65,8 @@
             <button type="button" aria-pressed="false" data-lab-operation="encrypt">encrypt / decrypt</button>
           </div></fieldset>
           <div class="lab-invocation">
-            <div class="lab-invocation__header"><span>Function usage</span><span>Updates from this form</span></div>
-            <pre><code data-lab-usage></code></pre>
+            <div class="lab-invocation__header"><span>What developers write</span><div><span>Updates from this form</span><button type="button" data-copy="#lab-usage-code">Copy code</button></div></div>
+            <pre><code id="lab-usage-code" data-lab-usage></code></pre>
           </div>
           <div class="function-lab__actions">
             <label class="lab-select"><span>Preset</span><select data-lab-preset><option value="balanced">balanced</option><option value="compact">compact</option><option value="concealed">concealed</option></select></label>
@@ -75,11 +75,34 @@
           <output class="lab-output" data-lab-output aria-live="polite">
             <span>Waiting for a test key.</span>
           </output>
-          <div class="lab-raw lab-raw--artifact" data-lab-artifact-panel hidden>
-            <div class="lab-raw__header"><span data-lab-artifact-label>Full encrypted artifact · Base64</span><button type="button" data-copy="#lab-artifact-raw">Copy</button></div>
-            <pre><code id="lab-artifact-raw" data-lab-artifact-raw></code></pre>
-          </div>
-          <p class="lab-note">This is an inspectable example. Everything runs locally in compiled Rust/WASM; nothing is sent or persisted, and refreshing clears the displayed key and artifact.</p>
+          <section class="lab-roundtrip" data-lab-roundtrip hidden aria-labelledby="lab-roundtrip-title">
+            <header class="lab-roundtrip__header"><div><span>Complete trace</span><strong id="lab-roundtrip-title">Every value in the round trip</strong></div><span data-lab-match>Not run</span></header>
+            <div class="lab-roundtrip__stages">
+              <article class="lab-stage">
+                <header><span>01</span><strong>Input</strong></header>
+                <div class="lab-value"><span>Original text</span><code data-lab-input-text></code></div>
+                <div class="lab-value"><span>UTF-8 bytes · hex</span><code id="lab-input-hex" data-lab-input-hex></code><button type="button" data-copy="#lab-input-hex">Copy</button></div>
+                <div class="lab-value"><span>UTF-8 bytes · Base64</span><code data-lab-input-base64></code></div>
+              </article>
+              <article class="lab-stage">
+                <header><span>02</span><strong>Ephemeral key</strong></header>
+                <div class="lab-value"><span>32 bytes · Base64</span><code data-lab-trace-key-base64></code></div>
+                <div class="lab-value"><span>32 bytes · hex</span><code id="lab-key-hex" data-lab-key-hex></code><button type="button" data-copy="#lab-key-hex">Copy</button></div>
+              </article>
+              <article class="lab-stage lab-stage--wide">
+                <header><span>03</span><strong data-lab-artifact-label>Encrypted output</strong></header>
+                <div class="lab-value lab-value--raw"><span>Full raw result</span><code id="lab-artifact-raw" data-lab-artifact-raw></code><button type="button" data-copy="#lab-artifact-raw">Copy</button></div>
+                <div class="lab-value lab-value--raw"><span>Parsed public structure</span><code id="lab-artifact-meta" data-lab-artifact-meta></code><button type="button" data-copy="#lab-artifact-meta">Copy</button></div>
+              </article>
+              <article class="lab-stage lab-stage--wide">
+                <header><span>04</span><strong>Open / decrypt</strong></header>
+                <div class="lab-value"><span>Restored bytes · hex</span><code data-lab-restored-hex></code></div>
+                <div class="lab-value"><span>Restored bytes · Base64</span><code data-lab-restored-base64></code></div>
+                <div class="lab-value"><span>Restored text</span><code data-lab-restored-text></code></div>
+              </article>
+            </div>
+          </section>
+          <p class="lab-note">The code sample shows the normal string API. The trace deliberately exposes the ephemeral key and every byte from the lower-level Rust/WASM execution. Nothing is sent or persisted; refreshing clears it.</p>
         </section>
       </div>
     </section>
@@ -128,17 +151,17 @@
     <section class="section section--light section--compact deck-lab-section" aria-labelledby="deck-lab-title" data-search-title="Recovery Deck UI demo" data-search-summary="Secure shuffle, card reordering, modal or inline presentation, and theme customization">
       <div class="section__inner">
         <div class="section__intro">
-          <div><span class="eyebrow">Recovery Deck UI</span><h2 class="section__title" id="deck-lab-title">Behavior is built in. Styling is yours.</h2></div>
-          <p>The generic component supports secure generation, card movement, modal or inline presentation, class hooks, label overrides, and custom card rendering.</p>
+          <div><span class="eyebrow">Recovery Deck UI</span><h2 class="section__title" id="deck-lab-title">One component. Completely different experiences.</h2></div>
+          <p>Switch between a practical full-order grid, four physical hands, and a 52-card cipher orbit. Every view uses the same generated order and the same shipped component.</p>
         </div>
         <div class="deck-lab" data-deck-lab>
           <div class="deck-lab__toolbar">
             <div class="deck-lab__control"><span>Design system</span><div class="deck-lab__choices" role="group" aria-label="Recovery Deck appearance">
-              <button type="button" aria-pressed="true" data-deck-theme="plain">System</button>
-              <button type="button" aria-pressed="false" data-deck-theme="editorial">Cutout</button>
-              <button type="button" aria-pressed="false" data-deck-theme="signal">Signal</button>
-            </div><p class="deck-lab__theme-note" data-deck-theme-note>Quiet utility grid. The host owns every visual decision.</p></div>
-            <div class="deck-lab__actions"><button class="button button--dark" type="button" data-deck-modal disabled>Open as modal</button></div>
+              <button type="button" aria-pressed="true" data-deck-theme="plain">Order grid</button>
+              <button type="button" aria-pressed="false" data-deck-theme="editorial">Four hands</button>
+              <button type="button" aria-pressed="false" data-deck-theme="signal">Cipher orbit</button>
+            </div><p class="deck-lab__theme-note" data-deck-theme-note>All 52 positions at once: the sensible default integration.</p></div>
+            <div class="deck-lab__actions"><button class="button button--signal" type="button" data-deck-shuffle disabled>Secure shuffle</button><button class="button button--dark" type="button" data-deck-modal disabled>Open as modal</button></div>
           </div>
           <div class="deck-component-host" data-deck-component-host data-deck-appearance="plain"><p class="deck-component-loading" data-deck-status>Loading the generic Recovery Deck component…</p></div>
         </div>
