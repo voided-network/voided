@@ -53,13 +53,13 @@ const fieldPalette = {
 const courseReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
 function byteAt(bytes, index) {
-  return bytes.length ? bytes[index % bytes.length] : 0;
+  if (!bytes.length) return 0;
+  return bytes[((index % bytes.length) + bytes.length) % bytes.length];
 }
 
 function createSignalCanvas(canvas, draw) {
   if (!canvas) return { render() {} };
   const context = canvas.getContext("2d", { alpha: false });
-  const pointer = { active: false, x: 0.5, y: 0.5 };
   let width = 1;
   let height = 1;
   let visible = true;
@@ -73,29 +73,17 @@ function createSignalCanvas(canvas, draw) {
     canvas.width = Math.round(width * scale);
     canvas.height = Math.round(height * scale);
     context.setTransform(scale, 0, 0, scale, 0, 0);
-    draw(context, width, height, courseReducedMotion ? 0 : performance.now() / 1000, pointer);
+    draw(context, width, height, courseReducedMotion ? 0 : performance.now() / 1000);
   }
 
   function render() {
-    draw(context, width, height, courseReducedMotion ? 0 : performance.now() / 1000, pointer);
+    draw(context, width, height, courseReducedMotion ? 0 : performance.now() / 1000);
   }
 
   function loop(timestamp) {
-    if (visible) draw(context, width, height, timestamp / 1000, pointer);
+    if (visible) draw(context, width, height, timestamp / 1000);
     frame = requestAnimationFrame(loop);
   }
-
-  canvas.addEventListener("pointermove", (event) => {
-    const bounds = canvas.getBoundingClientRect();
-    pointer.active = true;
-    pointer.x = Math.max(0, Math.min(1, (event.clientX - bounds.left) / bounds.width));
-    pointer.y = Math.max(0, Math.min(1, (event.clientY - bounds.top) / bounds.height));
-    if (courseReducedMotion) render();
-  });
-  canvas.addEventListener("pointerleave", () => {
-    pointer.active = false;
-    if (courseReducedMotion) render();
-  });
 
   const resizeObserver = new ResizeObserver(resize);
   resizeObserver.observe(canvas);
@@ -115,7 +103,7 @@ function createSignalCanvas(canvas, draw) {
 }
 
 function drawFieldGrid(context, width, height, columns = 24, rows = 12) {
-  context.strokeStyle = fieldPalette.line;
+  context.strokeStyle = "rgba(199,255,94,.055)";
   context.lineWidth = 0.5;
   for (let column = 0; column <= columns; column += 1) {
     const x = (column / columns) * width;
@@ -133,327 +121,344 @@ function drawFieldGrid(context, width, height, columns = 24, rows = 12) {
   }
 }
 
-function drawByteGlyph(context, byte, x, y, size, phase) {
-  const unit = size / 5;
-  context.fillStyle = fieldPalette.paper;
-  for (let row = 0; row < 5; row += 1) {
-    for (let column = 0; column < 5; column += 1) {
-      const bit = (byte >> ((row * 3 + column * 5 + phase) % 8)) & 1;
-      const echo = ((byte + row * 11 + column * 7 + phase) % 5) === 0;
-      if (bit ^ echo) context.fillRect(x + column * unit, y + row * unit, Math.max(1, unit - 1.2), Math.max(1, unit - 1.2));
-    }
+function drawMono(context, text, x, y, options = {}) {
+  const { color = fieldPalette.paper, size = 9, align = "left", alpha = 1, weight = 500 } = options;
+  context.save();
+  context.fillStyle = color;
+  context.globalAlpha = alpha;
+  context.font = `${weight} ${size}px SFMono-Regular, Consolas, "Liberation Mono", monospace`;
+  context.textAlign = align;
+  context.textBaseline = "middle";
+  context.fillText(text, x, y);
+  context.restore();
+}
+
+function drawTerminalPanel(context, x, y, width, height, color = fieldPalette.signal) {
+  context.fillStyle = "rgba(7,12,12,.82)";
+  context.fillRect(x, y, width, height);
+  context.strokeStyle = "rgba(241,239,231,.15)";
+  context.lineWidth = 1;
+  context.strokeRect(x + 0.5, y + 0.5, width - 1, height - 1);
+  context.fillStyle = color;
+  context.fillRect(x, y, Math.min(width, 42), 2);
+}
+
+function drawStatusLamp(context, x, y, color, active = true) {
+  context.save();
+  context.fillStyle = color;
+  context.globalAlpha = active ? 1 : 0.25;
+  context.shadowColor = color;
+  context.shadowBlur = active ? 10 : 0;
+  context.beginPath();
+  context.arc(x, y, 2.6, 0, Math.PI * 2);
+  context.fill();
+  context.restore();
+}
+
+function drawFlowPackets(context, fromX, toX, y, time, color, active = true, stop = 1) {
+  context.strokeStyle = active ? "rgba(199,255,94,.32)" : "rgba(241,239,231,.1)";
+  context.lineWidth = 1;
+  context.beginPath();
+  context.moveTo(fromX, y);
+  context.lineTo(toX, y);
+  context.stroke();
+  if (!active) return;
+  for (let index = 0; index < 7; index += 1) {
+    const progress = Math.min(((time * 0.18 + index / 7) % 1), stop);
+    const x = fromX + (toX - fromX) * progress;
+    context.fillStyle = color;
+    context.globalAlpha = 0.35 + progress * 0.65;
+    context.fillRect(x - 2, y - 2, 4, 4);
+  }
+  context.globalAlpha = 1;
+}
+
+function drawMatrixColumn(context, bytes, x, top, bottom, column, time, color, faded = false) {
+  const rowHeight = 18;
+  const rows = Math.ceil((bottom - top) / rowHeight) + 2;
+  const offset = (time * (16 + (column % 4) * 2) + column * 31) % rowHeight;
+  for (let row = -1; row < rows; row += 1) {
+    const index = row + column * 7 + Math.floor(time * 1.4);
+    const byte = byteAt(bytes, index);
+    const y = top + row * rowHeight + offset;
+    const edgeFade = Math.min(1, (y - top) / 34, (bottom - y) / 34);
+    drawMono(context, byte.toString(16).padStart(2, "0").toUpperCase(), x, y, {
+      color,
+      size: 8,
+      alpha: Math.max(0, edgeFade) * (faded ? 0.18 : 0.42 + ((byte % 5) / 10)),
+    });
   }
 }
 
-function drawTransformField(context, width, height, time, pointer, state) {
+function drawKeyFingerprint(context, x, y, width, height, seed, color, label) {
+  drawMono(context, label, x + width / 2, y - 14, { color: fieldPalette.muted, size: 8, align: "center" });
+  context.strokeStyle = "rgba(241,239,231,.14)";
+  context.strokeRect(x + 0.5, y + 0.5, width - 1, height - 1);
+  const bars = Math.max(6, Math.min(12, Math.floor(width / 11)));
+  const gap = 3;
+  const barWidth = Math.max(2, (width - 18 - gap * (bars - 1)) / bars);
+  for (let index = 0; index < bars; index += 1) {
+    const value = ((seed * (index + 11) + index * 47) ^ (seed >> (index % 5))) & 255;
+    const barHeight = 12 + (value / 255) * (height - 30);
+    context.fillStyle = color;
+    context.globalAlpha = 0.32 + (value / 255) * 0.68;
+    context.fillRect(x + 9 + index * (barWidth + gap), y + height - 9 - barHeight, barWidth, barHeight);
+  }
+  context.globalAlpha = 1;
+}
+
+function drawLock(context, x, y, size, color, closed) {
+  context.save();
+  context.strokeStyle = color;
+  context.lineWidth = Math.max(1.5, size * 0.035);
+  context.strokeRect(x - size * 0.35, y - size * 0.05, size * 0.7, size * 0.55);
+  context.beginPath();
+  context.arc(x, y - size * 0.08, size * 0.23, Math.PI, closed ? Math.PI * 2 : Math.PI * 1.72);
+  context.stroke();
+  context.fillStyle = color;
+  context.beginPath();
+  context.arc(x, y + size * 0.16, size * 0.045, 0, Math.PI * 2);
+  context.fill();
+  context.restore();
+}
+
+function drawTransformField(context, width, height, time, state) {
   context.fillStyle = fieldPalette.ink;
   context.fillRect(0, 0, width, height);
   drawFieldGrid(context, width, height, 30, 14);
-  const thirds = [0, width / 3, width * 2 / 3, width];
-  context.strokeStyle = "rgba(199,255,94,.25)";
-  for (const x of thirds.slice(1, -1)) {
-    context.beginPath(); context.moveTo(x, 0); context.lineTo(x, height); context.stroke();
-  }
+  const pad = width < 600 ? 9 : 18;
+  const gap = width < 600 ? 7 : 14;
+  const top = width < 600 ? 38 : 46;
+  const bottom = 30;
+  const panelWidth = (width - pad * 2 - gap * 2) / 3;
+  const panelHeight = height - top - bottom;
+  const panels = [0, 1, 2].map((index) => ({ x: pad + index * (panelWidth + gap), y: top, width: panelWidth, height: panelHeight }));
+  const encrypted = state.cipherBytes.length > 0;
 
-  const sourceWidth = width / 3;
-  const glyphSize = Math.min(34, sourceWidth / 7);
-  const glyphGapX = (sourceWidth - glyphSize * 4) / 5;
-  const glyphGapY = (height - glyphSize * 4) / 5;
-  for (let index = 0; index < 16; index += 1) {
-    const column = index % 4;
-    const row = Math.floor(index / 4);
-    const x = glyphGapX + column * (glyphSize + glyphGapX);
-    const y = glyphGapY + row * (glyphSize + glyphGapY);
-    context.strokeStyle = "rgba(241,239,231,.2)";
-    context.strokeRect(x - 5, y - 5, glyphSize + 10, glyphSize + 10);
-    drawByteGlyph(context, byteAt(state.bytes, index), x, y, glyphSize, index);
-  }
+  panels.forEach((panel, index) => drawTerminalPanel(context, panel.x, panel.y, panel.width, panel.height, index === 0 && !encrypted ? fieldPalette.change : fieldPalette.signal));
 
-  for (let stream = 0; stream < 6; stream += 1) {
-    const seed = byteAt(state.bytes, stream * 3) / 255;
-    const flow = (time * (0.055 + seed * 0.035) + stream / 6) % 1;
-    context.beginPath();
-    for (let point = 0; point <= 32; point += 1) {
-      const progress = point / 32;
-      const x = 12 + progress * (sourceWidth - 24);
-      const y = height * (0.16 + stream * 0.135)
-        + Math.sin(progress * Math.PI * (2.4 + seed) + time * 0.85 + stream) * (7 + seed * 12);
-      if (point === 0) context.moveTo(x, y); else context.lineTo(x, y);
-    }
-    context.strokeStyle = stream % 2 === 0 ? "rgba(255,139,69,.34)" : "rgba(199,255,94,.18)";
-    context.lineWidth = stream % 2 === 0 ? 1.4 : 0.8;
-    context.stroke();
-    const headX = 12 + flow * (sourceWidth - 24);
-    const headY = height * (0.16 + stream * 0.135)
-      + Math.sin(flow * Math.PI * (2.4 + seed) + time * 0.85 + stream) * (7 + seed * 12);
-    context.fillStyle = stream % 2 === 0 ? fieldPalette.change : fieldPalette.signal;
-    context.beginPath(); context.arc(headX, headY, stream % 2 === 0 ? 2.8 : 1.8, 0, Math.PI * 2); context.fill();
+  const source = panels[0];
+  context.save();
+  context.beginPath();
+  context.rect(source.x + 1, source.y + 1, source.width - 2, source.height - 2);
+  context.clip();
+  const sourceColumns = Math.max(2, Math.min(8, Math.floor(source.width / 34)));
+  for (let column = 0; column < sourceColumns; column += 1) {
+    drawMatrixColumn(context, state.bytes, source.x + 14 + column * ((source.width - 28) / sourceColumns), source.y + 20, source.y + source.height - 22, column, time, column % 3 === 0 ? fieldPalette.change : fieldPalette.paper);
   }
+  const scanY = source.y + 20 + ((time * 28) % Math.max(1, source.height - 44));
+  const sourceGradient = context.createLinearGradient(0, scanY - 24, 0, scanY + 4);
+  sourceGradient.addColorStop(0, "rgba(255,139,69,0)");
+  sourceGradient.addColorStop(1, "rgba(255,139,69,.17)");
+  context.fillStyle = sourceGradient;
+  context.fillRect(source.x, scanY - 24, source.width, 28);
+  context.restore();
+  drawMono(context, `${state.bytes.length} UTF-8 BYTES`, source.x + source.width / 2, source.y + source.height - 12, { color: fieldPalette.change, size: width < 600 ? 6.5 : 8, align: "center" });
 
-  for (let index = 0; index < 34; index += 1) {
-    const progress = (index / 34 + time * (0.055 + (byteAt(state.bytes, index) / 255) * 0.035)) % 1;
-    const fromX = sourceWidth * 0.42;
-    const toX = width * 0.73;
-    const x = fromX + (toX - fromX) * progress;
-    const current = pointer.active ? (pointer.y - 0.5) * 90 : 0;
-    const y = height * 0.5 + Math.sin(progress * Math.PI * 4 + index * 1.7 + time) * (18 + byteAt(state.bytes, index) * 0.08) + current * Math.sin(progress * Math.PI);
-    context.fillStyle = index % 5 === 0 ? fieldPalette.signal : fieldPalette.change;
-    context.globalAlpha = 0.28 + (1 - progress) * 0.6;
-    context.beginPath(); context.arc(x, y, index % 5 === 0 ? 2.3 : 1.25, 0, Math.PI * 2); context.fill();
+  const hash = panels[1];
+  const digestColumns = width < 600 ? 4 : 8;
+  const digestRows = Math.ceil(32 / digestColumns);
+  const digestGap = width < 600 ? 3 : 5;
+  const digestCellWidth = (hash.width - 22 - digestGap * (digestColumns - 1)) / digestColumns;
+  const digestCellHeight = Math.min(24, (hash.height - 82 - digestGap * (digestRows - 1)) / digestRows);
+  const digestTop = hash.y + 42;
+  for (let index = 0; index < 32; index += 1) {
+    const column = index % digestColumns;
+    const row = Math.floor(index / digestColumns);
+    const x = hash.x + 11 + column * (digestCellWidth + digestGap);
+    const y = digestTop + row * (digestCellHeight + digestGap);
+    const byte = byteAt(state.digest, index);
+    const pulse = (Math.floor(time * 5) + index) % 17 === 0;
+    context.fillStyle = pulse ? "rgba(199,255,94,.34)" : `rgba(199,255,94,${0.05 + (byte / 255) * 0.12})`;
+    context.fillRect(x, y, digestCellWidth, digestCellHeight);
+    drawMono(context, byte.toString(16).padStart(2, "0").toUpperCase(), x + digestCellWidth / 2, y + digestCellHeight / 2, { color: fieldPalette.signal, size: width < 600 ? 6 : 8, align: "center", alpha: 0.72 });
   }
-  context.globalAlpha = 1;
+  drawMono(context, "SHA-256", hash.x + hash.width / 2, hash.y + 23, { color: fieldPalette.signal, size: width < 600 ? 7 : 10, align: "center", weight: 700 });
+  drawMono(context, "FIXED 256-BIT DIGEST", hash.x + hash.width / 2, hash.y + hash.height - 12, { color: fieldPalette.muted, size: width < 600 ? 5.5 : 8, align: "center" });
 
-  const terrainLeft = width / 3 + 16;
-  const terrainRight = width * 2 / 3 - 16;
-  const terrainTop = height * 0.22;
-  const terrainBottom = height * 0.8;
-  for (let row = 0; row < 10; row += 1) {
-    context.beginPath();
-    for (let column = 0; column < 14; column += 1) {
-      const progressX = column / 13;
-      const progressY = row / 9;
-      const seed = byteAt(state.digest, row * 14 + column) / 255;
-      const x = terrainLeft + progressX * (terrainRight - terrainLeft) + (progressY - 0.5) * 18;
-      const wave = Math.sin(progressX * Math.PI * 3 + time * 0.7 + row * 0.36) * (8 + seed * 24);
-      const y = terrainTop + progressY * (terrainBottom - terrainTop) - wave;
-      if (column === 0) context.moveTo(x, y); else context.lineTo(x, y);
-    }
-    context.strokeStyle = row % 3 === 0 ? fieldPalette.signalSoft : "rgba(241,239,231,.48)";
-    context.lineWidth = row % 3 === 0 ? 1.3 : 0.75;
-    context.stroke();
+  const cipher = panels[2];
+  context.save();
+  context.beginPath();
+  context.rect(cipher.x + 1, cipher.y + 1, cipher.width - 2, cipher.height - 2);
+  context.clip();
+  const cipherBytes = encrypted ? state.cipherBytes : state.digest;
+  const cipherColumns = Math.max(2, Math.min(8, Math.floor(cipher.width / 34)));
+  for (let column = 0; column < cipherColumns; column += 1) {
+    drawMatrixColumn(context, cipherBytes, cipher.x + 14 + column * ((cipher.width - 28) / cipherColumns), cipher.y + 20, cipher.y + cipher.height - 22, column + 9, time * 1.22, fieldPalette.signal, !encrypted);
   }
-  for (let column = 0; column < 14; column += 1) {
-    context.beginPath();
-    for (let row = 0; row < 10; row += 1) {
-      const progressX = column / 13;
-      const progressY = row / 9;
-      const seed = byteAt(state.digest, row * 14 + column) / 255;
-      const x = terrainLeft + progressX * (terrainRight - terrainLeft) + (progressY - 0.5) * 18;
-      const y = terrainTop + progressY * (terrainBottom - terrainTop) - Math.sin(progressX * Math.PI * 3 + time * 0.7 + row * 0.36) * (8 + seed * 24);
-      if (row === 0) context.moveTo(x, y); else context.lineTo(x, y);
-    }
-    context.strokeStyle = "rgba(241,239,231,.17)";
-    context.lineWidth = 0.6;
-    context.stroke();
-  }
+  context.restore();
+  drawStatusLamp(context, cipher.x + 14, cipher.y + 19, encrypted ? fieldPalette.signal : fieldPalette.change, true);
+  drawMono(context, encrypted ? "SEALED" : "AWAITING KEY", cipher.x + 23, cipher.y + 19, { color: encrypted ? fieldPalette.signal : fieldPalette.change, size: width < 600 ? 6 : 8 });
+  drawMono(context, encrypted ? "XCHACHA20-POLY1305" : "NO CIPHERTEXT", cipher.x + cipher.width / 2, cipher.y + cipher.height - 12, { color: encrypted ? fieldPalette.signal : fieldPalette.muted, size: width < 600 ? 5.5 : 8, align: "center" });
 
-  const fieldBytes = state.cipherBytes.length ? state.cipherBytes : state.digest;
-  const points = [];
-  const fieldLeft = width * 2 / 3;
-  for (let index = 0; index < 42; index += 1) {
-    const seedA = byteAt(fieldBytes, index * 2) / 255;
-    const seedB = byteAt(fieldBytes, index * 2 + 1) / 255;
-    const orbit = time * (0.08 + (index % 5) * 0.012);
-    const x = fieldLeft + 28 + seedA * (width - fieldLeft - 56) + Math.cos(orbit + index) * 7;
-    const y = 30 + seedB * (height - 60) + Math.sin(orbit * 1.3 + index) * 7;
-    points.push({ x, y });
-  }
-  for (let index = 1; index < points.length; index += 1) {
-    if (index % 3 === 0) continue;
-    context.beginPath();
-    context.moveTo(points[index - 1].x, points[index - 1].y);
-    context.lineTo(points[index].x, points[index].y);
-    context.strokeStyle = state.cipherBytes.length ? fieldPalette.signalSoft : "rgba(241,239,231,.17)";
-    context.lineWidth = 0.6;
-    context.stroke();
-  }
-  points.forEach((point, index) => {
-    context.fillStyle = index % 7 === 0 ? fieldPalette.change : state.cipherBytes.length ? fieldPalette.signal : fieldPalette.paper;
-    context.beginPath(); context.arc(point.x, point.y, index % 7 === 0 ? 2.6 : 1.35, 0, Math.PI * 2); context.fill();
-  });
+  const wireY = top + panelHeight * 0.5;
+  drawFlowPackets(context, source.x + source.width, hash.x, wireY, time, fieldPalette.change, true);
+  drawFlowPackets(context, hash.x + hash.width, cipher.x, wireY, time, fieldPalette.signal, encrypted);
 }
 
-function drawKeyField(context, width, height, time, pointer, state) {
+function drawKeyField(context, width, height, time, state) {
   context.fillStyle = fieldPalette.ink;
   context.fillRect(0, 0, width, height);
-  drawFieldGrid(context, width, height, 26, 10);
-  const centers = [{ x: width * 0.18, y: height * 0.5 }, { x: width * 0.5, y: height * 0.5 }, { x: width * 0.82, y: height * 0.5 }];
+  drawFieldGrid(context, width, height, 28, 12);
+  const compact = width < 600;
+  const y = height * 0.51;
+  const fingerprintWidth = Math.max(72, width * (compact ? 0.23 : 0.2));
+  const fingerprintHeight = Math.min(150, height * 0.42);
+  const leftX = width * 0.15 - fingerprintWidth / 2;
+  const rightX = width * 0.85 - fingerprintWidth / 2;
+  const gateWidth = Math.max(76, width * (compact ? 0.22 : 0.18));
+  const gateHeight = Math.min(160, height * 0.5);
+  const gateX = width * 0.5 - gateWidth / 2;
+  const gateY = y - gateHeight / 2;
   const isRejected = state.status === "rejected";
+  const active = ["locked", "sealed", "open"].includes(state.status);
   const accent = isRejected ? fieldPalette.change : fieldPalette.signal;
-  const drift = pointer.active ? (pointer.y - 0.5) * 28 : 0;
-  centers.forEach((center, index) => {
-    for (let ring = 1; ring <= 4; ring += 1) {
-      context.beginPath();
-      context.arc(center.x, center.y + drift * (index - 1), 18 + ring * 13 + Math.sin(time + ring + index) * 2, 0, Math.PI * 2);
-      context.strokeStyle = ring === 1 ? accent : "rgba(241,239,231,.13)";
-      context.lineWidth = ring === 1 ? 1.4 : 0.7;
-      context.stroke();
-    }
-  });
 
-  context.strokeStyle = isRejected ? fieldPalette.changeSoft : fieldPalette.signalSoft;
-  context.lineWidth = 1;
-  context.beginPath();
-  context.moveTo(centers[0].x, centers[0].y);
-  context.bezierCurveTo(width * 0.32, height * 0.22 + drift, width * 0.38, height * 0.78 - drift, centers[1].x, centers[1].y);
-  context.bezierCurveTo(width * 0.62, height * 0.22 - drift, width * 0.7, height * 0.78 + drift, centers[2].x, centers[2].y);
-  context.stroke();
+  drawKeyFingerprint(context, leftX, y - fingerprintHeight / 2, fingerprintWidth, fingerprintHeight, state.model === "asymmetric" ? 0xb6 : 0xca, fieldPalette.signal, state.model === "asymmetric" ? "PUBLIC KEY" : "KEY A");
+  drawKeyFingerprint(context, rightX, y - fingerprintHeight / 2, fingerprintWidth, fingerprintHeight, state.model === "asymmetric" ? 0x67 : isRejected ? 0x91 : 0xca, isRejected ? fieldPalette.change : fieldPalette.signal, state.model === "asymmetric" ? "PRIVATE KEY" : isRejected ? "KEY B" : "KEY A");
 
-  const moving = state.status === "locked" || state.status === "sealed" || state.status === "open";
-  for (let index = 0; index < 28; index += 1) {
-    const progress = moving ? (index / 28 + time * 0.085) % 1 : index / 28;
-    const x = centers[0].x + (centers[2].x - centers[0].x) * progress;
-    const y = height * 0.5 + Math.sin(progress * Math.PI * 4 + index * 0.7) * (18 + (pointer.active ? 16 : 0));
-    context.fillStyle = isRejected && progress > 0.42 && progress < 0.58 ? fieldPalette.change : accent;
-    context.globalAlpha = moving ? 0.85 : 0.2;
-    context.beginPath(); context.arc(x, y, index % 6 === 0 ? 2.7 : 1.3, 0, Math.PI * 2); context.fill();
-  }
-  context.globalAlpha = 1;
+  drawTerminalPanel(context, gateX, gateY, gateWidth, gateHeight, accent);
+  drawMono(context, "CIPHER GATE", width * 0.5, gateY + 18, { color: fieldPalette.muted, size: compact ? 6 : 8, align: "center" });
+  drawLock(context, width * 0.5, y - 2, Math.min(62, gateHeight * 0.42), accent, state.status !== "open");
+  drawMono(context, isRejected ? "DENIED" : state.status === "locked" || state.status === "sealed" ? "SEALED" : "AUTHORIZED", width * 0.5, gateY + gateHeight - 18, { color: accent, size: compact ? 6.5 : 9, align: "center", weight: 700 });
 
-  if (state.model === "asymmetric") {
-    for (let index = 0; index < 18; index += 1) {
-      const angle = (index / 18) * Math.PI * 2 + time * 0.08;
-      const radius = 72 + (index % 3) * 13;
-      context.fillStyle = index % 4 === 0 ? fieldPalette.signal : fieldPalette.paper;
-      context.globalAlpha = 0.65;
-      context.fillRect(centers[0].x + Math.cos(angle) * radius - 2, centers[0].y + Math.sin(angle) * radius - 2, 4, 4);
-    }
-    context.globalAlpha = 1;
-    drawByteGlyph(context, 0b10110110, centers[2].x - 17, centers[2].y - 17, 34, 2);
-  } else {
-    drawByteGlyph(context, 0b11001010, centers[0].x - 17, centers[0].y - 17, 34, 1);
-    drawByteGlyph(context, 0b11001010, centers[2].x - 17, centers[2].y - 17, 34, 1);
-  }
+  const leftBus = leftX + fingerprintWidth;
+  const rightBus = rightX;
+  drawFlowPackets(context, leftBus, gateX, y, time, accent, active, 1);
+  drawFlowPackets(context, gateX + gateWidth, rightBus, y, time, accent, active && !isRejected, 1);
 
   if (isRejected) {
-    const radius = 34 + ((time * 44) % 90);
-    context.beginPath(); context.arc(centers[1].x, centers[1].y, radius, 0, Math.PI * 2);
-    context.strokeStyle = fieldPalette.changeSoft; context.lineWidth = 2; context.stroke();
+    for (let ray = 0; ray < 8; ray += 1) {
+      const angle = (ray / 8) * Math.PI * 2 + time * 0.5;
+      context.beginPath();
+      context.moveTo(gateX + gateWidth / 2, y);
+      context.lineTo(gateX + gateWidth / 2 + Math.cos(angle) * (20 + ray * 2), y + Math.sin(angle) * (14 + ray));
+      context.strokeStyle = fieldPalette.changeSoft;
+      context.stroke();
+    }
   }
+
+  const status = isRejected
+    ? "KEY MISMATCH · NO PLAINTEXT RELEASED"
+    : state.status === "locked" ? "MATCHING SECRET REQUIRED TO OPEN"
+      : state.status === "sealed" ? "PUBLIC KEY SEALED · PRIVATE KEY REQUIRED"
+        : state.model === "asymmetric" ? "PUBLIC KEY LOCKS · PRIVATE KEY OPENS" : "MATCHING KEYS · ACCESS GRANTED";
+  drawStatusLamp(context, width * 0.5 - Math.min(140, status.length * 3.2), height - 22, accent, true);
+  drawMono(context, status, width * 0.5, height - 22, { color: accent, size: compact ? 6.2 : 9, align: "center" });
 }
 
-function drawJourneyField(context, width, height, time, pointer, state) {
+function drawJourneyField(context, width, height, time, state) {
   context.fillStyle = fieldPalette.ink;
   context.fillRect(0, 0, width, height);
   drawFieldGrid(context, width, height, 32, 12);
-  const y = height * (0.5 + (pointer.active ? (pointer.y - 0.5) * 0.05 : 0));
+  const compact = width < 600;
+  const y = height * 0.52;
   const positions = [width * 0.12, width * 0.34, width * 0.5, width * 0.88];
   if (!Number.isFinite(state.position) || state.position <= 0) state.position = positions[state.step];
   state.position += (positions[state.step] - state.position) * 0.08;
   const routeColor = state.mode === "e2ee" ? fieldPalette.signal : fieldPalette.change;
-
-  for (let lane = -3; lane <= 3; lane += 1) {
-    context.beginPath();
-    for (let point = 0; point <= 80; point += 1) {
-      const progress = point / 80;
-      const x = width * 0.1 + progress * width * 0.8;
-      const wave = Math.sin(progress * Math.PI * 5 + time * 1.2 + lane) * (4 + Math.abs(lane) * 2);
-      const py = y + lane * 10 + wave;
-      if (point === 0) context.moveTo(x, py); else context.lineTo(x, py);
-    }
-    context.strokeStyle = lane === 0 ? routeColor : "rgba(241,239,231,.13)";
-    context.lineWidth = lane === 0 ? 1.5 : 0.6;
-    context.stroke();
-  }
-
+  const endpointWidth = compact ? 58 : Math.min(150, width * 0.16);
+  const endpointHeight = compact ? 104 : Math.min(180, height * 0.48);
+  const endpointY = y - endpointHeight / 2;
   const serviceX = width * 0.5;
-  context.fillStyle = state.mode === "server" ? "rgba(255,139,69,.14)" : "rgba(199,255,94,.05)";
-  context.fillRect(serviceX - width * 0.1, height * 0.17, width * 0.2, height * 0.66);
-  context.strokeStyle = state.mode === "server" ? fieldPalette.change : fieldPalette.signalSoft;
-  context.strokeRect(serviceX - width * 0.1, height * 0.17, width * 0.2, height * 0.66);
-  for (let row = 0; row < 7; row += 1) {
-    for (let column = 0; column < 7; column += 1) {
-      const on = (row * 7 + column + Math.floor(time * 3)) % (state.mode === "server" ? 4 : 3) === 0;
-      context.fillStyle = on ? routeColor : "rgba(241,239,231,.12)";
-      context.fillRect(serviceX - 42 + column * 14, height * 0.28 + row * 14, 5, 5);
-    }
-  }
+  const serviceWidth = compact ? 74 : Math.min(200, width * 0.2);
+  const serviceHeight = compact ? 160 : Math.min(240, height * 0.62);
+  const serviceY = y - serviceHeight / 2;
 
-  for (const x of [width * 0.12, width * 0.88]) {
-    for (let ring = 0; ring < 5; ring += 1) {
-      context.beginPath(); context.arc(x, y, 20 + ring * 12 + Math.sin(time + ring) * 2, 0, Math.PI * 2);
-      context.strokeStyle = ring === 0 ? fieldPalette.signal : "rgba(241,239,231,.13)"; context.stroke();
-    }
-  }
+  drawTerminalPanel(context, width * 0.12 - endpointWidth / 2, endpointY, endpointWidth, endpointHeight, fieldPalette.signal);
+  drawTerminalPanel(context, width * 0.88 - endpointWidth / 2, endpointY, endpointWidth, endpointHeight, fieldPalette.signal);
+  drawTerminalPanel(context, serviceX - serviceWidth / 2, serviceY, serviceWidth, serviceHeight, routeColor);
+  drawMono(context, "KEY", width * 0.12, endpointY + 18, { color: fieldPalette.signal, size: compact ? 7 : 9, align: "center", weight: 700 });
+  drawMono(context, "KEY", width * 0.88, endpointY + 18, { color: fieldPalette.signal, size: compact ? 7 : 9, align: "center", weight: 700 });
+  drawKeyFingerprint(context, width * 0.12 - endpointWidth * 0.3, y - endpointHeight * 0.18, endpointWidth * 0.6, endpointHeight * 0.38, 0x44, fieldPalette.signal, "");
+  drawKeyFingerprint(context, width * 0.88 - endpointWidth * 0.3, y - endpointHeight * 0.18, endpointWidth * 0.6, endpointHeight * 0.38, 0x44, fieldPalette.signal, "");
 
-  const packetSize = Math.min(72, height * 0.18);
+  const rackTop = serviceY + 30;
+  const rackRows = compact ? 6 : 8;
+  for (let row = 0; row < rackRows; row += 1) {
+    const rackY = rackTop + row * ((serviceHeight - 64) / rackRows);
+    context.strokeStyle = "rgba(241,239,231,.12)";
+    context.strokeRect(serviceX - serviceWidth * 0.36, rackY, serviceWidth * 0.72, 11);
+    drawStatusLamp(context, serviceX - serviceWidth * 0.29, rackY + 5.5, row % 3 === 0 ? routeColor : fieldPalette.muted, true);
+    drawMono(context, state.mode === "e2ee" ? byteAt(new Uint8Array([0xa3, 0x7c, 0x91, 0xef]), row).toString(16).padStart(2, "0").toUpperCase() : "TXT", serviceX + serviceWidth * 0.27, rackY + 5.5, { color: state.mode === "e2ee" ? fieldPalette.signal : fieldPalette.change, size: compact ? 5.5 : 7, align: "right", alpha: 0.72 });
+  }
+  drawMono(context, state.mode === "e2ee" ? "CIPHERTEXT RELAY" : "PLAINTEXT VISIBLE", serviceX, serviceY + serviceHeight - 16, { color: routeColor, size: compact ? 5.5 : 8, align: "center", weight: 700 });
+
+  drawFlowPackets(context, width * 0.12 + endpointWidth / 2, serviceX - serviceWidth / 2, y, time, routeColor, state.step > 0);
+  drawFlowPackets(context, serviceX + serviceWidth / 2, width * 0.88 - endpointWidth / 2, y, time, routeColor, state.step > 1);
+
+  const packetSize = compact ? 34 : Math.min(62, height * 0.16);
   context.fillStyle = fieldPalette.ink;
   context.strokeStyle = routeColor;
   context.lineWidth = 2;
   context.fillRect(state.position - packetSize / 2, y - packetSize / 2, packetSize, packetSize);
   context.strokeRect(state.position - packetSize / 2, y - packetSize / 2, packetSize, packetSize);
-  if (state.mode === "e2ee" && state.step > 0 && state.step < 3) {
-    for (let index = 0; index < 25; index += 1) {
-      context.fillStyle = index % 4 === 0 ? fieldPalette.signal : fieldPalette.paper;
-      context.globalAlpha = 0.45 + (index % 3) * 0.18;
-      context.fillRect(state.position - packetSize * 0.32 + (index % 5) * packetSize * 0.13, y - packetSize * 0.32 + Math.floor(index / 5) * packetSize * 0.13, 3, 3);
-    }
-  } else {
-    context.strokeStyle = state.mode === "server" && state.step > 0 ? fieldPalette.change : fieldPalette.paper;
-    context.lineWidth = 2;
-    for (let line = -1; line <= 1; line += 1) {
-      context.beginPath(); context.moveTo(state.position - packetSize * 0.25, y + line * 9); context.lineTo(state.position + packetSize * (line === 1 ? 0.12 : 0.25), y + line * 9); context.stroke();
-    }
-  }
-  context.globalAlpha = 1;
-
-  for (let index = 0; index < 40; index += 1) {
-    const progress = (index / 40 + time * 0.045) % 1;
-    const x = width * 0.1 + progress * width * 0.8;
-    const py = y + Math.sin(progress * 18 + index) * 34;
-    context.fillStyle = index % 8 === 0 ? routeColor : fieldPalette.paper;
-    context.globalAlpha = 0.15 + progress * 0.55;
-    context.beginPath(); context.arc(x, py, index % 8 === 0 ? 2.4 : 1, 0, Math.PI * 2); context.fill();
-  }
-  context.globalAlpha = 1;
+  const encryptedTransit = state.mode === "e2ee" && state.step > 0 && state.step < 3;
+  drawMono(context, encryptedTransit ? "A7 3C" : "TXT", state.position, y, { color: routeColor, size: compact ? 6 : 9, align: "center", weight: 700 });
+  const boundaryText = state.mode === "e2ee" ? "ONLY ENDPOINTS HOLD DECRYPTION KEYS" : "SERVICE RECEIVES READABLE DATA";
+  drawStatusLamp(context, width * 0.5 - Math.min(150, boundaryText.length * 3.2), height - 22, routeColor, true);
+  drawMono(context, boundaryText, width * 0.5, height - 22, { color: routeColor, size: compact ? 6 : 9, align: "center" });
 }
 
-function drawTamperField(context, width, height, time, pointer, state) {
+function drawTamperField(context, width, height, time, state) {
   context.fillStyle = fieldPalette.ink;
   context.fillRect(0, 0, width, height);
-  const columns = width < 560 ? 12 : 20;
+  drawFieldGrid(context, width, height, 30, 12);
+  const compact = width < 560;
+  const columns = compact ? 8 : 16;
   const bytes = state.bytes;
-  const rows = bytes?.length ? Math.ceil(bytes.length / columns) : 7;
-  const gap = 4;
-  const cellWidth = Math.max(5, (width - 44 - gap * (columns - 1)) / columns);
-  const cellHeight = Math.max(5, Math.min(18, (height - 42 - gap * (rows - 1)) / rows));
+  const count = bytes?.length || columns * (compact ? 12 : 7);
+  const rows = Math.ceil(count / columns);
+  const addressWidth = compact ? 25 : 42;
+  const gap = compact ? 2 : 4;
+  const startX = 14 + addressWidth;
+  const startY = compact ? 50 : 58;
+  const footerHeight = compact ? 42 : 54;
+  const availableWidth = width - startX - 14;
+  const availableHeight = height - startY - footerHeight;
+  const cellWidth = (availableWidth - gap * (columns - 1)) / columns;
+  const cellHeight = Math.max(9, Math.min(28, (availableHeight - gap * (rows - 1)) / rows));
   const gridHeight = rows * cellHeight + (rows - 1) * gap;
-  const startX = 22;
-  const startY = Math.max(20, (height - gridHeight) / 2);
-  const count = bytes?.length || columns * rows;
+
+  drawMono(context, "AUTHENTICATED ARTIFACT / HEX", 14, 22, { color: fieldPalette.paper, size: compact ? 7 : 10, weight: 700 });
+  const statusColor = state.status === "rejected" || state.status === "broken" ? fieldPalette.change : state.status === "intact" ? fieldPalette.signal : fieldPalette.muted;
+  const statusText = state.status === "rejected" ? "TAG MISMATCH · REJECTED" : state.status === "broken" ? "BYTE CHANGED · VERIFY REQUIRED" : state.status === "intact" ? "AUTHENTICATED · INTACT" : "AWAITING ARTIFACT";
+  drawStatusLamp(context, width - 14 - Math.min(170, statusText.length * 5.4), 22, statusColor, state.status !== "idle");
+  drawMono(context, statusText, width - 14, 22, { color: statusColor, size: compact ? 6 : 9, align: "right", weight: 700 });
 
   for (let index = 0; index < count; index += 1) {
     const column = index % columns;
     const row = Math.floor(index / columns);
     const x = startX + column * (cellWidth + gap);
     const y = startY + row * (cellHeight + gap);
-    const value = bytes ? bytes[index] : Math.round((Math.sin(index * 1.7 + time) + 1) * 50);
+    if (column === 0) drawMono(context, (row * columns).toString(16).padStart(4, "0").toUpperCase(), 14, y + cellHeight / 2, { color: fieldPalette.muted, size: compact ? 5.5 : 8 });
+    const value = bytes ? bytes[index] : 0;
     const isBroken = index === state.tamperedIndex;
-    context.fillStyle = isBroken ? fieldPalette.change : bytes ? `rgba(199,255,94,${0.12 + (value / 255) * 0.65})` : "rgba(241,239,231,.07)";
+    context.fillStyle = isBroken ? "rgba(255,139,69,.3)" : bytes ? `rgba(199,255,94,${0.035 + (value / 255) * 0.1})` : "rgba(241,239,231,.035)";
     context.fillRect(x, y, cellWidth, cellHeight);
-    if (pointer.active) {
-      const pointerColumn = Math.floor((pointer.x * width - startX) / (cellWidth + gap));
-      const pointerRow = Math.floor((pointer.y * height - startY) / (cellHeight + gap));
-      if (column === pointerColumn && row === pointerRow) {
-        context.strokeStyle = fieldPalette.paper; context.lineWidth = 1; context.strokeRect(x - 2, y - 2, cellWidth + 4, cellHeight + 4);
-      }
-    }
+    context.strokeStyle = isBroken ? fieldPalette.change : "rgba(241,239,231,.08)";
+    context.strokeRect(x + 0.5, y + 0.5, cellWidth - 1, cellHeight - 1);
+    drawMono(context, bytes ? value.toString(16).padStart(2, "0").toUpperCase() : "··", x + cellWidth / 2, y + cellHeight / 2, { color: isBroken ? fieldPalette.change : bytes ? fieldPalette.signal : fieldPalette.muted, size: compact ? 5.5 : 8, align: "center", alpha: isBroken ? 1 : bytes ? 0.72 : 0.25, weight: isBroken ? 700 : 500 });
   }
 
   if (bytes) {
-    const rawScan = ((time - state.changedAt) * 0.22) % 1;
-    const brokenColumn = state.tamperedIndex >= 0 ? state.tamperedIndex % columns : columns - 1;
-    const stop = state.status === "rejected" ? brokenColumn / columns : 1;
-    const progress = Math.min(rawScan, stop);
-    const scanX = startX + progress * (width - 44);
-    const gradient = context.createLinearGradient(scanX - 34, 0, scanX + 10, 0);
+    const progress = ((time - state.changedAt) * 0.17) % 1;
+    const scanY = startY + progress * gridHeight;
+    const gradient = context.createLinearGradient(0, scanY - 24, 0, scanY + 2);
     gradient.addColorStop(0, "rgba(199,255,94,0)");
-    gradient.addColorStop(1, state.status === "rejected" ? fieldPalette.change : fieldPalette.signal);
+    gradient.addColorStop(1, state.status === "rejected" ? "rgba(255,139,69,.65)" : "rgba(199,255,94,.55)");
     context.fillStyle = gradient;
-    context.fillRect(scanX - 34, startY - 8, 44, gridHeight + 16);
+    context.fillRect(startX, scanY - 24, availableWidth, 26);
   }
 
-  if (state.tamperedIndex >= 0) {
-    const column = state.tamperedIndex % columns;
-    const row = Math.floor(state.tamperedIndex / columns);
-    const x = startX + column * (cellWidth + gap) + cellWidth / 2;
-    const y = startY + row * (cellHeight + gap) + cellHeight / 2;
-    for (let ray = 0; ray < 10; ray += 1) {
-      const angle = (ray / 10) * Math.PI * 2 + time * 0.2;
-      context.beginPath(); context.moveTo(x, y); context.lineTo(x + Math.cos(angle) * (18 + ray * 2), y + Math.sin(angle) * (12 + ray));
-      context.strokeStyle = fieldPalette.changeSoft; context.stroke();
-    }
-  }
+  const footerY = startY + gridHeight + (compact ? 12 : 18);
+  const fingerprintBytes = bytes || new Uint8Array(8);
+  const expected = [...Array(8)].map((_, index) => byteAt(fingerprintBytes, Math.max(0, fingerprintBytes.length - 8 + index)).toString(16).padStart(2, "0")).join("");
+  const observed = state.status === "rejected" ? `${expected.slice(0, -2)}${expected.slice(-2) === "ff" ? "00" : "ff"}` : expected;
+  drawMono(context, "EXPECTED TAG", 14, footerY, { color: fieldPalette.muted, size: compact ? 5.5 : 8 });
+  drawMono(context, expected.toUpperCase(), 14, footerY + 15, { color: fieldPalette.signal, size: compact ? 5.5 : 8 });
+  drawMono(context, "OBSERVED TAG", width * 0.54, footerY, { color: fieldPalette.muted, size: compact ? 5.5 : 8 });
+  drawMono(context, observed.toUpperCase(), width * 0.54, footerY + 15, { color: state.status === "rejected" ? fieldPalette.change : fieldPalette.signal, size: compact ? 5.5 : 8 });
 }
 
 function setupByteLab() {
@@ -506,7 +511,7 @@ function setupTransformLab() {
   const openButton = lab.querySelector("[data-transform-open]");
   const packetReadout = lab.querySelector("[data-field-packets]");
   const transformState = { bytes: encoder.encode(input.value), digest: new Uint8Array(32), cipherBytes: new Uint8Array() };
-  const transformField = createSignalCanvas(lab.querySelector("[data-transform-canvas]"), (context, width, height, time, pointer) => drawTransformField(context, width, height, time, pointer, transformState));
+  const transformField = createSignalCanvas(lab.querySelector("[data-transform-canvas]"), (context, width, height, time) => drawTransformField(context, width, height, time, transformState));
   let updateSequence = 0;
   let key = null;
   let encrypted = null;
@@ -591,7 +596,7 @@ function setupKeyModels() {
   const lab = document.querySelector("[data-key-model-lab]");
   if (!lab) return;
   const keyFieldState = { model: "symmetric", status: "open" };
-  const keyField = createSignalCanvas(lab.querySelector("[data-key-canvas]"), (context, width, height, time, pointer) => drawKeyField(context, width, height, time, pointer, keyFieldState));
+  const keyField = createSignalCanvas(lab.querySelector("[data-key-canvas]"), (context, width, height, time) => drawKeyField(context, width, height, time, keyFieldState));
 
   lab.querySelectorAll("[data-key-model]").forEach((button) => {
     button.addEventListener("click", () => {
@@ -679,7 +684,7 @@ function setupJourneyLab() {
   let mode = "e2ee";
   let step = 0;
   const journeyFieldState = { mode, step, position: 0 };
-  const journeyField = createSignalCanvas(journeyCanvas, (context, width, height, time, pointer) => drawJourneyField(context, width, height, time, pointer, journeyFieldState));
+  const journeyField = createSignalCanvas(journeyCanvas, (context, width, height, time) => drawJourneyField(context, width, height, time, journeyFieldState));
 
   function render() {
     stage.dataset.journeyStage = String(step);
@@ -737,7 +742,7 @@ function setupTamperLab() {
   const tamperCanvas = lab.querySelector("[data-tamper-canvas]");
   const tamperProbe = lab.querySelector("[data-tamper-probe]");
   const tamperFieldState = { bytes: null, tamperedIndex: -1, status: "idle", changedAt: performance.now() / 1000 };
-  const tamperField = createSignalCanvas(tamperCanvas, (context, width, height, time, pointer) => drawTamperField(context, width, height, time, pointer, tamperFieldState));
+  const tamperField = createSignalCanvas(tamperCanvas, (context, width, height, time) => drawTamperField(context, width, height, time, tamperFieldState));
   let key = null;
   let artifact = null;
   let tampered = false;
@@ -752,20 +757,6 @@ function setupTamperLab() {
     tamperFieldState.status = "idle";
     tamperField.render();
   }
-
-  tamperCanvas.addEventListener("pointermove", (event) => {
-    if (!artifact) return;
-    const bounds = tamperCanvas.getBoundingClientRect();
-    const columns = bounds.width < 560 ? 12 : 20;
-    const rows = Math.ceil(artifact.length / columns);
-    const column = Math.max(0, Math.min(columns - 1, Math.floor(((event.clientX - bounds.left) / bounds.width) * columns)));
-    const row = Math.max(0, Math.min(rows - 1, Math.floor(((event.clientY - bounds.top) / bounds.height) * rows)));
-    const index = Math.min(artifact.length - 1, row * columns + column);
-    tamperProbe.textContent = `BYTE ${String(index).padStart(3, "0")} · 0x${artifact[index].toString(16).padStart(2, "0")}`;
-  });
-  tamperCanvas.addEventListener("pointerleave", () => {
-    tamperProbe.textContent = artifact ? `${artifact.length} AUTHENTICATED BYTES` : "AWAITING ARTIFACT";
-  });
 
   protectButton.addEventListener("click", async () => {
     setBusy(protectButton, true, "Protect locally");
