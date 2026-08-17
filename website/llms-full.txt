@@ -4,6 +4,23 @@ Reference status: Voided 1.0 release candidate.
 Publication status: packages are not published yet.
 Final native gate: real Windows x64 MSVC execution remains pending. The Windows artifact has verified provenance and hashes.
 
+## Educational route
+
+The public Learn course at https://voidednetwork.com/learn.html is separate from the implementation reference. It teaches these general concepts in plain language with local browser experiments:
+
+- Data becomes bytes through a representation such as UTF-8.
+- Encoding changes representation and is reversible without a secret.
+- Hashing makes a one-way comparison fingerprint.
+- Encryption controls readability with a key.
+- Symmetric encryption shares one secret; public-key systems separate a shareable public key from a private opening key.
+- End-to-end encryption places readable data and reading keys at the communicating endpoints, not the carrying service.
+- Authenticated encryption combines confidentiality with tamper detection and releases no plaintext after authentication failure.
+- Password-based key derivation combines a human secret, salt, and deliberate work; a wider output does not add entropy to a weak input.
+- Recovery should unwrap a stable root rather than replace every application and data key.
+- Encryption does not make compromised endpoints, plaintext logs, exposed metadata, authorization mistakes, screenshots, or stolen recovery material safe.
+
+The course itself is semantic HTML. Its experiments use UTF-8 and Web Crypto for byte, SHA-256, and PBKDF2 demonstrations, plus the same shipped Voided Rust/WASM runtime for XChaCha20-Poly1305 and VOF3 authenticated-open demonstrations. Inputs and ephemeral values remain local and are not persisted.
+
 ## What Voided does
 
 Voided protects application data as one authenticated artifact. Its primary surfaces resolve to one Rust source of truth:

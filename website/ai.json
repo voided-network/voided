@@ -16,6 +16,13 @@
     "pending": ["windows-x64-msvc-real-execution"]
   },
   "core_rule": "Use protect/open for normal application data.",
+  "education": {
+    "url": "https://voidednetwork.com/learn.html",
+    "audience": "People learning cryptography concepts before or alongside implementation",
+    "topics": ["bytes", "UTF-8", "encoding", "hashing", "encryption", "symmetric keys", "public and private keys", "end-to-end encryption", "authenticated encryption", "password key derivation", "recovery hierarchy", "security limits"],
+    "experiments": ["UTF-8 byte visualization", "Base64 round trip", "SHA-256", "XChaCha20-Poly1305 round trip", "E2EE trust-boundary model", "VOF3 tamper rejection", "PBKDF2 with random salt", "recovery wrapper rotation"],
+    "execution": "local browser only"
+  },
   "api_layers": [
     {"name": "full_flow", "calls": ["protect", "open"], "use_when": "Voided should own the standard artifact end to end", "default": true},
     {"name": "shell_only", "calls": ["fuse", "unfuse"], "use_when": "The caller already owns and has prepared the inner bytes", "default": false},
@@ -84,6 +91,7 @@
     "docs": "https://voidednetwork.com/docs.html",
     "developer_lab": "https://voidednetwork.com/docs.html?guide=lab",
     "library_map": "https://voidednetwork.com/docs.html?guide=library",
+    "learn": "https://voidednetwork.com/learn.html",
     "updates": "https://voidednetwork.com/updates.html"
   }
 }

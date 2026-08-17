@@ -47,6 +47,7 @@ function setupCopyButtons() {
 }
 
 const searchIndex = [
+  { title: "Learn encryption", summary: "Plain-language interactive course covering bytes, encoding, hashing, encryption, keys, E2EE, integrity, passwords, recovery, and limits.", url: "./learn.html" },
   { title: "Developer Lab", summary: "Choose a runtime, run interactive architecture labs, and inspect the complete library.", url: "./docs.html?guide=lab" },
   { title: "Updates", summary: "Release status, changelog, compatibility notes, and project news.", url: "./updates.html" },
   { title: "AI reference", summary: "Direct semantic HTML for agents: API choices, runtimes, artifacts, recovery, and security.", url: "./ai.html" },

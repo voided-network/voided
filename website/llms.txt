@@ -10,6 +10,7 @@ Voided is at 1.0 release-candidate state. Package publication has not happened. 
 - [Full standalone reference](https://voidednetwork.com/llms-full.txt): Complete plain-text context for agents that need to work without the website or MCP.
 - [Structured machine reference](https://voidednetwork.com/ai.json): JSON facts and invariants.
 - [Developer documentation](https://voidednetwork.com/docs.html): Human implementation guides and examples.
+- [Encryption fundamentals](https://voidednetwork.com/learn.html): Plain-language semantic course with local experiments for bytes, encoding, hashing, encryption, keys, E2EE, integrity, password derivation, recovery, and limits.
 - [Interactive developer lab](https://voidednetwork.com/docs.html?guide=lab): API selection, artifact stages, Fuse presets, and recovery rotation.
 - [Complete library map](https://voidednetwork.com/docs.html?guide=library): Layered public API and runtime capability map.
 - [Updates](https://voidednetwork.com/updates.html): Current release state, changelog, and compatibility notices.
@@ -32,6 +33,7 @@ Voided is at 1.0 release-candidate state. Package publication has not happened. 
 - Recovery Deck: https://voidednetwork.com/docs.html?guide=recovery
 - Security boundaries: https://voidednetwork.com/docs.html?guide=security
 - Support and verification: https://voidednetwork.com/docs.html?guide=operations
+- General encryption education: https://voidednetwork.com/learn.html
 
 ## Source
 

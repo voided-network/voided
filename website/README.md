@@ -32,7 +32,8 @@ The human and machine reference surfaces are deliberately first-class:
 
 - `index.html`, `docs.html`, and `updates.html` are the three primary human pages.
 - `docs.html` is the Guided/Expert Developer Lab, complete library map, runtime reference, and support workbench.
-- `legal.html`, `support.html`, and the earlier learning surface remain contextual secondary routes.
+- `learn.html` is the secondary, plain-language encryption fundamentals course. It teaches bytes, encoding, hashing, encryption, key models, E2EE, integrity, password derivation, recovery, and system limits with local experiments.
+- `legal.html` and `support.html` remain contextual secondary routes.
 - `ai.html` is the semantic direct implementation reference.
 - `llms.txt` routes an agent to the smallest relevant source.
 - `llms-full.txt` is a standalone complete context file.

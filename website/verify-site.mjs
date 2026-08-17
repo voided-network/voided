@@ -19,7 +19,7 @@ for (const page of pages) {
   if (duplicateIds.length > 0) failures.push(`${page}: duplicate ids ${[...new Set(duplicateIds)].join(", ")}`);
   if (!html.includes('<meta name="viewport"')) failures.push(`${page}: missing viewport metadata`);
   if (!html.includes("skip-link")) failures.push(`${page}: missing skip link`);
-  if (!html.includes('href="./assets/styles.css?v=20260813.4"')) failures.push(`${page}: missing release-versioned shared stylesheet`);
+  if (!html.includes('href="./assets/styles.css?v=20260816.1"')) failures.push(`${page}: missing release-versioned shared stylesheet`);
   if (/\s(?:href|src)="\//.test(html)) failures.push(`${page}: local links must remain file-preview compatible`);
 
   for (const match of html.matchAll(/(?:href|src)="((?:\.\/|\/)[^"#?]+)"/g)) {
@@ -49,13 +49,24 @@ for (const required of ['data-guide-panel="lab"', 'data-guide-panel="library"', 
   if (!developer.includes(required)) failures.push(`docs.html: missing ${required} developer workbench surface`);
 }
 
+const course = readFileSync(join(root, "learn.html"), "utf8");
+for (const required of ["data-byte-lab", "data-transform-lab", "data-key-model-lab", "data-journey-lab", "data-tamper-lab", "data-kdf-lab", "data-recovery-simulator", "data-knowledge-check", "./assets/education.js"]) {
+  if (!course.includes(required)) failures.push(`learn.html: missing ${required} education surface`);
+}
+
+const educationScript = readFileSync(join(root, "assets", "education.js"), "utf8");
+for (const required of ["TextEncoder", "crypto.subtle.digest", "PBKDF2", "generateKey", "encrypt", "decrypt", "protect", "open", "../runtime/voided_wasm.js", "pagehide"]) {
+  if (!educationScript.includes(required)) failures.push(`education.js: missing ${required} local course behavior`);
+}
+if (educationScript.includes("innerHTML")) failures.push("education.js: output must use text-safe DOM construction");
+
 const compactReference = readFileSync(join(root, "llms.txt"), "utf8");
-for (const required of ["Use protect/open", "llms-full.txt", "Voided MCP", "Recovery Deck"]) {
+for (const required of ["Use protect/open", "llms-full.txt", "Voided MCP", "Recovery Deck", "Encryption fundamentals"]) {
   if (!compactReference.includes(required)) failures.push(`llms.txt: missing ${required}`);
 }
 
 const fullReference = readFileSync(join(root, "llms-full.txt"), "utf8");
-for (const required of ["225.58 bits", "29-byte", "32-byte", "80 bytes", "Windows x64", "voided_get_context"]) {
+for (const required of ["225.58 bits", "29-byte", "32-byte", "80 bytes", "Windows x64", "voided_get_context", "Educational route"]) {
   if (!fullReference.includes(required)) failures.push(`llms-full.txt: missing ${required}`);
 }
 

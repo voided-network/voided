@@ -3,133 +3,88 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="Interactive Voided learning lab: choose an SDK, understand the artifact pipeline, compare Fuse presets, and learn Recovery Deck boundaries.">
+  <meta name="description" content="A free, interactive course that makes encryption, encoding, hashing, keys, end-to-end encryption, integrity, passwords, and recovery understandable.">
   <meta name="theme-color" content="#080a0b">
-  <title>Learn Voided — Interactive architecture guides</title>
+  <meta property="og:title" content="Learn encryption — Voided">
+  <meta property="og:description" content="Encryption is not magic. Learn the rules with live, local experiments.">
+  <title>Learn encryption — Voided</title>
   <link rel="icon" href="./assets/favicon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="./assets/styles.css?v=20260813.4">
-  <script src="./assets/site.js?v=20260813.4" defer></script>
+  <link rel="stylesheet" href="./assets/styles.css?v=20260816.1">
+  <script src="./assets/site.js?v=20260816.1" defer></script>
+  <script src="./assets/education.js?v=20260816.1" type="module"></script>
 </head>
 <body data-page="learn">
   <a class="skip-link" href="#main">Skip to content</a>
-  <header class="site-header">
-    <div class="site-header__inner">
-      <a class="brand" href="./index.html" aria-label="Voided home"><span class="brand__mark" aria-hidden="true"></span>VOIDED</a>
-      <button class="menu-toggle" type="button" aria-expanded="false" aria-controls="site-navigation"><span class="sr-only">Toggle navigation</span>Menu</button>
-      <nav class="site-nav" id="site-navigation" aria-label="Primary navigation">
-        <a href="./index.html">Home</a><a href="./docs.html">Developer</a><a href="./updates.html">Updates</a>
-        <button class="header-search" type="button" data-search-open aria-label="Search documentation">Search <kbd>⌘K</kbd></button>
-      </nav>
-    </div>
-  </header>
+  <header class="site-header"><div class="site-header__inner"><a class="brand" href="./index.html" aria-label="Voided home"><span class="brand__mark" aria-hidden="true"></span>VOIDED</a><button class="menu-toggle" type="button" aria-expanded="false" aria-controls="site-navigation"><span class="sr-only">Toggle navigation</span>Menu</button><nav class="site-nav" id="site-navigation" aria-label="Primary navigation"><a href="./index.html">Home</a><a href="./docs.html">Developer</a><a href="./updates.html">Updates</a><button class="header-search" type="button" data-search-open aria-label="Search documentation">Search <kbd>⌘K</kbd></button></nav></div></header>
 
-  <main id="main">
-    <section class="page-hero">
-      <div class="page-hero__inner">
-        <span class="eyebrow">Architecture</span>
-        <h1>Know what owns each byte.</h1>
-        <p>Choose the right layer, inspect the artifact path, and identify the security responsibilities that remain in your application.</p>
-      </div>
+  <main id="main" class="course">
+    <section class="course-hero" aria-labelledby="course-title">
+      <div class="course-hero__copy"><span class="eyebrow">The fundamentals · free and interactive</span><h1 id="course-title">Encryption is not magic.</h1><p>It is a small set of ideas about messages, locks, fingerprints, and who holds the keys. Learn those ideas by changing real data and watching what happens.</p><div class="hero__actions"><a class="button button--signal" href="#data">Start with a message <span aria-hidden="true">↓</span></a><a class="button" href="./docs.html">I already build software</a></div></div>
+      <div class="course-hero__machine" aria-hidden="true"><div class="course-orbit course-orbit--outer"><span>HASH</span><span>KEY</span><span>E2EE</span><span>BYTES</span></div><div class="course-orbit course-orbit--inner"><span>ENCODE</span><span>LOCK</span><span>VERIFY</span></div><div class="course-lock"><span>PLAINTEXT</span><strong>→</strong><span>PROTECTED</span></div></div>
     </section>
 
-    <section class="section" id="choose-api" aria-labelledby="choose-title" data-search-title="Choose a Voided API" data-search-summary="Interactive decision guide for runtime and ownership">
-      <div class="section__inner">
-        <div class="section__intro">
-          <div><span class="eyebrow">API selection</span><h2 class="section__title" id="choose-title">Choose the boundary.</h2></div>
-          <p>Select where plaintext lives, who owns the artifact, and whether the flow requires recovery.</p>
-        </div>
-        <div class="learn-grid" data-path-finder>
-          <form class="learn-panel" aria-label="Integration choices">
-            <span class="eyebrow">Your system</span>
-            <h2>Choose the boundary.</h2>
-            <fieldset class="choice-group" data-choice-group="runtime">
-              <legend>Plaintext runtime</legend>
-              <div class="choice-row"><button class="choice-button" type="button" aria-pressed="true" data-choice="browser">Browser</button><button class="choice-button" type="button" aria-pressed="false" data-choice="node">Node.js</button><button class="choice-button" type="button" aria-pressed="false" data-choice="rust">Rust</button></div>
-            </fieldset>
-            <fieldset class="choice-group" data-choice-group="ownership">
-              <legend>Artifact ownership</legend>
-              <div class="choice-row"><button class="choice-button" type="button" aria-pressed="true" data-choice="full">Voided owns it</button><button class="choice-button" type="button" aria-pressed="false" data-choice="shell">I prepared the bytes</button><button class="choice-button" type="button" aria-pressed="false" data-choice="primitive">I own the format</button></div>
-            </fieldset>
-            <fieldset class="choice-group" data-choice-group="need">
-              <legend>Additional need</legend>
-              <div class="choice-row"><button class="choice-button" type="button" aria-pressed="true" data-choice="artifact">Protected data</button><button class="choice-button" type="button" aria-pressed="false" data-choice="recovery">Root recovery</button></div>
-            </fieldset>
-          </form>
-          <div class="learn-panel recommendation" aria-live="polite">
-            <span class="recommendation__package" data-recommendation-package>@voideddev/e2ee-client</span>
-            <h3 data-recommendation-title>Use protect/open.</h3>
-            <p data-recommendation-copy>Let the stateful browser client own key persistence and the complete VOF3 artifact lifecycle.</p>
-            <div class="code-window"><div class="code-window__bar"><span data-recommendation-file>browser.ts</span><button class="copy-button" type="button" data-copy="#recommendation-code">Copy</button></div><pre><code id="recommendation-code" data-recommendation-code>const artifact = await client.protect(data, {
-  preset: "balanced",
-});
-const restored = await client.open(artifact);</code></pre></div>
-          </div>
-        </div>
-      </div>
+    <nav class="course-map" aria-label="Course chapters"><a href="#data"><span>01</span><strong>Data</strong></a><a href="#jobs"><span>02</span><strong>Three jobs</strong></a><a href="#keys"><span>03</span><strong>Keys</strong></a><a href="#e2ee"><span>04</span><strong>E2EE</strong></a><a href="#integrity"><span>05</span><strong>Integrity</strong></a><a href="#passwords"><span>06</span><strong>Passwords</strong></a><a href="#recovery"><span>07</span><strong>Recovery</strong></a><a href="#limits"><span>08</span><strong>Limits</strong></a></nav>
+
+    <section class="course-chapter course-chapter--paper" id="data" aria-labelledby="data-title" data-search-title="Data, text, bytes, and binary" data-search-summary="Understand how computers represent a message as numbers">
+      <div class="course-chapter__heading"><span class="chapter-number">01 / DATA</span><h2 id="data-title">A computer sees numbers.</h2><p>You see letters, images, and sound. A computer stores all of them as bytes: small numbers from 0 to 255. A shared rule such as UTF-8 says which numbers represent which characters.</p></div>
+      <div class="byte-lab" data-byte-lab><label><span>Write a short message</span><input type="text" value="hello" maxlength="24" data-byte-input></label><div class="byte-lab__readout"><div><span>TEXT</span><strong data-byte-text>hello</strong></div><div><span>UTF-8 · HEX</span><code data-byte-hex>68 65 6c 6c 6f</code></div><div><span>UTF-8 · DECIMAL</span><code data-byte-decimal>104 101 108 108 111</code></div><div><span>BYTE COUNT</span><strong data-byte-count>5</strong></div></div><div class="byte-strip" data-byte-strip aria-label="Individual UTF-8 bytes"></div></div>
+      <div class="course-analogy"><strong>Think of it like sheet music.</strong><p>The page is not the sound. It is a precise representation that another musician can turn back into the same sound. Bytes are the computer’s notation.</p></div>
     </section>
 
-    <section class="section section--light" aria-labelledby="anatomy-title" data-search-title="Anatomy of a protected artifact" data-search-summary="How plaintext becomes a VOF3 artifact and returns">
-      <div class="section__inner">
-        <div class="section__intro"><div><span class="eyebrow">Artifact anatomy</span><h2 class="section__title" id="anatomy-title">Follow one payload.</h2></div><p>Each stage has a defined responsibility. Separation makes the format inspectable and failure behavior explicit.</p></div>
-        <div class="anatomy">
-          <div class="anatomy-step"><span class="anatomy-step__node"></span><h3>Application bytes</h3><p>Your trusted input. Decide its maximum size and whether every byte shares one compression trust boundary.</p></div>
-          <div class="anatomy-step"><span class="anatomy-step__node"></span><h3>Prepared bytes</h3><p>Optional gzip or Brotli under explicit bounds. Compression changes size, not confidentiality.</p></div>
-          <div class="anatomy-step"><span class="anatomy-step__node"></span><h3>AEAD payload</h3><p>Ciphertext, nonce, tag, and authenticated context. Tampering becomes a hard failure.</p></div>
-          <div class="anatomy-step"><span class="anatomy-step__node"></span><h3>VOF3 monolith</h3><p>The complete artifact plan is shaped into one stable outer object under compact, balanced, or concealed intent.</p></div>
-          <div class="anatomy-step"><span class="anatomy-step__node"></span><h3>Structural view</h3><p>Inspection can show sizes and shape without a key. It is useful and unauthenticated.</p></div>
-          <div class="anatomy-step"><span class="anatomy-step__node"></span><h3>Authenticated open</h3><p>Structure and work bounds first; tag verification before plaintext; bounded decompression last.</p></div>
-        </div>
-      </div>
+    <section class="course-chapter" id="jobs" aria-labelledby="jobs-title" data-search-title="Encoding, hashing, and encryption explained" data-search-summary="Compare encoding, hashing, and encryption with live outputs">
+      <div class="course-chapter__heading"><span class="chapter-number">02 / THREE DIFFERENT JOBS</span><h2 id="jobs-title">Same message. Different purpose.</h2><p>Encoding, hashing, and encryption are often grouped together because their outputs look unfamiliar. They solve completely different problems.</p></div>
+      <div class="transform-lab" data-transform-lab><label class="transform-input"><span>Change the source message</span><input type="text" value="meet me at seven" maxlength="80" data-transform-input></label><div class="transform-lanes">
+        <article class="transform-lane transform-lane--encode"><header><span>ENCODING</span><strong>Change the representation</strong></header><p>Like rewriting the same address in a different alphabet. Anyone who knows the format can reverse it. No secret required.</p><div class="transform-output"><span>BASE64</span><code data-transform-base64></code></div><button type="button" data-transform-decode>Decode it</button><output data-transform-decoded>Readable by anyone.</output></article>
+        <article class="transform-lane transform-lane--hash"><header><span>HASHING</span><strong>Make a fingerprint</strong></header><p>Like a receipt for the exact message. Tiny changes produce a different fingerprint. The receipt does not contain the original.</p><div class="transform-output"><span>SHA-256</span><code data-transform-hash></code></div><span class="transform-verdict">One-way comparison</span></article>
+        <article class="transform-lane transform-lane--encrypt"><header><span>ENCRYPTION</span><strong>Control who can read it</strong></header><p>Like placing the message in a locked box. The output is unreadable until the correct key opens it.</p><div class="transform-output"><span>REAL XCHACHA20-POLY1305</span><code data-transform-cipher>Generate a key to begin.</code></div><div class="transform-actions"><button type="button" data-transform-encrypt>Generate key + encrypt</button><button type="button" data-transform-open disabled>Open with key</button></div><output data-transform-restored>Runs locally in Voided’s Rust/WASM runtime.</output></article>
+      </div></div>
+      <div class="term-rule"><span>ENCODING</span><strong>compatibility</strong><span>HASHING</span><strong>comparison</strong><span>ENCRYPTION</span><strong>confidentiality</strong></div>
     </section>
 
-    <section class="section" id="preset-lab" aria-labelledby="preset-lab-title" data-search-title="Fuse preset lab" data-search-summary="Interactive comparison of compact, balanced, and concealed">
-      <div class="section__inner">
-        <div class="section__intro"><div><span class="eyebrow">Fuse presets</span><h2 class="section__title" id="preset-lab-title">Choose artifact shaping.</h2></div><p>Compare the intended overhead and variation of each preset. Measure representative data before changing production defaults.</p></div>
-        <div class="preset-lab" data-preset-lab>
-          <div class="preset-controls" aria-label="Choose a Fuse preset"><button type="button" data-preset="compact" aria-pressed="false">compact</button><button type="button" data-preset="balanced" aria-pressed="true">balanced</button><button type="button" data-preset="concealed" aria-pressed="false">concealed</button></div>
-          <div class="preset-output">
-            <span class="eyebrow" data-preset-label>Balanced · recommended default</span>
-            <h3 class="mt-24" data-preset-title>Start here.</h3>
-            <p class="mt-24" data-preset-copy>General-purpose artifact shaping for most applications. It keeps overhead and shell variation in a practical middle ground.</p>
-            <div class="preset-meter" aria-hidden="true"><span data-preset-meter></span></div>
-            <div class="preset-stats"><div class="preset-stat"><span>Shell overhead</span><strong data-preset-overhead>medium</strong></div><div class="preset-stat"><span>Shape variation</span><strong data-preset-variation>medium</strong></div><div class="preset-stat"><span>Decision</span><strong data-preset-use>default</strong></div></div>
-            <div class="code-window mt-40"><div class="code-window__bar"><span>options.ts</span><button class="copy-button" type="button" data-copy="#preset-code">Copy</button></div><pre><code id="preset-code" data-preset-code>const { artifact } = protect(data, key, {
-  preset: "balanced",
-});</code></pre></div>
-          </div>
-        </div>
+    <section class="course-chapter course-chapter--paper" id="keys" aria-labelledby="keys-title" data-search-title="Symmetric keys and public private keys" data-search-summary="Understand same-key encryption and public-key mailboxes">
+      <div class="course-chapter__heading"><span class="chapter-number">03 / KEYS</span><h2 id="keys-title">The algorithm can be public. The key cannot.</h2><p>Good encryption does not depend on hiding how the lock works. Everyone may inspect the lock. Security comes from the key being unpredictable and held by the right person.</p></div>
+      <div class="key-model-lab" data-key-model-lab><div class="key-model-switch" role="group" aria-label="Key model"><button type="button" aria-pressed="true" data-key-model="symmetric">One shared key</button><button type="button" aria-pressed="false" data-key-model="asymmetric">Public + private pair</button></div>
+        <div class="key-model" data-key-model-panel="symmetric"><div class="key-model__stage"><div class="key-person"><span>ALICE</span><div class="key-token key-token--a">KEY A</div></div><div class="key-object" data-key-object><span>MESSAGE</span><strong data-key-state>OPEN</strong></div><div class="key-person"><span>BOB</span><div class="key-token key-token--a">KEY A</div></div></div><div class="key-controls"><button type="button" data-key-action="lock">Lock with Key A</button><button type="button" data-key-action="wrong">Try Key B</button><button type="button" data-key-action="open">Open with Key A</button></div><p data-key-explanation>Symmetric encryption uses the same secret key to lock and unlock. It is fast, but both sides need a safe way to get that secret.</p></div>
+        <div class="key-model" data-key-model-panel="asymmetric" hidden><div class="mailbox-sim"><div class="mailbox-person"><span>ANY SENDER</span><div class="key-token key-token--public">BOB’S PUBLIC KEY</div></div><div class="mailbox"><span>DROP SLOT</span><strong data-mailbox-state>EMPTY</strong></div><div class="mailbox-person"><span>ONLY BOB</span><div class="key-token key-token--private">BOB’S PRIVATE KEY</div></div></div><div class="key-controls"><button type="button" data-mailbox-action="send">Seal a message</button><button type="button" data-mailbox-action="public">Try opening publicly</button><button type="button" data-mailbox-action="private">Open privately</button></div><p data-mailbox-explanation>A public key is like an open padlock anyone may snap shut around a box. The matching private key is the only thing that opens it.</p></div>
       </div>
+      <div class="course-analogy"><strong>Public does not mean powerless.</strong><p>A public key is designed to be shared. A private key is designed never to be shared. The two have different jobs.</p></div>
     </section>
 
-    <section class="section" aria-labelledby="recovery-model-title" data-search-title="Recovery Deck mental model" data-search-summary="Understand deterministic recovery, stable roots, and rotation">
-      <div class="section__inner recovery-spotlight">
-        <div class="recovery-copy"><span class="eyebrow">Recovery model</span><h2 id="recovery-model-title">Recover the root, not the data.</h2><p>Application keys sit below a stable user/account root. A Recovery Deck unwraps that root; rotation replaces only the recovery wrapper.</p><div class="recovery-facts"><div class="recovery-fact"><strong>1 deck</strong><span>whole hierarchy</span></div><div class="recovery-fact"><strong>N apps</strong><span>isolated keys</span></div><div class="recovery-fact"><strong>0 decks</strong><span>stored by Voided</span></div><div class="recovery-fact"><strong>0 data</strong><span>re-encrypted on rotation</span></div></div><a class="button" href="./docs.html?guide=recovery">Build the recovery flow <span class="arrow" aria-hidden="true">→</span></a></div>
-        <div class="anatomy" aria-label="Recovery hierarchy">
-          <div class="anatomy-step"><span class="anatomy-step__node"></span><h3>Physical deck</h3><p>The exact order is the secret. Generate it locally with a CSPRNG.</p></div>
-          <div class="anatomy-step"><span class="anatomy-step__node"></span><h3>Canonical rank</h3><p>A unique 29-byte integer representation of one permutation.</p></div>
-          <div class="anatomy-step"><span class="anatomy-step__node"></span><h3>Recovery Key</h3><p>Domain-separated 32-byte output. Useful only transiently.</p></div>
-          <div class="anatomy-step"><span class="anatomy-step__node"></span><h3>Stable root</h3><p>Unwrapped without changing application keys or re-encrypting data.</p></div>
-        </div>
-      </div>
+    <section class="course-chapter" id="e2ee" aria-labelledby="e2ee-title" data-search-title="End-to-end encryption explained" data-search-summary="See what endpoints and servers can read during E2EE">
+      <div class="course-chapter__heading"><span class="chapter-number">04 / END TO END</span><h2 id="e2ee-title">Put the keys at the ends.</h2><p>End-to-end encryption means readable data exists at the communicating endpoints, but the systems carrying or storing it do not receive the key needed to read it.</p></div>
+      <div class="journey-lab" data-journey-lab><div class="journey-mode" role="group" aria-label="Protection model"><button type="button" aria-pressed="true" data-journey-mode="e2ee">End-to-end</button><button type="button" aria-pressed="false" data-journey-mode="server">Server-readable</button></div><div class="journey-stage" data-journey-stage="0"><div class="journey-end journey-end--alice"><span>ALICE’S DEVICE</span><strong data-alice-view>READABLE</strong><small>holds a key</small></div><div class="journey-path"><div class="journey-packet" data-journey-packet>MESSAGE</div><span class="journey-line"></span></div><div class="journey-service"><span>SERVICE</span><strong data-service-view>CIPHERTEXT ONLY</strong><small data-service-detail>moves and stores the locked box</small></div><div class="journey-path"><span class="journey-line"></span></div><div class="journey-end journey-end--bob"><span>BOB’S DEVICE</span><strong data-bob-view>WAITING</strong><small>holds a key</small></div></div><div class="journey-controls"><button class="button button--signal" type="button" data-journey-next>Send message</button><p data-journey-caption>Alice protects the message before it leaves her device.</p></div></div>
+      <div class="e2ee-rule"><strong>E2EE does not mean “nothing can ever go wrong.”</strong><p>If an endpoint is compromised while the message is readable, encryption cannot make that endpoint trustworthy. It protects the path and storage boundary between trusted ends.</p></div>
     </section>
 
-    <section class="section section--light" aria-labelledby="anti-pattern-title" data-search-title="Voided anti-patterns" data-search-summary="What not to do with encryption, compression, inspection, and recovery">
-      <div class="section__inner">
-        <div class="section__intro"><div><span class="eyebrow">Failure modes</span><h2 class="section__title" id="anti-pattern-title">Common integration errors.</h2></div><p>Most failures occur around the primitive: serialization, lifecycle, logs, concurrency, and misplaced trust.</p></div>
-        <div class="principles">
-          <div class="principle"><span class="principle__number">×</span><h3>Authorize from inspection</h3><p>Keyless metadata is a preview, not authenticated truth. Route conservatively and trust only after open.</p></div>
-          <div class="principle"><span class="principle__number">×</span><h3>Compress mixed secrets</h3><p>Shared compression context plus observable ciphertext length can become an oracle. Keep one trust boundary or leave compression off.</p></div>
-          <div class="principle"><span class="principle__number">×</span><h3>Rotate by nudging a deck</h3><p>Nearby permutations are searchable after compromise. Secure recovery rotation starts over with a wholly fresh random deck.</p></div>
-          <div class="principle"><span class="principle__number">×</span><h3>Let two tabs own rotation</h3><p>Sequential changes are detected. Truly concurrent lifecycle writers require an application-level transactional lock.</p></div>
-        </div>
-      </div>
+    <section class="course-chapter course-chapter--signal" id="integrity" aria-labelledby="integrity-title" data-search-title="Authenticated encryption and tamper detection" data-search-summary="Protect a message, flip a byte, and watch authenticated open fail">
+      <div class="course-chapter__heading"><span class="chapter-number">05 / INTEGRITY</span><h2 id="integrity-title">A locked box needs a seal.</h2><p>Confidentiality hides the contents. Integrity tells you whether the protected data was changed. Modern authenticated encryption provides both.</p></div>
+      <div class="tamper-lab" data-tamper-lab><div class="tamper-message"><span>MESSAGE</span><strong>Transfer 10 credits</strong></div><div class="tamper-arrow">→</div><div class="tamper-artifact"><span>VOF3 ARTIFACT</span><code data-tamper-artifact>Not protected yet.</code><i data-tamper-seal>NO SEAL</i></div><div class="tamper-controls"><button type="button" data-tamper-protect>Protect locally</button><button type="button" data-tamper-flip disabled>Flip one byte</button><button type="button" data-tamper-open disabled>Authenticate + open</button></div><output data-tamper-result>Generate an authenticated artifact to begin.</output></div>
+      <div class="course-analogy course-analogy--dark"><strong>A broken seal is not repaired.</strong><p>The safe result is failure—not a best guess at what the message might have been.</p></div>
     </section>
 
-    <section class="section section--signal final-cta" aria-labelledby="learn-final-title"><div class="final-cta__inner"><span class="eyebrow">Implementation</span><h2 id="learn-final-title">Open the SDK guides.</h2><div class="final-cta__actions"><a class="button" href="./docs.html">Choose a runtime <span class="arrow" aria-hidden="true">→</span></a><a class="button button--quiet" href="./support.html">Troubleshoot an integration</a></div></div></section>
+    <section class="course-chapter course-chapter--paper" id="passwords" aria-labelledby="passwords-title" data-search-title="Passwords salts and key derivation" data-search-summary="See how a KDF, random salt, and work turn a password into key material">
+      <div class="course-chapter__heading"><span class="chapter-number">06 / HUMAN SECRETS</span><h2 id="passwords-title">A password is not automatically a key.</h2><p>People create memorable passwords. Cryptography wants uniformly shaped key material. A key-derivation function combines a password, a random salt, and deliberate work to bridge that gap.</p></div>
+      <div class="kdf-lab" data-kdf-lab><div class="kdf-inputs"><label><span>Password for this teaching demo</span><input type="text" value="correct horse" maxlength="64" data-kdf-password></label><label><span>Work factor</span><input type="range" min="10000" max="150000" step="10000" value="50000" data-kdf-work><strong data-kdf-work-label>50,000 rounds</strong></label><button type="button" data-kdf-run>Derive 256 bits</button><button type="button" data-kdf-salt>New random salt</button></div><div class="kdf-machine"><div><span>PASSWORD</span><code data-kdf-password-view>correct horse</code></div><strong>+</strong><div><span>RANDOM SALT</span><code data-kdf-salt-view></code></div><strong>+</strong><div><span>WORK</span><code data-kdf-work-view>50,000</code></div><strong>→</strong><div class="kdf-key"><span>DERIVED KEY</span><code data-kdf-output>Run the derivation.</code></div></div><output data-kdf-status>Changing the salt changes the result even when the password stays the same.</output></div>
+      <div class="course-analogy"><strong>Salt is not another password.</strong><p>It may be stored beside the derivation record. Its job is to make identical passwords take different paths and defeat precomputed lookup tables. The work factor makes each guess cost more.</p></div>
+    </section>
+
+    <section class="course-chapter" id="recovery" aria-labelledby="course-recovery-title" data-search-title="Encryption recovery and key hierarchy" data-search-summary="Understand how recovery credentials unwrap a stable root without re-encrypting data">
+      <div class="course-chapter__heading"><span class="chapter-number">07 / RECOVERY</span><h2 id="course-recovery-title">Recover the keys, not every file.</h2><p>A well-designed system separates the recovery credential from the stable root, application keys, and data keys. Changing recovery should change the wrapper—not the identity of everything underneath.</p></div>
+      <div class="recovery-simulator recovery-simulator--course" data-recovery-simulator><div class="recovery-simulator__flow"><div class="recovery-sim-node recovery-sim-node--deck">RECOVERY CREDENTIAL</div><span>derives</span><div class="recovery-sim-node" data-recovery-wrapper>WRAPPER 01 · ACTIVE</div><span>unwraps</span><div class="recovery-sim-node recovery-sim-node--root" data-recovery-root>STABLE ROOT</div></div><div class="recovery-simulator__apps"><div data-recovery-app="NOTES">NOTES KEY</div><div data-recovery-app="PHOTOS">PHOTOS KEY</div><div data-recovery-app="MESSAGES">MESSAGES KEY</div></div><button class="button button--signal" type="button" data-recovery-rotate>Rotate the recovery credential</button><p data-recovery-state>Ready. The stable root and application keys do not need to change.</p></div>
+      <div class="hierarchy-rule"><div><strong>One root</strong><span>stable account continuity</span></div><div><strong>Separate app keys</strong><span>one app does not become every app</span></div><div><strong>Many data keys</strong><span>rotation and deletion stay narrow</span></div></div>
+    </section>
+
+    <section class="course-chapter course-chapter--paper" id="limits" aria-labelledby="limits-title" data-search-title="What encryption does not protect" data-search-summary="Endpoints, logs, metadata, screenshots, malware, and access control remain separate boundaries">
+      <div class="course-chapter__heading"><span class="chapter-number">08 / THE REAL BOUNDARY</span><h2 id="limits-title">Encryption protects data—not every mistake.</h2><p>A strong lock does not help if someone photographs the open document, steals the key, or convinces the owner to open the door. Security is the whole path around the primitive.</p></div>
+      <div class="limit-list"><article><span>01</span><h3>Compromised endpoints</h3><p>Readable data and usable keys exist somewhere. Malware at that endpoint may observe them.</p></article><article><span>02</span><h3>Logs and analytics</h3><p>Plaintext copied into telemetry is outside the protection of the encrypted artifact.</p></article><article><span>03</span><h3>Metadata</h3><p>Encryption may hide content while timing, size, participants, or access patterns remain visible.</p></article><article><span>04</span><h3>Authorization</h3><p>Cryptography can prove integrity. Your application still decides who is allowed to perform an action.</p></article><article><span>05</span><h3>Screenshots and cameras</h3><p>Once information is shown to a person, the physical environment becomes part of the threat model.</p></article><article><span>06</span><h3>Recovery custody</h3><p>A recovery secret deserves the same care as the keys it can restore.</p></article></div>
+    </section>
+
+    <section class="course-check" aria-labelledby="check-title" data-knowledge-check><div><span class="eyebrow">Knowledge check</span><h2 id="check-title">Four claims.<br>What is true?</h2><p>No score, no account, no tracking. Just confirm the mental model.</p></div><div class="knowledge-questions"><article data-question data-answer="false"><p>Base64 encoding keeps a secret from anyone without a key.</p><div><button type="button" data-quiz-choice="true">True</button><button type="button" data-quiz-choice="false">False</button></div><output>Choose an answer.</output></article><article data-question data-answer="true"><p>A tiny message change should produce a different cryptographic hash.</p><div><button type="button" data-quiz-choice="true">True</button><button type="button" data-quiz-choice="false">False</button></div><output>Choose an answer.</output></article><article data-question data-answer="true"><p>In E2EE, the service can carry ciphertext without holding the key that reads it.</p><div><button type="button" data-quiz-choice="true">True</button><button type="button" data-quiz-choice="false">False</button></div><output>Choose an answer.</output></article><article data-question data-answer="false"><p>Rotating a recovery credential should require re-encrypting every file.</p><div><button type="button" data-quiz-choice="true">True</button><button type="button" data-quiz-choice="false">False</button></div><output>Choose an answer.</output></article></div></section>
+
+    <section class="section section--signal final-cta" aria-labelledby="course-final-title"><div class="final-cta__inner"><span class="eyebrow">Next layer</span><h2 id="course-final-title">You know the vocabulary.<br>Now use the library.</h2><div class="final-cta__actions"><a class="button" href="./docs.html?guide=lab">Open the Developer Lab <span class="arrow" aria-hidden="true">→</span></a><a class="button button--quiet" href="./index.html">Return home</a></div></div></section>
   </main>
 
-  <footer class="site-footer"><div class="site-footer__inner"><div><a class="brand" href="./index.html"><span class="brand__mark" aria-hidden="true"></span>VOIDED</a><p class="site-footer__meta">MIT licensed · Learn the boundary, then ship it</p></div><nav aria-label="Footer navigation"><a href="./docs.html">Start</a><a href="./ai.html">AI</a><a href="./mcp.html">MCP</a><a href="./support.html">Support</a><a href="https://github.com/voided-network/voided">GitHub</a></nav></div></footer>
-  <dialog class="search-dialog" data-search-dialog aria-label="Search Voided documentation"><form class="search-form" method="dialog"><input type="search" data-search-input placeholder="Search guides, concepts, APIs…" autocomplete="off"><button class="search-close" value="cancel" aria-label="Close search">Esc</button></form><div class="search-results" data-search-results><p class="search-empty">Type a concept or API name.</p></div></dialog>
-  <div class="sr-only" aria-live="polite" data-live-region></div>
+  <footer class="site-footer"><div class="site-footer__inner"><div><a class="brand" href="./index.html"><span class="brand__mark" aria-hidden="true"></span>VOIDED</a><p class="site-footer__meta">Free fundamentals · local experiments · no account</p></div><nav aria-label="Footer navigation"><a href="./index.html">Home</a><a href="./docs.html">Developer</a><a href="./updates.html">Updates</a><a href="./ai.html">AI reference</a><a href="./legal.html">Legal</a><a href="https://github.com/voided-network/voided">Source</a></nav></div></footer>
+  <dialog class="search-dialog" data-search-dialog aria-label="Search Voided documentation"><form class="search-form" method="dialog"><input type="search" data-search-input placeholder="Search guides, concepts, APIs…" autocomplete="off"><button class="search-close" value="cancel" aria-label="Close search">Esc</button></form><div class="search-results" data-search-results><p class="search-empty">Type a concept or API name.</p></div></dialog><div class="sr-only" aria-live="polite" data-live-region></div>
 </body>
 </html>
