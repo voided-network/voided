@@ -11,6 +11,7 @@ const matrixTransitionKey = "voided:matrix-transition";
 const matrixGlyphs = "01AF7E3XYZ<>[]{}|/+*:=░▒";
 const matrixTextSelector = "a, button, h1, h2, h3, h4, p, li, dt, dd, figcaption, blockquote, pre, code, label, legend, output, small, strong, time, span";
 const matrixSkipSelector = "script, style, noscript, template, svg, canvas, input, textarea, select, option, [hidden], [aria-hidden=\"true\"], [contenteditable=\"true\"], .sr-only, .matrix-remold-layer";
+const matrixDocumentWarmups = new Map();
 
 function matrixHash(first, second, third = 0) {
   let value = Math.imul(first + 1, 0x45d9f3b) ^ Math.imul(second + 7, 0x119de1f3) ^ Math.imul(third + 11, 0x27d4eb2d);
@@ -146,6 +147,36 @@ function drawMatrixDissipation(layer, phase, direction) {
   context.clearRect(0, 0, width, height);
   context.textBaseline = "middle";
 
+  const cellWidth = Math.max(42, Math.min(78, width / 15));
+  const cellHeight = Math.max(34, Math.min(66, height / 12));
+  const columns = Math.ceil(width / cellWidth);
+  const rows = Math.ceil(height / cellHeight);
+  for (let row = 0; row < rows; row += 1) {
+    for (let column = 0; column < columns; column += 1) {
+      const delay = matrixHash(column, row, columns + rows) * 0.62;
+      const rawCoverage = direction === "out"
+        ? (phase - delay) / (1 - delay)
+        : ((1 - phase) - delay) / (1 - delay);
+      const coverage = Math.max(0, Math.min(1, rawCoverage));
+      if (coverage <= 0) continue;
+      const x = Math.floor(column * cellWidth);
+      const y = Math.floor(row * cellHeight);
+      const cellBottom = Math.min(height, y + Math.ceil(cellHeight) + 1);
+      const revealedHeight = Math.max(1, Math.ceil((cellBottom - y) * coverage));
+      const fromTop = matrixHash(row, column, 17) > 0.5;
+      const revealY = fromTop ? y : cellBottom - revealedHeight;
+      context.globalAlpha = 0.6 + (coverage * 0.4);
+      context.fillStyle = "#080a0b";
+      context.fillRect(x, revealY, Math.ceil(cellWidth) + 1, revealedHeight);
+
+      if (coverage > 0.08 && coverage < 0.94 && matrixHash(column, row, 23) > 0.76) {
+        context.globalAlpha = (1 - Math.abs(0.5 - coverage) * 2) * 0.24;
+        context.fillStyle = "#c7ff5e";
+        context.fillRect(x, fromTop ? revealY + revealedHeight - 1 : revealY, Math.ceil(cellWidth) + 1, 1);
+      }
+    }
+  }
+
   particles.forEach((particle, index) => {
     const local = Math.max(0, Math.min(1, (phase - particle.delay) / (1 - particle.delay)));
     const travel = direction === "out" ? local : 1 - local;
@@ -167,11 +198,6 @@ function drawMatrixDissipation(layer, phase, direction) {
 
 function animateMatrixRemold(direction, onComplete) {
   const targets = collectMatrixTargets();
-  if (targets.length === 0) {
-    const cleanup = () => {};
-    onComplete(cleanup);
-    return cleanup;
-  }
   const layer = createMatrixLayer(targets);
   const duration = direction === "out" ? 430 : 560;
   const started = performance.now();
@@ -179,6 +205,12 @@ function animateMatrixRemold(direction, onComplete) {
 
   document.documentElement.classList.add("matrix-remold-active");
   document.body.setAttribute("aria-busy", "true");
+
+  if (direction === "in") {
+    remoldMatrixText(targets, 1, 0);
+    drawMatrixDissipation(layer, 0, direction);
+    document.documentElement.classList.remove("matrix-remold-pending");
+  }
 
   function cleanup() {
     cancelAnimationFrame(animationFrame);
@@ -189,6 +221,7 @@ function animateMatrixRemold(direction, onComplete) {
   }
 
   function render(now) {
+    if (direction === "in") window.scrollTo(0, 0);
     const phase = Math.min(1, (now - started) / duration);
     const eased = phase * phase * (3 - (2 * phase));
     const amount = direction === "out" ? eased : 1 - eased;
@@ -198,7 +231,12 @@ function animateMatrixRemold(direction, onComplete) {
       animationFrame = requestAnimationFrame(render);
       return;
     }
-    if (direction === "in") cleanup();
+    if (direction === "in") {
+      cleanup();
+      window.scrollTo(0, 0);
+      requestAnimationFrame(() => { window.scrollTo(0, 0); });
+      window.setTimeout(() => { window.scrollTo(0, 0); }, 250);
+    }
     onComplete(cleanup);
   }
 
@@ -206,33 +244,86 @@ function animateMatrixRemold(direction, onComplete) {
   return cleanup;
 }
 
-function isMatrixNavigation(event, link) {
-  if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return false;
-  if (link.target && link.target !== "_self") return false;
-  if (link.hasAttribute("download") || link.dataset.noTransition !== undefined) return false;
+function matrixDestinationForLink(link) {
+  if (!(link instanceof HTMLAnchorElement)) return null;
+  if (link.target && link.target !== "_self") return null;
+  if (link.hasAttribute("download") || link.dataset.noTransition !== undefined) return null;
   const destination = new URL(link.href, location.href);
   const current = new URL(location.href);
   const localFile = current.protocol === "file:" && destination.protocol === "file:";
-  if (!localFile && destination.origin !== current.origin) return false;
-  if (!/\/$|\.html$/i.test(destination.pathname)) return false;
-  if (destination.pathname === current.pathname && destination.search === current.search && destination.hash) return false;
-  return true;
+  if (!localFile && destination.origin !== current.origin) return null;
+  if (!/\/$|\.html$/i.test(destination.pathname)) return null;
+  if (destination.pathname === current.pathname && destination.search === current.search && destination.hash) return null;
+  return destination;
+}
+
+function warmMatrixDocument(link) {
+  const destination = matrixDestinationForLink(link);
+  if (!destination || destination.protocol === "file:") return Promise.resolve();
+  const cacheKey = `${destination.origin}${destination.pathname}${destination.search}`;
+  const currentKey = `${location.origin}${location.pathname}${location.search}`;
+  if (cacheKey === currentKey) return Promise.resolve();
+  if (matrixDocumentWarmups.has(cacheKey)) return matrixDocumentWarmups.get(cacheKey);
+
+  const warmup = fetch(cacheKey, {
+    credentials: "same-origin",
+    cache: "force-cache",
+    priority: "low",
+  }).then((response) => {
+    if (!response.ok) throw new Error(`Document warmup returned ${response.status}`);
+    return response.text();
+  }).catch(() => undefined);
+  matrixDocumentWarmups.set(cacheKey, warmup);
+  return warmup;
+}
+
+function waitForMatrixWarmup(warmup) {
+  return Promise.race([
+    warmup,
+    new Promise((resolve) => window.setTimeout(resolve, 500)),
+  ]);
+}
+
+function isMatrixNavigation(event, link) {
+  if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return false;
+  return matrixDestinationForLink(link) !== null;
 }
 
 function setupMatrixPageTransitions() {
   if (reducedMotion) return;
   let transitioning = false;
   let activeCleanup = null;
+  let incomingNavigation = false;
 
   try {
     const incoming = JSON.parse(sessionStorage.getItem(matrixTransitionKey) ?? "null");
     sessionStorage.removeItem(matrixTransitionKey);
-    if (incoming?.timestamp && Date.now() - incoming.timestamp < 5000) {
-      requestAnimationFrame(() => { activeCleanup = animateMatrixRemold("in", () => { activeCleanup = null; }); });
+    if (incoming?.timestamp && Date.now() - incoming.timestamp < 8000) {
+      incomingNavigation = true;
+      if ("scrollRestoration" in history) history.scrollRestoration = "manual";
+      window.scrollTo(0, 0);
+      activeCleanup = animateMatrixRemold("in", () => { activeCleanup = null; });
+    } else {
+      document.documentElement.classList.remove("matrix-remold-pending");
     }
   } catch {
+    document.documentElement.classList.remove("matrix-remold-pending");
     try { sessionStorage.removeItem(matrixTransitionKey); } catch { /* Storage may be unavailable in hardened browsing modes. */ }
   }
+
+  const warmFromEvent = (event) => {
+    const link = event.target.closest?.("a[href]");
+    if (link) warmMatrixDocument(link);
+  };
+  document.addEventListener("pointerover", warmFromEvent, { capture: true, passive: true });
+  document.addEventListener("focusin", warmFromEvent, { capture: true });
+  document.addEventListener("touchstart", warmFromEvent, { capture: true, passive: true });
+
+  const warmPrimaryNavigation = () => {
+    document.querySelectorAll(".site-nav a[href]").forEach((link) => { warmMatrixDocument(link); });
+  };
+  if ("requestIdleCallback" in window) window.requestIdleCallback(warmPrimaryNavigation, { timeout: 1800 });
+  else window.setTimeout(warmPrimaryNavigation, 900);
 
   document.addEventListener("click", (event) => {
     const link = event.target.closest("a[href]");
@@ -240,19 +331,26 @@ function setupMatrixPageTransitions() {
     event.preventDefault();
     transitioning = true;
     const destination = link.href;
+    const warmup = warmMatrixDocument(link);
     activeCleanup = animateMatrixRemold("out", (cleanup) => {
-      try { sessionStorage.setItem(matrixTransitionKey, JSON.stringify({ timestamp: Date.now() })); } catch { /* Navigation still works without the arrival effect. */ }
-      location.assign(destination);
-      window.setTimeout(() => {
-        cleanup();
-        transitioning = false;
-        activeCleanup = null;
-      }, 1600);
+      waitForMatrixWarmup(warmup).finally(() => {
+        try { sessionStorage.setItem(matrixTransitionKey, JSON.stringify({ timestamp: Date.now() })); } catch { /* Navigation still works without the arrival effect. */ }
+        location.assign(destination);
+        window.setTimeout(() => {
+          cleanup();
+          transitioning = false;
+          activeCleanup = null;
+        }, 1600);
+      });
     });
   });
 
   window.addEventListener("pagehide", () => { if (activeCleanup) activeCleanup(); });
   window.addEventListener("pageshow", (event) => {
+    if (incomingNavigation) {
+      window.scrollTo(0, 0);
+      requestAnimationFrame(() => { window.scrollTo(0, 0); });
+    }
     if (!event.persisted) return;
     if (activeCleanup) activeCleanup();
     activeCleanup = null;

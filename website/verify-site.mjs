@@ -19,7 +19,8 @@ for (const page of pages) {
   if (duplicateIds.length > 0) failures.push(`${page}: duplicate ids ${[...new Set(duplicateIds)].join(", ")}`);
   if (!html.includes('<meta name="viewport"')) failures.push(`${page}: missing viewport metadata`);
   if (!html.includes("skip-link")) failures.push(`${page}: missing skip link`);
-  if (!html.includes('href="./assets/styles.css?v=20260827.1"')) failures.push(`${page}: missing release-versioned shared stylesheet`);
+  if (!html.includes('src="./assets/transition-boot.js?v=20260827.3"')) failures.push(`${page}: missing pre-paint transition handoff`);
+  if (!html.includes('href="./assets/styles.css?v=20260827.3"')) failures.push(`${page}: missing release-versioned shared stylesheet`);
   if (/\s(?:href|src)="\//.test(html)) failures.push(`${page}: local links must remain file-preview compatible`);
 
   for (const match of html.matchAll(/(?:href|src)="((?:\.\/|\/)[^"#?]+)"/g)) {
@@ -40,7 +41,7 @@ for (const required of ["data-function-lab", "data-lab-key-raw", "data-lab-usage
 }
 
 const siteScript = readFileSync(join(root, "assets", "site.js"), "utf8");
-for (const required of ["prefers-reduced-motion", "aria-expanded", "data-copy", "data-guide", "Voided MCP", "llms-full.txt", "setupMatrixPageTransitions", "matrix-remold-target", "sessionStorage", "pagehide", "pageshow"]) {
+for (const required of ["prefers-reduced-motion", "aria-expanded", "data-copy", "data-guide", "Voided MCP", "llms-full.txt", "setupMatrixPageTransitions", "matrix-remold-target", "sessionStorage", "scrollRestoration", "pagehide", "pageshow", "warmMatrixDocument", "waitForMatrixWarmup", "matrix-remold-pending"]) {
   if (!siteScript.includes(required)) failures.push(`site.js: missing ${required} behavior or search route`);
 }
 
@@ -100,6 +101,9 @@ if (demoScript.includes("innerHTML")) failures.push("demo.js: output must use te
 if (siteScript.includes("IntersectionObserver") || siteScript.includes("setupReveals")) failures.push("site.js: scroll-triggered reveal behavior must remain disabled");
 
 const siteStyles = readFileSync(join(root, "assets", "styles.css"), "utf8");
+for (const required of ["matrix-remold-pending"]) {
+  if (!siteStyles.includes(required)) failures.push(`styles.css: missing ${required} document handoff behavior`);
+}
 for (const required of ["deck-deal", "collect-hand", "cipher-ring-drift", "orbit-collapse", "system-shuffle-stack", "signal-scan", 'data-voideddev-color="black"', ".deck-hand", ".cipher-ring", ".cipher-reader", ".deck-dealer-table", ".deck-spiral-stage", ".deck-order-tape", ".deck-vault-dial", ".deck-cascade", ".deck-route-map", ".deck-archive", ".deck-wave", ".deck-constellation", ".deck-folios", ".deck-card-art--editorial", ".deck-card-art--signal"]) {
   if (!siteStyles.includes(required)) failures.push(`styles.css: missing ${required} deck showcase behavior`);
 }
