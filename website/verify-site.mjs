@@ -19,7 +19,7 @@ for (const page of pages) {
   if (duplicateIds.length > 0) failures.push(`${page}: duplicate ids ${[...new Set(duplicateIds)].join(", ")}`);
   if (!html.includes('<meta name="viewport"')) failures.push(`${page}: missing viewport metadata`);
   if (!html.includes("skip-link")) failures.push(`${page}: missing skip link`);
-  if (!html.includes('href="./assets/styles.css?v=20260816.3"')) failures.push(`${page}: missing release-versioned shared stylesheet`);
+  if (!html.includes('href="./assets/styles.css?v=20260827.1"')) failures.push(`${page}: missing release-versioned shared stylesheet`);
   if (/\s(?:href|src)="\//.test(html)) failures.push(`${page}: local links must remain file-preview compatible`);
 
   for (const match of html.matchAll(/(?:href|src)="((?:\.\/|\/)[^"#?]+)"/g)) {
@@ -40,7 +40,7 @@ for (const required of ["data-function-lab", "data-lab-key-raw", "data-lab-usage
 }
 
 const siteScript = readFileSync(join(root, "assets", "site.js"), "utf8");
-for (const required of ["prefers-reduced-motion", "aria-expanded", "data-copy", "data-guide", "Voided MCP", "llms-full.txt"]) {
+for (const required of ["prefers-reduced-motion", "aria-expanded", "data-copy", "data-guide", "Voided MCP", "llms-full.txt", "setupMatrixPageTransitions", "matrix-remold-target", "sessionStorage", "pagehide", "pageshow"]) {
   if (!siteScript.includes(required)) failures.push(`site.js: missing ${required} behavior or search route`);
 }
 

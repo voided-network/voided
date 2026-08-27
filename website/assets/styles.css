@@ -49,6 +49,33 @@
   code, pre, kbd { font-family: var(--mono); }
   :focus-visible { outline: 2px solid var(--signal); outline-offset: 4px; }
 
+  .matrix-remold-active { cursor: progress; }
+  .matrix-remold-active .matrix-remold-target {
+    inline-size: var(--matrix-remold-width) !important;
+    min-inline-size: var(--matrix-remold-width) !important;
+    max-inline-size: var(--matrix-remold-width) !important;
+    block-size: var(--matrix-remold-height) !important;
+    min-block-size: var(--matrix-remold-height) !important;
+    max-block-size: var(--matrix-remold-height) !important;
+    overflow: hidden !important;
+    contain: paint;
+    text-shadow: 0 0 9px rgba(199, 255, 94, 0.28);
+  }
+  .matrix-remold-active a,
+  .matrix-remold-active button,
+  .matrix-remold-active input,
+  .matrix-remold-active textarea,
+  .matrix-remold-active select { pointer-events: none; }
+  .matrix-remold-layer {
+    position: fixed;
+    z-index: 10000;
+    inset: 0;
+    width: 100vw;
+    height: 100svh;
+    max-width: none;
+    pointer-events: none;
+  }
+
   h1, h2, h3 {
     font-weight: 560;
     letter-spacing: -0.045em;
@@ -1669,4 +1696,5 @@
 @media (prefers-reduced-motion: reduce) {
   html { scroll-behavior: auto; }
   *, *::before, *::after { animation-duration: .001ms !important; animation-iteration-count: 1 !important; transition-duration: .001ms !important; }
+  .matrix-remold-layer { display: none !important; }
 }

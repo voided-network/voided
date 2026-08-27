@@ -7,6 +7,259 @@ function announce(message) {
   window.setTimeout(() => { liveRegion.textContent = message; }, 20);
 }
 
+const matrixTransitionKey = "voided:matrix-transition";
+const matrixGlyphs = "01AF7E3XYZ<>[]{}|/+*:=░▒";
+const matrixTextSelector = "a, button, h1, h2, h3, h4, p, li, dt, dd, figcaption, blockquote, pre, code, label, legend, output, small, strong, time, span";
+const matrixSkipSelector = "script, style, noscript, template, svg, canvas, input, textarea, select, option, [hidden], [aria-hidden=\"true\"], [contenteditable=\"true\"], .sr-only, .matrix-remold-layer";
+
+function matrixHash(first, second, third = 0) {
+  let value = Math.imul(first + 1, 0x45d9f3b) ^ Math.imul(second + 7, 0x119de1f3) ^ Math.imul(third + 11, 0x27d4eb2d);
+  value = Math.imul(value ^ (value >>> 16), 0x45d9f3b);
+  return ((value ^ (value >>> 16)) >>> 0) / 4294967295;
+}
+
+function isVisibleMatrixTarget(element) {
+  if (!(element instanceof HTMLElement) || element.closest(matrixSkipSelector)) return false;
+  const style = getComputedStyle(element);
+  if (style.display === "none" || style.visibility === "hidden" || Number(style.opacity) === 0) return false;
+  const rect = element.getBoundingClientRect();
+  return rect.width > 1 && rect.height > 1 && rect.bottom > 0 && rect.right > 0 && rect.top < innerHeight && rect.left < innerWidth;
+}
+
+function collectMatrixTargets() {
+  const grouped = new Map();
+  const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, {
+    acceptNode(node) {
+      if (!node.nodeValue?.trim()) return NodeFilter.FILTER_REJECT;
+      const parent = node.parentElement;
+      if (!parent || parent.closest(matrixSkipSelector)) return NodeFilter.FILTER_REJECT;
+      return NodeFilter.FILTER_ACCEPT;
+    },
+  });
+
+  let node = walker.nextNode();
+  while (node) {
+    const parent = node.parentElement;
+    let target = parent.closest(matrixTextSelector) ?? parent;
+    let ancestor = target.parentElement;
+    while (ancestor && ancestor !== document.body) {
+      if (ancestor.matches(matrixTextSelector)) target = ancestor;
+      ancestor = ancestor.parentElement;
+    }
+    if (isVisibleMatrixTarget(target)) {
+      if (!grouped.has(target)) grouped.set(target, []);
+      grouped.get(target).push(node);
+    }
+    node = walker.nextNode();
+  }
+
+  return [...grouped.entries()].map(([element, nodes], targetIndex) => {
+    const rect = element.getBoundingClientRect();
+    const computed = getComputedStyle(element);
+    const originalStyle = element.getAttribute("style");
+    element.style.setProperty("--matrix-remold-width", `${rect.width}px`);
+    element.style.setProperty("--matrix-remold-height", `${rect.height}px`);
+    element.classList.add("matrix-remold-target");
+    return {
+      element,
+      nodes: nodes.map((textNode, nodeIndex) => ({ textNode, text: textNode.nodeValue, nodeIndex })),
+      targetIndex,
+      rect,
+      color: computed.color,
+      fontSize: Math.max(8, Number.parseFloat(computed.fontSize) || 13),
+      originalStyle,
+    };
+  });
+}
+
+function remoldMatrixText(targets, amount, frame) {
+  targets.forEach((target) => {
+    target.nodes.forEach(({ textNode, text, nodeIndex }) => {
+      if (amount <= 0.015) {
+        textNode.nodeValue = text;
+        return;
+      }
+      textNode.nodeValue = [...text].map((character, characterIndex) => {
+        if (/\s/.test(character)) return character;
+        const threshold = matrixHash(target.targetIndex, nodeIndex, characterIndex);
+        if (amount < threshold * 0.94) return character;
+        const glyphIndex = Math.floor(matrixHash(characterIndex + frame, target.targetIndex, nodeIndex + frame) * matrixGlyphs.length);
+        if (amount > 0.74 && matrixHash(nodeIndex, characterIndex, target.targetIndex) < (amount - 0.74) * 0.88) return "·";
+        return matrixGlyphs[glyphIndex];
+      }).join("");
+    });
+  });
+}
+
+function restoreMatrixTargets(targets) {
+  targets.forEach(({ element, nodes, originalStyle }) => {
+    nodes.forEach(({ textNode, text }) => { textNode.nodeValue = text; });
+    element.classList.remove("matrix-remold-target");
+    if (originalStyle === null) element.removeAttribute("style");
+    else element.setAttribute("style", originalStyle);
+  });
+}
+
+function createMatrixLayer(targets) {
+  const canvas = document.createElement("canvas");
+  canvas.className = "matrix-remold-layer";
+  canvas.setAttribute("aria-hidden", "true");
+  document.body.append(canvas);
+
+  const particles = [];
+  targets.forEach((target) => {
+    const characterCount = target.nodes.reduce((total, item) => total + item.text.trim().length, 0);
+    const count = Math.min(18, Math.max(2, Math.round(characterCount / 9)));
+    for (let index = 0; index < count; index += 1) {
+      const horizontal = matrixHash(target.targetIndex, index, 1);
+      const vertical = matrixHash(target.targetIndex, index, 2);
+      particles.push({
+        x: target.rect.left + horizontal * target.rect.width,
+        y: target.rect.top + vertical * target.rect.height,
+        driftX: (matrixHash(index, target.targetIndex, 3) - 0.5) * 34,
+        driftY: (matrixHash(index, target.targetIndex, 4) - 0.5) * 92,
+        delay: matrixHash(index, target.targetIndex, 5) * 0.48,
+        glyph: matrixGlyphs[Math.floor(matrixHash(index, target.targetIndex, 6) * matrixGlyphs.length)],
+        color: target.color,
+        size: Math.min(15, Math.max(8, target.fontSize * (0.38 + matrixHash(index, target.targetIndex, 7) * 0.28))),
+      });
+    }
+  });
+
+  const fontFamily = getComputedStyle(document.documentElement).getPropertyValue("--mono").trim() || "monospace";
+  return { canvas, particles, fontFamily };
+}
+
+function drawMatrixDissipation(layer, phase, direction) {
+  const { canvas, particles, fontFamily } = layer;
+  const ratio = Math.min(devicePixelRatio || 1, 2);
+  const width = innerWidth;
+  const height = innerHeight;
+  const pixelWidth = Math.round(width * ratio);
+  const pixelHeight = Math.round(height * ratio);
+  if (canvas.width !== pixelWidth || canvas.height !== pixelHeight) {
+    canvas.width = pixelWidth;
+    canvas.height = pixelHeight;
+  }
+  const context = canvas.getContext("2d");
+  context.setTransform(ratio, 0, 0, ratio, 0, 0);
+  context.clearRect(0, 0, width, height);
+  context.textBaseline = "middle";
+
+  particles.forEach((particle, index) => {
+    const local = Math.max(0, Math.min(1, (phase - particle.delay) / (1 - particle.delay)));
+    const travel = direction === "out" ? local : 1 - local;
+    const visibility = Math.sin(local * Math.PI) * 0.78;
+    if (visibility <= 0.01) return;
+    const flutter = Math.sin((phase * 28) + index) * 4;
+    context.globalAlpha = visibility * 0.22;
+    context.fillStyle = particle.color;
+    context.fillRect(particle.x, particle.y + (particle.driftY * travel), 1, Math.max(5, particle.size * 1.7));
+    context.globalAlpha = visibility;
+    context.font = `${particle.size}px ${fontFamily}`;
+    context.shadowBlur = 9;
+    context.shadowColor = "rgba(199, 255, 94, 0.5)";
+    context.fillText(particle.glyph, particle.x + (particle.driftX * travel) + flutter, particle.y + (particle.driftY * travel));
+  });
+  context.globalAlpha = 1;
+  context.shadowBlur = 0;
+}
+
+function animateMatrixRemold(direction, onComplete) {
+  const targets = collectMatrixTargets();
+  if (targets.length === 0) {
+    const cleanup = () => {};
+    onComplete(cleanup);
+    return cleanup;
+  }
+  const layer = createMatrixLayer(targets);
+  const duration = direction === "out" ? 430 : 560;
+  const started = performance.now();
+  let animationFrame = 0;
+
+  document.documentElement.classList.add("matrix-remold-active");
+  document.body.setAttribute("aria-busy", "true");
+
+  function cleanup() {
+    cancelAnimationFrame(animationFrame);
+    restoreMatrixTargets(targets);
+    layer.canvas.remove();
+    document.documentElement.classList.remove("matrix-remold-active");
+    document.body.removeAttribute("aria-busy");
+  }
+
+  function render(now) {
+    const phase = Math.min(1, (now - started) / duration);
+    const eased = phase * phase * (3 - (2 * phase));
+    const amount = direction === "out" ? eased : 1 - eased;
+    remoldMatrixText(targets, amount, Math.floor((now - started) / 42));
+    drawMatrixDissipation(layer, phase, direction);
+    if (phase < 1) {
+      animationFrame = requestAnimationFrame(render);
+      return;
+    }
+    if (direction === "in") cleanup();
+    onComplete(cleanup);
+  }
+
+  animationFrame = requestAnimationFrame(render);
+  return cleanup;
+}
+
+function isMatrixNavigation(event, link) {
+  if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return false;
+  if (link.target && link.target !== "_self") return false;
+  if (link.hasAttribute("download") || link.dataset.noTransition !== undefined) return false;
+  const destination = new URL(link.href, location.href);
+  const current = new URL(location.href);
+  const localFile = current.protocol === "file:" && destination.protocol === "file:";
+  if (!localFile && destination.origin !== current.origin) return false;
+  if (!/\/$|\.html$/i.test(destination.pathname)) return false;
+  if (destination.pathname === current.pathname && destination.search === current.search && destination.hash) return false;
+  return true;
+}
+
+function setupMatrixPageTransitions() {
+  if (reducedMotion) return;
+  let transitioning = false;
+  let activeCleanup = null;
+
+  try {
+    const incoming = JSON.parse(sessionStorage.getItem(matrixTransitionKey) ?? "null");
+    sessionStorage.removeItem(matrixTransitionKey);
+    if (incoming?.timestamp && Date.now() - incoming.timestamp < 5000) {
+      requestAnimationFrame(() => { activeCleanup = animateMatrixRemold("in", () => { activeCleanup = null; }); });
+    }
+  } catch {
+    try { sessionStorage.removeItem(matrixTransitionKey); } catch { /* Storage may be unavailable in hardened browsing modes. */ }
+  }
+
+  document.addEventListener("click", (event) => {
+    const link = event.target.closest("a[href]");
+    if (!link || transitioning || !isMatrixNavigation(event, link)) return;
+    event.preventDefault();
+    transitioning = true;
+    const destination = link.href;
+    activeCleanup = animateMatrixRemold("out", (cleanup) => {
+      try { sessionStorage.setItem(matrixTransitionKey, JSON.stringify({ timestamp: Date.now() })); } catch { /* Navigation still works without the arrival effect. */ }
+      location.assign(destination);
+      window.setTimeout(() => {
+        cleanup();
+        transitioning = false;
+        activeCleanup = null;
+      }, 1600);
+    });
+  });
+
+  window.addEventListener("pagehide", () => { if (activeCleanup) activeCleanup(); });
+  window.addEventListener("pageshow", (event) => {
+    if (!event.persisted) return;
+    if (activeCleanup) activeCleanup();
+    activeCleanup = null;
+    transitioning = false;
+  });
+}
+
 function setupNavigation() {
   const toggle = document.querySelector(".menu-toggle");
   const navigation = document.querySelector(".site-nav");
@@ -449,3 +702,4 @@ setupDiagnosticBuilder();
 setupDevMode();
 setupArtifactExplorer();
 setupRecoverySimulator();
+setupMatrixPageTransitions();
