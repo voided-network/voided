@@ -20,8 +20,8 @@ for (const page of pages) {
   if (duplicateIds.length > 0) failures.push(`${page}: duplicate ids ${[...new Set(duplicateIds)].join(", ")}`);
   if (!html.includes('<meta name="viewport"')) failures.push(`${page}: missing viewport metadata`);
   if (!html.includes("skip-link")) failures.push(`${page}: missing skip link`);
-  if (!html.includes('src="./assets/transition-boot.js?v=20260829.1"')) failures.push(`${page}: missing pre-paint transition handoff`);
-  if (!html.includes('href="./assets/styles.css?v=20260829.1"')) failures.push(`${page}: missing release-versioned shared stylesheet`);
+  if (!html.includes('src="./assets/transition-boot.js?v=20260829.2"')) failures.push(`${page}: missing pre-paint transition handoff`);
+  if (!html.includes('href="./assets/styles.css?v=20260829.2"')) failures.push(`${page}: missing release-versioned shared stylesheet`);
   if (/\s(?:href|src)="\//.test(html)) failures.push(`${page}: local links must remain file-preview compatible`);
 
   for (const match of html.matchAll(/(?:href|src)="((?:\.\/|\/)[^"#?]+)"/g)) {
