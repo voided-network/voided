@@ -171,7 +171,7 @@ function setupFunctionLab() {
     key = null;
   }
 
-  generateButton.addEventListener("click", async () => {
+  async function generateKey() {
     generateButton.disabled = true;
     runtime.textContent = "Loading Rust/WASM…";
     try {
@@ -192,7 +192,9 @@ function setupFunctionLab() {
     } finally {
       generateButton.disabled = false;
     }
-  });
+  }
+
+  generateButton.addEventListener("click", generateKey);
 
   lab.querySelectorAll("[data-lab-operation]").forEach((button) => {
     button.addEventListener("click", () => {
@@ -302,6 +304,7 @@ function setupFunctionLab() {
 
   window.addEventListener("pagehide", clearKey, { once: true });
   updateUsage();
+  generateKey();
 }
 
 async function setupDeckLab() {

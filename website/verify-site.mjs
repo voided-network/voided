@@ -8,8 +8,9 @@ import { createInterface } from "node:readline";
 import { fileURLToPath } from "node:url";
 
 const root = dirname(fileURLToPath(import.meta.url));
-const pages = ["index.html", "docs.html", "updates.html", "legal.html", "learn.html", "support.html", "ai.html", "mcp.html", "404.html"];
+const pages = ["index.html", "docs.html", "updates.html", "legal.html", "learn.html", "support.html", "source.html", "ai.html", "mcp.html", "404.html"];
 const failures = [];
+const publicTextFiles = ["README.md", "llms.txt", "llms-full.txt", "ai.json", "mcp.json", "downloads/README.txt", "downloads/voided-agents.md", "downloads/voided-skill.md"];
 
 for (const page of pages) {
   const pagePath = join(root, page);
@@ -19,8 +20,8 @@ for (const page of pages) {
   if (duplicateIds.length > 0) failures.push(`${page}: duplicate ids ${[...new Set(duplicateIds)].join(", ")}`);
   if (!html.includes('<meta name="viewport"')) failures.push(`${page}: missing viewport metadata`);
   if (!html.includes("skip-link")) failures.push(`${page}: missing skip link`);
-  if (!html.includes('src="./assets/transition-boot.js?v=20260827.3"')) failures.push(`${page}: missing pre-paint transition handoff`);
-  if (!html.includes('href="./assets/styles.css?v=20260827.3"')) failures.push(`${page}: missing release-versioned shared stylesheet`);
+  if (!html.includes('src="./assets/transition-boot.js?v=20260829.1"')) failures.push(`${page}: missing pre-paint transition handoff`);
+  if (!html.includes('href="./assets/styles.css?v=20260829.1"')) failures.push(`${page}: missing release-versioned shared stylesheet`);
   if (/\s(?:href|src)="\//.test(html)) failures.push(`${page}: local links must remain file-preview compatible`);
 
   for (const match of html.matchAll(/(?:href|src)="((?:\.\/|\/)[^"#?]+)"/g)) {
@@ -35,13 +36,18 @@ for (const page of pages) {
   }
 }
 
+for (const publicFile of publicTextFiles) {
+  const contents = readFileSync(join(root, publicFile), "utf8");
+  if (/slipner/i.test(contents)) failures.push(`${publicFile}: contains non-Voided product naming`);
+}
+
 const home = readFileSync(join(root, "index.html"), "utf8");
 for (const required of ["data-function-lab", "data-lab-key-raw", "data-lab-usage", "lab-usage-code", 'data-lab-language="node"', 'data-lab-language="rust"', "data-lab-input-hex", "data-lab-artifact-raw", "data-lab-artifact-meta", "data-lab-restored-hex", "data-lab-match", "data-deck-lab", "data-deck-shuffle", 'data-deck-theme="plain"', 'data-deck-theme="editorial"', 'data-deck-theme="signal"', 'data-deck-theme="dealer"', 'data-deck-theme="spiral"', 'data-deck-theme="timeline"', 'data-deck-theme="vault"', 'data-deck-theme="cascade"', 'data-deck-theme="map"', 'data-deck-theme="archive"', 'data-deck-theme="wave"', 'data-deck-theme="constellation"', 'data-deck-theme="folio"', "./assets/demo.js"]) {
   if (!home.includes(required)) failures.push(`index.html: missing ${required} live demo surface`);
 }
 
 const siteScript = readFileSync(join(root, "assets", "site.js"), "utf8");
-for (const required of ["prefers-reduced-motion", "aria-expanded", "data-copy", "data-guide", "Voided MCP", "llms-full.txt", "setupMatrixPageTransitions", "matrix-remold-target", "sessionStorage", "scrollRestoration", "pagehide", "pageshow", "warmMatrixDocument", "waitForMatrixWarmup", "matrix-remold-pending"]) {
+for (const required of ["prefers-reduced-motion", "aria-expanded", "data-copy", "data-guide", "Voided MCP", "llms-full.txt", "setupMatrixPageTransitions", "setupSiteChrome", "remoldRegion", "matrix-remold-target", "sessionStorage", "scrollRestoration", "pagehide", "pageshow", "warmMatrixDocument", "waitForMatrixWarmup", "matrix-remold-pending"]) {
   if (!siteScript.includes(required)) failures.push(`site.js: missing ${required} behavior or search route`);
 }
 
@@ -51,7 +57,7 @@ for (const required of ['data-guide-panel="lab"', 'data-guide-panel="library"', 
 }
 
 const course = readFileSync(join(root, "learn.html"), "utf8");
-for (const required of ["data-byte-lab", "data-transform-lab", "data-transform-canvas", "data-key-model-lab", "data-key-canvas", "data-journey-lab", "data-journey-canvas", "data-tamper-lab", "data-tamper-canvas", "data-kdf-lab", "data-recovery-simulator", "data-knowledge-check", "./assets/education.js"]) {
+for (const required of ["data-byte-lab", "data-transform-lab", "data-transform-key", "data-transform-canvas", "data-key-model-lab", "data-key-canvas", "data-journey-lab", "data-server-stores", "data-journey-canvas", "data-tamper-lab", "data-tamper-key", "data-tamper-change", "data-tamper-canvas", "data-kdf-lab", "data-kdf-history", "data-recovery-simulator", "data-system-finale", "data-system-key", "data-knowledge-check", "data-quiz-score", "./assets/education.js"]) {
   if (!course.includes(required)) failures.push(`learn.html: missing ${required} education surface`);
 }
 
@@ -82,7 +88,7 @@ for (const jsonFile of ["ai.json", "mcp.json"]) {
 const mcpPath = join(root, "downloads", "voided-mcp.mjs");
 const mcpBytes = readFileSync(mcpPath);
 const actualMcpHash = createHash("sha256").update(mcpBytes).digest("hex");
-const expectedMcpHash = "fd8ad4bdb0afde8d9d47d7a196dc88a473c3cc65a2494c4281cd4b5240f77354";
+const expectedMcpHash = "c149448fce0d18b277f6b2652547f1ab0ac882bab85f9b1a069afee3c420a088";
 if (actualMcpHash !== expectedMcpHash) failures.push(`voided-mcp.mjs: SHA-256 ${actualMcpHash} does not match descriptor`);
 for (const descriptor of ["mcp.html", "mcp.json", "ai.json", "downloads/README.txt"]) {
   if (!readFileSync(join(root, descriptor), "utf8").includes(expectedMcpHash)) failures.push(`${descriptor}: missing MCP checksum`);

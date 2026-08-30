@@ -180,12 +180,12 @@ Recovery Deck is not identity, login authentication, an application encryption k
 The Voided MCP server is a developer-facing, read-only local source knowledge server. It is not part of runtime cryptography or authentication.
 
 Download: https://voidednetwork.com/downloads/voided-mcp.mjs
-SHA-256: fd8ad4bdb0afde8d9d47d7a196dc88a473c3cc65a2494c4281cd4b5240f77354
+SHA-256: c149448fce0d18b277f6b2652547f1ab0ac882bab85f9b1a069afee3c420a088
 Runtime: Node.js 18 or newer
 Transport: stdio JSON-RPC
 Server name/version: voided-mcp 0.1.0
 Configuration environment: VOIDED_ROOT=/absolute/path/to/voided
-Registry status: @slipner/cli is not publicly available on npm; direct download is the current launch path.
+Registry status: the Voided MCP is not publicly available through a package registry; direct download is the current launch path.
 
 Tools:
 - voided_get_context: confirm checkout and discover crates and packages
@@ -202,6 +202,8 @@ The MCP server does not need keys, deck order, plaintext, derived recovery mater
 ## Machine and human endpoints
 
 - Compact index: https://voidednetwork.com/llms.txt
+- Reusable Voided skill: https://voidednetwork.com/downloads/voided-skill.md
+- Compact AGENTS.md instruction: https://voidednetwork.com/downloads/voided-agents.md
 - Semantic HTML: https://voidednetwork.com/ai.html
 - Structured JSON: https://voidednetwork.com/ai.json
 - MCP page: https://voidednetwork.com/mcp.html
@@ -210,5 +212,6 @@ The MCP server does not need keys, deck order, plaintext, derived recovery mater
 - Interactive developer lab: https://voidednetwork.com/docs.html?guide=lab
 - Complete library map: https://voidednetwork.com/docs.html?guide=library
 - Updates and release ledger: https://voidednetwork.com/updates.html
-- Source: https://github.com/voided-network/voided
+- Source map: https://voidednetwork.com/source.html
+- Repository: https://github.com/voided-network/voided
 - Support: https://voidednetwork.com/support.html

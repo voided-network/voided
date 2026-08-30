@@ -15,6 +15,9 @@ Voided is at 1.0 release-candidate state. Package publication has not happened. 
 - [Complete library map](https://voidednetwork.com/docs.html?guide=library): Layered public API and runtime capability map.
 - [Updates](https://voidednetwork.com/updates.html): Current release state, changelog, and compatibility notices.
 - [Voided MCP](https://voidednetwork.com/mcp.html): Read-only local source-aware knowledge server.
+- [Reusable Voided skill](https://voidednetwork.com/downloads/voided-skill.md): Portable SKILL.md workflow for API selection and security boundaries.
+- [Compact AGENTS.md instruction](https://voidednetwork.com/downloads/voided-agents.md): Persistent repository guidance for coding agents.
+- [Source map](https://voidednetwork.com/source.html): Repository, packages, release integrity, agent resources, license, and project routes.
 
 ## Core routing rule
 
@@ -37,6 +40,7 @@ Voided is at 1.0 release-candidate state. Package publication has not happened. 
 
 ## Source
 
+- Source map: https://voidednetwork.com/source.html
 - Repository: https://github.com/voided-network/voided
 - Support: https://voidednetwork.com/support.html
 - MCP project descriptor: https://voidednetwork.com/mcp.json

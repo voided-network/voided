@@ -7,9 +7,9 @@
   <meta name="theme-color" content="#080a0b">
   <title>Voided Support — Diagnose, verify, and report</title>
   <link rel="icon" href="./assets/favicon.svg" type="image/svg+xml">
-  <script src="./assets/transition-boot.js?v=20260827.3"></script>
-  <link rel="stylesheet" href="./assets/styles.css?v=20260827.3">
-  <script src="./assets/site.js?v=20260827.3" defer></script>
+  <script src="./assets/transition-boot.js?v=20260829.1"></script>
+  <link rel="stylesheet" href="./assets/styles.css?v=20260829.1">
+  <script src="./assets/site.js?v=20260829.1" defer></script>
 </head>
 <body data-page="support">
   <a class="skip-link" href="#main">Skip to content</a>
@@ -23,31 +23,22 @@
 
   <main id="main">
     <section class="page-hero">
-      <div class="page-hero__inner"><span class="eyebrow">Developer support</span><h1>Diagnose the failing boundary.</h1><p>Select the runtime and symptom to generate a focused verification sequence and a safe diagnostic report.</p></div>
+      <div class="page-hero__inner"><span class="eyebrow">Developer support</span><h1>Diagnose the failing boundary.</h1><p>Select the runtime and symptom. Voided gives you the smallest relevant command sequence and the evidence worth including.</p></div>
     </section>
 
     <section class="support-layout" aria-labelledby="diagnose-title" data-search-title="Voided diagnostic builder" data-search-summary="Generate commands and an issue report for browser, Node.js, or Rust">
-      <div class="support-intro"><span class="eyebrow">Guided triage</span><h2 id="diagnose-title">Build a useful report.</h2><p>Include only runtime facts, public errors, and release checks that can change the diagnosis.</p><div class="callout callout--danger mt-40"><strong>Scrub before sharing</strong><p>Never attach Recovery Deck order, derived keys, raw roots, unredacted environment variables, protected customer data, or crash dumps containing plaintext.</p></div></div>
+      <div class="support-intro"><span class="eyebrow">Guided triage</span><h2 id="diagnose-title">Run the focused checks.</h2><p>Choose the failing boundary. Copy and run the generated commands from the repository root.</p><div class="secret-boundary mt-40"><span>SAFE SHARING BOUNDARY</span><strong>Evidence in. Secrets out.</strong><div><p><b>Include</b> versions, platform, exact public error, and a minimal reproduction.</p><p><b>Remove</b> plaintext, keys, deck order, roots, environments, customer data, and crash memory.</p></div></div></div>
       <form class="support-form" data-diagnostic-form>
         <div class="support-question"><label for="diag-runtime">Where does it fail?</label><select id="diag-runtime" name="runtime"><option value="browser">Browser / WASM</option><option value="node">Node.js native package</option><option value="rust">Rust crate</option></select></div>
         <div class="support-question"><label for="diag-symptom">What are you seeing?</label><select id="diag-symptom" name="symptom"><option value="load">Backend or native module will not load</option><option value="open">A protected artifact will not open</option><option value="recovery">Recovery Deck reconstruction fails</option><option value="performance">Performance or memory regression</option><option value="package">Package contents or release verification fails</option></select></div>
-        <div class="support-question"><label for="diag-context">Safe context to include</label><textarea id="diag-context" name="context" rows="4" placeholder="OS/browser version, package version, and the exact public error message. Do not paste secrets or customer data."></textarea></div>
         <div class="diagnostic-output">
-          <div class="code-window"><div class="code-window__bar"><span>diagnostic-report.txt</span><button class="copy-button" type="button" data-copy="#diagnostic-code">Copy report</button></div><pre><code id="diagnostic-code" data-diagnostic-output>Runtime: Browser / WASM
-Symptom: Backend or native module will not load
+          <div class="code-window"><div class="code-window__bar"><span>commands</span><button class="copy-button" type="button" data-copy="#diagnostic-code">Copy commands</button></div><pre><code id="diagnostic-code" data-diagnostic-output># Browser / WASM
+# Backend or native module will not load
 
-Run:
 npm --prefix packages/e2ee-client run verify:release
 npm --prefix packages/e2ee-client run test:wasm
-npm --prefix packages/e2ee-client run smoke:package
-
-Include:
-- Browser and OS version
-- Package version
-- Configured WASM URL, without credentials
-- Exact initialization error
-
-Never include keys, deck order, plaintext, or protected customer data.</code></pre></div>
+npm --prefix packages/e2ee-client run smoke:package</code></pre></div>
+          <div class="support-evidence"><span>WHEN YOU REPORT IT</span><ul><li>Package or crate version</li><li>OS, architecture, browser, or Node version</li><li>Exact public error text</li><li>Whether the failure repeats from a clean start</li></ul></div>
         </div>
       </form>
     </section>
@@ -82,20 +73,8 @@ Never include keys, deck order, plaintext, or protected customer data.</code></p
       </div>
     </section>
 
-    <section class="section" aria-labelledby="release-title" data-search-title="Voided release verification" data-search-summary="Source, package, dependency, and current-platform checks">
-      <div class="section__inner recovery-spotlight">
-        <div class="recovery-copy"><span class="eyebrow">Release verification</span><h2 id="release-title">Verify the shipped artifact.</h2><p>Voided packages bind release artifacts to a clean committed source snapshot. Native and WASM loaders verify the selected binary before use.</p><div class="recovery-facts"><div class="recovery-fact"><strong>150</strong><span>Rust tests</span></div><div class="recovery-fact"><strong>364</strong><span>JS unit tests</span></div><div class="recovery-fact"><strong>0</strong><span>audit vulnerabilities</span></div><div class="recovery-fact"><strong>1 gate</strong><span>Windows pending</span></div></div></div>
-        <div class="code-window"><div class="code-window__bar"><span>release-gates.sh</span><button class="copy-button" type="button" data-copy="#release-gates-code">Copy</button></div><pre><code id="release-gates-code">npm run release:verify:source
-npm run site:check
-npm test
-npm run typecheck
-npm run lint
-
-cargo test --workspace --all-features
-cargo clippy --workspace --all-targets --all-features -- -D warnings
-cargo audit
-cargo deny check</code></pre></div>
-      </div>
+    <section class="section" aria-labelledby="release-title" data-search-title="Choose the correct Voided support route" data-search-summary="Public integration issue, private vulnerability report, release state, and implementation documentation">
+      <div class="section__inner"><div class="section__intro"><div><span class="eyebrow">Next route</span><h2 class="section__title" id="release-title">Send it to the right place.</h2></div><p>A public integration failure, a private vulnerability, and a release-status question need different evidence and different channels.</p></div><div class="support-routes"><a href="https://github.com/voided-network/voided/issues/new"><span>PUBLIC ISSUE</span><strong>Reproducible integration failure</strong><p>No secrets. Include the minimal reproduction and command output.</p></a><a href="https://github.com/voided-network/voided/security/advisories/new"><span>PRIVATE ADVISORY</span><strong>Security vulnerability</strong><p>Use the private channel before disclosing exploitable detail.</p></a><a href="./updates.html"><span>RELEASE STATE</span><strong>Current gates and changes</strong><p>The factual release ledger lives on Updates, not Support.</p></a><a href="./docs.html"><span>IMPLEMENTATION</span><strong>API and runtime guidance</strong><p>Use the Developer page when the system is behaving as designed but the integration choice is unclear.</p></a></div></div>
     </section>
 
     <section class="section section--signal final-cta" aria-labelledby="support-final-title"><div class="final-cta__inner"><span class="eyebrow">Escalation</span><h2 id="support-final-title">Share evidence,<br>never secret material.</h2><div class="final-cta__actions"><a class="button" href="https://github.com/voided-network/voided/issues/new">Open a public issue <span class="arrow" aria-hidden="true">→</span></a><a class="button button--quiet" href="https://github.com/voided-network/voided/security/advisories/new">Report a vulnerability privately</a></div></div></section>

@@ -226,34 +226,54 @@ function drawTransformField(context, width, height, time, state) {
   context.fillStyle = fieldPalette.ink;
   context.fillRect(0, 0, width, height);
   drawFieldGrid(context, width, height, 30, 14);
-  const pad = width < 600 ? 9 : 18;
-  const gap = width < 600 ? 7 : 14;
-  const top = width < 600 ? 38 : 46;
-  const bottom = 30;
+  const compact = width < 600;
+  const pad = compact ? 9 : 18;
+  const gap = compact ? 7 : 14;
+  const sourceTop = compact ? 35 : 42;
+  const sourceHeight = compact ? 54 : 64;
+  const laneTop = sourceTop + sourceHeight + (compact ? 42 : 54);
   const panelWidth = (width - pad * 2 - gap * 2) / 3;
-  const panelHeight = height - top - bottom;
-  const panels = [0, 1, 2].map((index) => ({ x: pad + index * (panelWidth + gap), y: top, width: panelWidth, height: panelHeight }));
+  const panelHeight = height - laneTop - 28;
+  const panels = [0, 1, 2].map((index) => ({ x: pad + index * (panelWidth + gap), y: laneTop, width: panelWidth, height: panelHeight }));
   const encrypted = state.cipherBytes.length > 0;
+  const sourceWidth = Math.min(width - pad * 2, compact ? width * .72 : 460);
+  const sourceX = (width - sourceWidth) / 2;
+  drawTerminalPanel(context, sourceX, sourceTop, sourceWidth, sourceHeight, fieldPalette.change);
+  drawMono(context, "ONE SOURCE MESSAGE", sourceX + 14, sourceTop + 18, { color: fieldPalette.change, size: compact ? 6 : 8, weight: 700 });
+  drawMono(context, `${state.bytes.length} UTF-8 BYTES · ${bytesToHex(state.bytes.slice(0, compact ? 5 : 12), " ").toUpperCase()}${state.bytes.length > (compact ? 5 : 12) ? " …" : ""}`, sourceX + 14, sourceTop + 40, { color: fieldPalette.paper, size: compact ? 5.5 : 8 });
 
-  panels.forEach((panel, index) => drawTerminalPanel(context, panel.x, panel.y, panel.width, panel.height, index === 0 && !encrypted ? fieldPalette.change : fieldPalette.signal));
+  const sourceCenter = sourceX + sourceWidth / 2;
+  const branchY = laneTop - 19;
+  context.strokeStyle = "rgba(241,239,231,.24)";
+  context.beginPath();
+  context.moveTo(sourceCenter, sourceTop + sourceHeight);
+  context.lineTo(sourceCenter, branchY);
+  context.stroke();
+  panels.forEach((panel) => {
+    const center = panel.x + panel.width / 2;
+    context.beginPath();
+    context.moveTo(sourceCenter, branchY);
+    context.lineTo(center, branchY);
+    context.lineTo(center, laneTop);
+    context.stroke();
+    drawStatusLamp(context, center, branchY, fieldPalette.signal, true);
+  });
+
+  panels.forEach((panel, index) => drawTerminalPanel(context, panel.x, panel.y, panel.width, panel.height, index === 0 ? fieldPalette.paper : index === 1 ? fieldPalette.signal : encrypted ? fieldPalette.change : fieldPalette.muted));
 
   const source = panels[0];
   context.save();
   context.beginPath();
   context.rect(source.x + 1, source.y + 1, source.width - 2, source.height - 2);
   context.clip();
+  const encodedBytes = encoder.encode(bytesToBase64(state.bytes));
   const sourceColumns = Math.max(2, Math.min(8, Math.floor(source.width / 34)));
   for (let column = 0; column < sourceColumns; column += 1) {
-    drawMatrixColumn(context, state.bytes, source.x + 14 + column * ((source.width - 28) / sourceColumns), source.y + 20, source.y + source.height - 22, column, time, column % 3 === 0 ? fieldPalette.change : fieldPalette.paper);
+    drawMatrixColumn(context, encodedBytes, source.x + 14 + column * ((source.width - 28) / sourceColumns), source.y + 30, source.y + source.height - 22, column, time, fieldPalette.paper);
   }
-  const scanY = source.y + 20 + ((time * 28) % Math.max(1, source.height - 44));
-  const sourceGradient = context.createLinearGradient(0, scanY - 24, 0, scanY + 4);
-  sourceGradient.addColorStop(0, "rgba(255,139,69,0)");
-  sourceGradient.addColorStop(1, "rgba(255,139,69,.17)");
-  context.fillStyle = sourceGradient;
-  context.fillRect(source.x, scanY - 24, source.width, 28);
   context.restore();
-  drawMono(context, `${state.bytes.length} UTF-8 BYTES`, source.x + source.width / 2, source.y + source.height - 12, { color: fieldPalette.change, size: width < 600 ? 6.5 : 8, align: "center" });
+  drawMono(context, "ENCODE · REVERSIBLE", source.x + source.width / 2, source.y + 16, { color: fieldPalette.paper, size: compact ? 6 : 8, align: "center", weight: 700 });
+  drawMono(context, "SAME DATA · DIFFERENT TEXT", source.x + source.width / 2, source.y + source.height - 12, { color: fieldPalette.muted, size: compact ? 5 : 7, align: "center" });
 
   const hash = panels[1];
   const digestColumns = width < 600 ? 4 : 8;
@@ -268,13 +288,14 @@ function drawTransformField(context, width, height, time, state) {
     const x = hash.x + 11 + column * (digestCellWidth + digestGap);
     const y = digestTop + row * (digestCellHeight + digestGap);
     const byte = byteAt(state.digest, index);
-    const pulse = (Math.floor(time * 5) + index) % 17 === 0;
-    context.fillStyle = pulse ? "rgba(199,255,94,.34)" : `rgba(199,255,94,${0.05 + (byte / 255) * 0.12})`;
+    const changed = byte !== byteAt(state.previousDigest, index);
+    const changeFade = Math.max(0, 1 - ((time - state.updatedAt) / 1.1));
+    context.fillStyle = changed && changeFade > 0 ? `rgba(255,139,69,${0.14 + changeFade * .5})` : `rgba(199,255,94,${0.05 + (byte / 255) * 0.12})`;
     context.fillRect(x, y, digestCellWidth, digestCellHeight);
     drawMono(context, byte.toString(16).padStart(2, "0").toUpperCase(), x + digestCellWidth / 2, y + digestCellHeight / 2, { color: fieldPalette.signal, size: width < 600 ? 6 : 8, align: "center", alpha: 0.72 });
   }
-  drawMono(context, "SHA-256", hash.x + hash.width / 2, hash.y + 23, { color: fieldPalette.signal, size: width < 600 ? 7 : 10, align: "center", weight: 700 });
-  drawMono(context, "FIXED 256-BIT DIGEST", hash.x + hash.width / 2, hash.y + hash.height - 12, { color: fieldPalette.muted, size: width < 600 ? 5.5 : 8, align: "center" });
+  drawMono(context, "HASH · ONE-WAY", hash.x + hash.width / 2, hash.y + 23, { color: fieldPalette.signal, size: compact ? 6 : 9, align: "center", weight: 700 });
+  drawMono(context, "32-BYTE FINGERPRINT", hash.x + hash.width / 2, hash.y + hash.height - 12, { color: fieldPalette.muted, size: compact ? 5 : 7, align: "center" });
 
   const cipher = panels[2];
   context.save();
@@ -288,12 +309,8 @@ function drawTransformField(context, width, height, time, state) {
   }
   context.restore();
   drawStatusLamp(context, cipher.x + 14, cipher.y + 19, encrypted ? fieldPalette.signal : fieldPalette.change, true);
-  drawMono(context, encrypted ? "SEALED" : "AWAITING KEY", cipher.x + 23, cipher.y + 19, { color: encrypted ? fieldPalette.signal : fieldPalette.change, size: width < 600 ? 6 : 8 });
-  drawMono(context, encrypted ? "XCHACHA20-POLY1305" : "NO CIPHERTEXT", cipher.x + cipher.width / 2, cipher.y + cipher.height - 12, { color: encrypted ? fieldPalette.signal : fieldPalette.muted, size: width < 600 ? 5.5 : 8, align: "center" });
-
-  const wireY = top + panelHeight * 0.5;
-  drawFlowPackets(context, source.x + source.width, hash.x, wireY, time, fieldPalette.change, true);
-  drawFlowPackets(context, hash.x + hash.width, cipher.x, wireY, time, fieldPalette.signal, encrypted);
+  drawMono(context, encrypted ? "ENCRYPT · KEYED" : "ENCRYPT · LOADING KEY", cipher.x + 23, cipher.y + 19, { color: encrypted ? fieldPalette.change : fieldPalette.muted, size: compact ? 5.5 : 7.5, weight: 700 });
+  drawMono(context, encrypted ? "UNREADABLE WITHOUT KEY" : "NO CIPHERTEXT", cipher.x + cipher.width / 2, cipher.y + cipher.height - 12, { color: encrypted ? fieldPalette.change : fieldPalette.muted, size: compact ? 5 : 7, align: "center" });
 }
 
 function drawKeyField(context, width, height, time, state) {
@@ -504,13 +521,14 @@ function setupTransformLab() {
   const base64 = lab.querySelector("[data-transform-base64]");
   const decoded = lab.querySelector("[data-transform-decoded]");
   const hash = lab.querySelector("[data-transform-hash]");
+  const keyOutput = lab.querySelector("[data-transform-key]");
   const cipher = lab.querySelector("[data-transform-cipher]");
   const restored = lab.querySelector("[data-transform-restored]");
   const decodeButton = lab.querySelector("[data-transform-decode]");
   const encryptButton = lab.querySelector("[data-transform-encrypt]");
   const openButton = lab.querySelector("[data-transform-open]");
   const packetReadout = lab.querySelector("[data-field-packets]");
-  const transformState = { bytes: encoder.encode(input.value), digest: new Uint8Array(32), cipherBytes: new Uint8Array() };
+  const transformState = { bytes: encoder.encode(input.value), digest: new Uint8Array(32), previousDigest: new Uint8Array(32), cipherBytes: new Uint8Array(), updatedAt: performance.now() / 1000 };
   const transformField = createSignalCanvas(lab.querySelector("[data-transform-canvas]"), (context, width, height, time) => drawTransformField(context, width, height, time, transformState));
   let updateSequence = 0;
   let key = null;
@@ -525,6 +543,23 @@ function setupTransformLab() {
     transformField.render();
   }
 
+  async function encryptCurrent({ rotate = false, sequence = updateSequence } = {}) {
+    const wasm = await loadWasm();
+    if (rotate || !key) {
+      key?.fill(0);
+      key = wasm.generateKey();
+    }
+    const nextEncrypted = wasm.encrypt(encoder.encode(input.value), key, "xchacha20-poly1305");
+    if (sequence !== updateSequence) return;
+    encrypted = nextEncrypted;
+    keyOutput.textContent = bytesToHex(key);
+    transformState.cipherBytes = base64ToBytes(encrypted.ciphertext);
+    cipher.textContent = JSON.stringify(encrypted, null, 2);
+    restored.textContent = "Protected automatically. Rotate the visible key or open the result with the matching key.";
+    openButton.disabled = false;
+    transformField.render();
+  }
+
   async function update() {
     const sequence = ++updateSequence;
     const bytes = encoder.encode(input.value);
@@ -533,18 +568,24 @@ function setupTransformLab() {
     base64.textContent = bytesToBase64(bytes) || "(empty input)";
     decoded.textContent = "Select decode to reverse the Base64 representation.";
     hash.textContent = "Calculating…";
-    clearSecretState();
-    cipher.textContent = "Message changed. Generate a fresh key to encrypt it.";
-    restored.textContent = "Runs locally in Voided’s Rust/WASM runtime.";
+    cipher.textContent = "Updating the encrypted result…";
+    restored.textContent = "Every message change is protected again with the current visible key.";
     try {
       const digest = new Uint8Array(await crypto.subtle.digest("SHA-256", bytes));
       if (sequence === updateSequence) {
+        transformState.previousDigest = transformState.digest;
         hash.textContent = bytesToHex(digest);
         transformState.digest = digest;
+        transformState.updatedAt = performance.now() / 1000;
         transformField.render();
       }
+      await encryptCurrent({ sequence });
     } catch (error) {
-      if (sequence === updateSequence) hash.textContent = `Unavailable: ${error instanceof Error ? error.message : String(error)}`;
+      if (sequence === updateSequence) {
+        hash.textContent = `Unavailable: ${error instanceof Error ? error.message : String(error)}`;
+        cipher.textContent = "Encryption did not run.";
+        restored.textContent = error instanceof Error ? error.message : String(error);
+      }
     }
   }
 
@@ -557,23 +598,15 @@ function setupTransformLab() {
   });
 
   encryptButton.addEventListener("click", async () => {
-    setBusy(encryptButton, true, "Generate key + encrypt");
-    restored.textContent = "Loading the verified Rust/WASM runtime…";
+    setBusy(encryptButton, true, "Rotate key");
+    restored.textContent = "Rotating the ephemeral key and protecting the same message again…";
     try {
-      const wasm = await loadWasm();
-      clearSecretState();
-      key = wasm.generateKey();
-      encrypted = wasm.encrypt(encoder.encode(input.value), key, "xchacha20-poly1305");
-      transformState.cipherBytes = base64ToBytes(encrypted.ciphertext);
-      cipher.textContent = JSON.stringify(encrypted, null, 2);
-      restored.textContent = "Protected with a fresh 256-bit key. The full encrypted result is shown above.";
-      openButton.disabled = false;
-      transformField.render();
+      await encryptCurrent({ rotate: true, sequence: updateSequence });
     } catch (error) {
       cipher.textContent = "Encryption did not run.";
       restored.textContent = error instanceof Error ? error.message : String(error);
     } finally {
-      setBusy(encryptButton, false, "Generate key + encrypt");
+      setBusy(encryptButton, false, "Rotate key");
     }
   });
 
@@ -681,6 +714,9 @@ function setupJourneyLab() {
   const bobView = lab.querySelector("[data-bob-view]");
   const nextButton = lab.querySelector("[data-journey-next]");
   const caption = lab.querySelector("[data-journey-caption]");
+  const serverReceives = lab.querySelector("[data-server-receives]");
+  const serverStores = lab.querySelector("[data-server-stores]");
+  const serverMust = lab.querySelector("[data-server-must]");
   let mode = "e2ee";
   let step = 0;
   const journeyFieldState = { mode, step, position: 0 };
@@ -701,6 +737,9 @@ function setupJourneyLab() {
       ][step];
       [packet.textContent, aliceView.textContent, serviceView.textContent, bobView.textContent, caption.textContent, nextButton.textContent] = copy;
       serviceDetail.textContent = "moves and stores the locked box";
+      serverReceives.textContent = "CIPHERTEXT";
+      serverStores.textContent = "THE SAME CIPHERTEXT";
+      serverMust.textContent = "REQUEST OR LOG THE KEY";
     } else {
       const copy = [
         ["MESSAGE", "READABLE", "WAITING", "WAITING", "Alice sends readable data to the service.", "Send message"],
@@ -710,6 +749,9 @@ function setupJourneyLab() {
       ][step];
       [packet.textContent, aliceView.textContent, serviceView.textContent, bobView.textContent, caption.textContent, nextButton.textContent] = copy;
       serviceDetail.textContent = "processes readable content";
+      serverReceives.textContent = "PLAINTEXT BY DESIGN";
+      serverStores.textContent = "ONLY WHAT ITS PRODUCT REQUIRES";
+      serverMust.textContent = "PRETEND IT IS END-TO-END";
     }
     journeyField.render();
   }
@@ -734,6 +776,8 @@ function setupTamperLab() {
   if (!lab) return;
 
   const artifactOutput = lab.querySelector("[data-tamper-artifact]");
+  const keyOutput = lab.querySelector("[data-tamper-key]");
+  const changeOutput = lab.querySelector("[data-tamper-change]");
   const seal = lab.querySelector("[data-tamper-seal]");
   const result = lab.querySelector("[data-tamper-result]");
   const protectButton = lab.querySelector("[data-tamper-protect]");
@@ -745,21 +789,36 @@ function setupTamperLab() {
   const tamperField = createSignalCanvas(tamperCanvas, (context, width, height, time) => drawTamperField(context, width, height, time, tamperFieldState));
   let key = null;
   let artifact = null;
+  let originalArtifact = null;
   let tampered = false;
+  let changedIndex = -1;
+  let flipCursor = 0;
+
+  function renderArtifact() {
+    if (!artifact) return;
+    artifactOutput.replaceChildren();
+    artifact.forEach((byte, index) => {
+      const token = document.createElement(index === changedIndex && tampered ? "mark" : "span");
+      token.textContent = `${byte.toString(16).padStart(2, "0")}${index === artifact.length - 1 ? "" : " "}`;
+      artifactOutput.append(token);
+    });
+  }
 
   function clearSecrets() {
     key?.fill(0);
     artifact?.fill(0);
+    originalArtifact?.fill(0);
     key = null;
     artifact = null;
+    originalArtifact = null;
     tamperFieldState.bytes = null;
     tamperFieldState.tamperedIndex = -1;
     tamperFieldState.status = "idle";
     tamperField.render();
   }
 
-  protectButton.addEventListener("click", async () => {
-    setBusy(protectButton, true, "Protect locally");
+  async function protect() {
+    setBusy(protectButton, true, "Rotate key + reset");
     result.textContent = "Loading the verified Rust/WASM runtime…";
     try {
       const wasm = await loadWasm();
@@ -767,16 +826,22 @@ function setupTamperLab() {
       key = wasm.generateKey();
       const protectedResult = wasm.protect(encoder.encode("Transfer 10 credits"), key, "balanced", undefined, undefined, "xchacha20-poly1305", undefined);
       artifact = protectedResult.artifact;
+      originalArtifact = artifact.slice();
       tampered = false;
+      changedIndex = -1;
+      flipCursor = 0;
       tamperFieldState.bytes = artifact;
       tamperFieldState.tamperedIndex = -1;
       tamperFieldState.status = "intact";
       tamperFieldState.changedAt = performance.now() / 1000;
-      artifactOutput.textContent = bytesToBase64(artifact);
+      keyOutput.textContent = bytesToHex(key);
+      renderArtifact();
+      changeOutput.textContent = "No byte changed. The artifact matches its authenticated seal.";
       seal.textContent = "AUTHENTICATED SEAL INTACT";
       seal.dataset.state = "intact";
       result.textContent = `Protected locally as ${artifact.length} authenticated VOF3 bytes. The full artifact is shown above.`;
       flipButton.disabled = false;
+      flipButton.textContent = "Flip next byte";
       openButton.disabled = false;
       tamperProbe.textContent = `${artifact.length} AUTHENTICATED BYTES`;
       tamperField.render();
@@ -784,23 +849,45 @@ function setupTamperLab() {
       artifactOutput.textContent = "Protection did not run.";
       result.textContent = error instanceof Error ? error.message : String(error);
     } finally {
-      setBusy(protectButton, false, "Protect locally");
+      setBusy(protectButton, false, "Rotate key + reset");
     }
-  });
+  }
+
+  protectButton.addEventListener("click", protect);
 
   flipButton.addEventListener("click", () => {
-    if (!artifact || tampered) return;
-    const changedIndex = Math.floor(artifact.length * 0.54);
+    if (!artifact || !originalArtifact) return;
+    if (tampered) {
+      const changed = artifact[changedIndex];
+      artifact[changedIndex] = originalArtifact[changedIndex];
+      tampered = false;
+      changeOutput.textContent = `BYTE ${String(changedIndex).padStart(3, "0")} RESTORED · ${changed.toString(16).padStart(2, "0")} → ${artifact[changedIndex].toString(16).padStart(2, "0")}`;
+      seal.textContent = "ORIGINAL BYTES RESTORED";
+      seal.dataset.state = "intact";
+      result.textContent = "The changed byte was flipped back. The original authenticated artifact can open again.";
+      flipButton.textContent = "Flip next byte";
+      tamperFieldState.tamperedIndex = -1;
+      tamperFieldState.status = "intact";
+      tamperProbe.textContent = `${artifact.length} AUTHENTICATED BYTES`;
+      flipCursor += 1;
+      renderArtifact();
+      tamperField.render();
+      return;
+    }
+    changedIndex = Math.min(artifact.length - 1, Math.floor(artifact.length * 0.46) + (flipCursor % 9));
+    const before = artifact[changedIndex];
     artifact[changedIndex] ^= 1;
+    const after = artifact[changedIndex];
     tampered = true;
     tamperFieldState.tamperedIndex = changedIndex;
     tamperFieldState.status = "broken";
     tamperFieldState.changedAt = performance.now() / 1000;
-    artifactOutput.textContent = bytesToBase64(artifact);
+    renderArtifact();
+    changeOutput.textContent = `BYTE ${String(changedIndex).padStart(3, "0")} CHANGED · ${before.toString(16).padStart(2, "0")} → ${after.toString(16).padStart(2, "0")}`;
     seal.textContent = "ONE BYTE CHANGED";
     seal.dataset.state = "broken";
     result.textContent = "The artifact still looks like arbitrary data. Authentication must decide whether it is trustworthy.";
-    flipButton.disabled = true;
+    flipButton.textContent = `Restore byte ${String(changedIndex).padStart(3, "0")}`;
     tamperProbe.textContent = `BYTE ${String(tamperFieldState.tamperedIndex).padStart(3, "0")} CHANGED`;
     tamperField.render();
   });
@@ -826,6 +913,7 @@ function setupTamperLab() {
   });
 
   window.addEventListener("pagehide", clearSecrets, { once: true });
+  protect();
 }
 
 function setupKdfLab() {
@@ -842,46 +930,78 @@ function setupKdfLab() {
   const status = lab.querySelector("[data-kdf-status]");
   const runButton = lab.querySelector("[data-kdf-run]");
   const saltButton = lab.querySelector("[data-kdf-salt]");
+  const history = lab.querySelector("[data-kdf-history]");
   let salt = randomBytes(16);
+  let deriveSequence = 0;
+  let deriveTimer = 0;
+  const seen = new Map();
 
   function updateInputs() {
     const rounds = Number(work.value).toLocaleString();
     passwordView.textContent = password.value || "(empty)";
     workLabel.textContent = `${rounds} rounds`;
     workView.textContent = rounds;
-    output.textContent = "Run the derivation.";
+  }
+
+  function scheduleDerivation(delay = 90) {
+    window.clearTimeout(deriveTimer);
+    output.textContent = "Updating…";
+    status.textContent = "Deriving again from the current password, salt, and work factor.";
+    deriveTimer = window.setTimeout(() => derive(), delay);
   }
 
   function replaceSalt() {
     salt.fill(0);
     salt = randomBytes(16);
     saltView.textContent = bytesToHex(salt);
-    output.textContent = "Run again with this salt.";
     status.textContent = "The password stayed the same; the random salt changed the derivation path.";
+    scheduleDerivation(0);
   }
 
-  runButton.addEventListener("click", async () => {
-    setBusy(runButton, true, "Derive 256 bits");
+  async function derive(manual = false) {
+    const sequence = ++deriveSequence;
+    if (manual) setBusy(runButton, true, "Re-derive now");
     const started = performance.now();
     try {
+      const signature = `${password.value}\u0000${bytesToHex(salt)}\u0000${work.value}`;
       const material = await crypto.subtle.importKey("raw", encoder.encode(password.value), "PBKDF2", false, ["deriveBits"]);
       const bits = await crypto.subtle.deriveBits({ name: "PBKDF2", salt, iterations: Number(work.value), hash: "SHA-256" }, material, 256);
-      output.textContent = bytesToHex(new Uint8Array(bits));
-      status.textContent = `Derived 256 bits locally in ${Math.max(1, Math.round(performance.now() - started))} ms. This is a teaching lab, not a password-policy recommendation.`;
+      if (sequence !== deriveSequence) return;
+      const derived = bytesToHex(new Uint8Array(bits));
+      const repeated = seen.has(signature);
+      output.textContent = derived;
+      status.textContent = repeated
+        ? "Exact inputs repeated. The exact same 256-bit output returned. Determinism confirmed."
+        : `New input state derived locally in ${Math.max(1, Math.round(performance.now() - started))} ms. Change any one input to compare.`;
+      seen.set(signature, derived);
+      const item = document.createElement("li");
+      item.dataset.repeated = String(repeated);
+      const label = document.createElement("span");
+      const fingerprint = document.createElement("strong");
+      const inputs = document.createElement("small");
+      label.textContent = repeated ? "REPEATED INPUT" : "NEW INPUT";
+      fingerprint.textContent = `${derived.slice(0, 16)}…${derived.slice(-8)}`;
+      inputs.textContent = `${Number(work.value).toLocaleString()} rounds · salt ${bytesToHex(salt).slice(0, 8)}…`;
+      item.append(label, fingerprint, inputs);
+      history.prepend(item);
+      while (history.children.length > 5) history.lastElementChild.remove();
     } catch (error) {
+      if (sequence !== deriveSequence) return;
       output.textContent = "Derivation unavailable.";
       status.textContent = error instanceof Error ? error.message : String(error);
     } finally {
-      setBusy(runButton, false, "Derive 256 bits");
+      if (manual) setBusy(runButton, false, "Re-derive now");
     }
-  });
+  }
 
-  password.addEventListener("input", updateInputs);
-  work.addEventListener("input", updateInputs);
+  runButton.addEventListener("click", () => derive(true));
+  password.addEventListener("input", () => { updateInputs(); scheduleDerivation(); });
+  work.addEventListener("input", () => { updateInputs(); scheduleDerivation(55); });
   saltButton.addEventListener("click", replaceSalt);
   saltView.textContent = bytesToHex(salt);
   updateInputs();
-  window.addEventListener("pagehide", () => salt.fill(0), { once: true });
+  scheduleDerivation(0);
+  window.addEventListener("pagehide", () => { window.clearTimeout(deriveTimer); salt.fill(0); }, { once: true });
 }
 
 const quizExplanations = [
@@ -891,8 +1011,79 @@ const quizExplanations = [
   "Correct: rotate the recovery wrapper around the stable root; application and data keys can remain unchanged.",
 ];
 
+function setupSystemFinale() {
+  const lab = document.querySelector("[data-system-finale]");
+  if (!lab) return;
+  const input = lab.querySelector("[data-system-input]");
+  const plain = lab.querySelector("[data-system-plain]");
+  const keyOutput = lab.querySelector("[data-system-key]");
+  const artifactOutput = lab.querySelector("[data-system-artifact]");
+  const restoredOutput = lab.querySelector("[data-system-restored]");
+  const verdict = lab.querySelector("[data-system-verdict]");
+  const rotateButton = lab.querySelector("[data-system-rotate]");
+  let key = null;
+  let sequence = 0;
+  let timer = 0;
+
+  async function run(rotate = false) {
+    const current = ++sequence;
+    plain.textContent = input.value || "(empty message)";
+    artifactOutput.textContent = "Protecting locally…";
+    restoredOutput.textContent = "Waiting for authenticated open…";
+    verdict.textContent = "Tracing bytes through the complete boundary…";
+    try {
+      const wasm = await loadWasm();
+      if (rotate || !key) {
+        key?.fill(0);
+        key = wasm.generateKey();
+      }
+      const protectedResult = wasm.protect(encoder.encode(input.value), key, "balanced", undefined, undefined, "xchacha20-poly1305", undefined);
+      const restored = wasm.open(protectedResult.artifact, key);
+      if (current !== sequence) {
+        protectedResult.artifact.fill(0);
+        restored.fill(0);
+        return;
+      }
+      keyOutput.textContent = bytesToHex(key);
+      artifactOutput.textContent = bytesToHex(protectedResult.artifact, " ");
+      restoredOutput.textContent = decoder.decode(restored);
+      verdict.textContent = `Round trip verified · ${encoder.encode(input.value).length} readable bytes became ${protectedResult.artifact.length} authenticated bytes and returned exactly.`;
+      protectedResult.artifact.fill(0);
+      restored.fill(0);
+    } catch (error) {
+      artifactOutput.textContent = "The local round trip did not run.";
+      verdict.textContent = error instanceof Error ? error.message : String(error);
+    }
+  }
+
+  input.addEventListener("input", () => {
+    window.clearTimeout(timer);
+    timer = window.setTimeout(() => run(false), 90);
+  });
+  rotateButton.addEventListener("click", () => run(true));
+  window.addEventListener("pagehide", () => { window.clearTimeout(timer); key?.fill(0); }, { once: true });
+  run(true);
+}
+
 function setupKnowledgeCheck() {
-  document.querySelectorAll("[data-question]").forEach((question, index) => {
+  const check = document.querySelector("[data-knowledge-check]");
+  if (!check) return;
+  const questions = [...check.querySelectorAll("[data-question]")];
+  const score = check.querySelector("[data-quiz-score]");
+  const meter = check.querySelector("[data-quiz-meter]");
+  const summary = check.querySelector("[data-quiz-summary]");
+  const complete = check.querySelector("[data-quiz-complete]");
+
+  function updateScore() {
+    const correct = questions.filter((question) => question.dataset.result === "correct").length;
+    score.textContent = `${correct} / ${questions.length}`;
+    meter.style.width = `${(correct / questions.length) * 100}%`;
+    summary.textContent = correct === questions.length ? "Every boundary verified." : `${questions.length - correct} boundar${questions.length - correct === 1 ? "y" : "ies"} left to verify.`;
+    complete.hidden = correct !== questions.length;
+    if (correct === questions.length) complete.scrollIntoView({ block: "nearest", behavior: courseReducedMotion ? "auto" : "smooth" });
+  }
+
+  questions.forEach((question, index) => {
     const output = question.querySelector("output");
     question.querySelectorAll("[data-quiz-choice]").forEach((button) => {
       button.addEventListener("click", () => {
@@ -900,9 +1091,11 @@ function setupKnowledgeCheck() {
         question.querySelectorAll("[data-quiz-choice]").forEach((candidate) => candidate.setAttribute("aria-pressed", String(candidate === button)));
         question.dataset.result = correct ? "correct" : "incorrect";
         output.textContent = correct ? quizExplanations[index] : "Not quite. Trace the job or trust boundary again, then retry.";
+        updateScore();
       });
     });
   });
+  updateScore();
 }
 
 setupByteLab();
@@ -911,4 +1104,5 @@ setupKeyModels();
 setupJourneyLab();
 setupTamperLab();
 setupKdfLab();
+setupSystemFinale();
 setupKnowledgeCheck();

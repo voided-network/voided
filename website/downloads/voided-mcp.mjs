@@ -1,6 +1,5 @@
 #!/usr/bin/env node
 
-// ../slipner/developer/packages/cli/src/foreign/voided-mcp.ts
 import readline from "node:readline";
 import path from "node:path";
 import { access, readdir, readFile } from "node:fs/promises";
@@ -798,5 +797,4 @@ var IGNORED_NAMES = /* @__PURE__ */ new Set([
   ".DS_Store"
 ]);
 
-// ../slipner/developer/packages/cli/src/voided-mcp.ts
 startVoidedMcpServer();

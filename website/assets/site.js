@@ -27,9 +27,9 @@ function isVisibleMatrixTarget(element) {
   return rect.width > 1 && rect.height > 1 && rect.bottom > 0 && rect.right > 0 && rect.top < innerHeight && rect.left < innerWidth;
 }
 
-function collectMatrixTargets() {
+function collectMatrixTargets(root = document.body) {
   const grouped = new Map();
-  const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, {
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
     acceptNode(node) {
       if (!node.nodeValue?.trim()) return NodeFilter.FILTER_REJECT;
       const parent = node.parentElement;
@@ -43,7 +43,7 @@ function collectMatrixTargets() {
     const parent = node.parentElement;
     let target = parent.closest(matrixTextSelector) ?? parent;
     let ancestor = target.parentElement;
-    while (ancestor && ancestor !== document.body) {
+    while (ancestor && ancestor !== root && root.contains(ancestor)) {
       if (ancestor.matches(matrixTextSelector)) target = ancestor;
       ancestor = ancestor.parentElement;
     }
@@ -232,16 +232,110 @@ function animateMatrixRemold(direction, onComplete) {
       return;
     }
     if (direction === "in") {
-      cleanup();
       window.scrollTo(0, 0);
-      requestAnimationFrame(() => { window.scrollTo(0, 0); });
-      window.setTimeout(() => { window.scrollTo(0, 0); }, 250);
+      cleanup();
     }
     onComplete(cleanup);
   }
 
   animationFrame = requestAnimationFrame(render);
   return cleanup;
+}
+
+function collectRegionText(root) {
+  const entries = [];
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
+    acceptNode(node) {
+      if (!node.nodeValue?.trim()) return NodeFilter.FILTER_REJECT;
+      const parent = node.parentElement;
+      if (!parent || parent.closest(matrixSkipSelector)) return NodeFilter.FILTER_REJECT;
+      const style = getComputedStyle(parent);
+      if (style.display === "none" || style.visibility === "hidden") return NodeFilter.FILTER_REJECT;
+      return NodeFilter.FILTER_ACCEPT;
+    },
+  });
+  let node = walker.nextNode();
+  while (node) {
+    entries.push({ textNode: node, text: node.nodeValue, index: entries.length });
+    node = walker.nextNode();
+  }
+  return entries;
+}
+
+function remoldRegionText(entries, amount, frame) {
+  entries.forEach(({ textNode, text, index }) => {
+    if (amount <= 0.01) {
+      textNode.nodeValue = text;
+      return;
+    }
+    textNode.nodeValue = [...text].map((character, characterIndex) => {
+      if (/\s/.test(character)) return character;
+      const threshold = matrixHash(index, characterIndex, 41);
+      if (amount < threshold * 0.9) return character;
+      return matrixGlyphs[Math.floor(matrixHash(frame + characterIndex, index, 53) * matrixGlyphs.length)];
+    }).join("");
+  });
+}
+
+function restoreRegionText(entries) {
+  entries.forEach(({ textNode, text }) => { textNode.nodeValue = text; });
+}
+
+function remoldRegion(region, swap = () => {}, options = {}) {
+  if (!region) {
+    swap();
+    return Promise.resolve();
+  }
+  if (reducedMotion || region.dataset.regionRemolding === "true") {
+    swap();
+    return Promise.resolve();
+  }
+
+  const outDuration = options.quick ? 70 : 105;
+  const inDuration = options.quick ? 95 : 145;
+  let entries = collectRegionText(region);
+  let swapped = false;
+  let frame = 0;
+  const started = performance.now();
+  region.dataset.regionRemolding = "true";
+  region.classList.add("matrix-region-remold");
+
+  return new Promise((resolve) => {
+    function finish() {
+      restoreRegionText(entries);
+      region.classList.remove("matrix-region-remold", "matrix-region-remold--incoming");
+      region.removeAttribute("data-region-remolding");
+      resolve();
+    }
+
+    function render(now) {
+      frame += 1;
+      const elapsed = now - started;
+      if (!swapped) {
+        const phase = Math.min(1, elapsed / outDuration);
+        remoldRegionText(entries, phase, frame);
+        if (phase < 1) {
+          requestAnimationFrame(render);
+          return;
+        }
+        restoreRegionText(entries);
+        swap();
+        swapped = true;
+        entries = collectRegionText(region);
+        remoldRegionText(entries, 1, frame);
+        region.classList.add("matrix-region-remold--incoming");
+      }
+
+      const incomingPhase = Math.min(1, (elapsed - outDuration) / inDuration);
+      remoldRegionText(entries, 1 - incomingPhase, frame);
+      if (incomingPhase < 1) {
+        requestAnimationFrame(render);
+        return;
+      }
+      finish();
+    }
+    requestAnimationFrame(render);
+  });
 }
 
 function matrixDestinationForLink(link) {
@@ -349,7 +443,6 @@ function setupMatrixPageTransitions() {
   window.addEventListener("pageshow", (event) => {
     if (incomingNavigation) {
       window.scrollTo(0, 0);
-      requestAnimationFrame(() => { window.scrollTo(0, 0); });
     }
     if (!event.persisted) return;
     if (activeCleanup) activeCleanup();
@@ -366,6 +459,47 @@ function setupNavigation() {
     const expanded = toggle.getAttribute("aria-expanded") === "true";
     toggle.setAttribute("aria-expanded", String(!expanded));
     navigation.classList.toggle("is-open", !expanded);
+  });
+}
+
+function setupSiteChrome() {
+  const page = document.body.dataset.page;
+  const navigation = document.querySelector(".site-nav");
+  if (navigation) {
+    const search = navigation.querySelector("[data-search-open]");
+    navigation.replaceChildren();
+    [
+      ["Learn", "./learn.html", "learn"],
+      ["Developer", "./docs.html", "docs"],
+      ["Source", "./source.html", "source"],
+      ["Updates", "./updates.html", "updates"],
+    ].forEach(([label, href, owner]) => {
+      const link = document.createElement("a");
+      link.textContent = label;
+      link.href = href;
+      if (page === owner) link.setAttribute("aria-current", "page");
+      navigation.append(link);
+    });
+    if (search) navigation.append(search);
+  }
+
+  document.querySelectorAll(".site-footer nav").forEach((footerNavigation) => {
+    footerNavigation.replaceChildren();
+    [
+      ["Learn", "./learn.html"],
+      ["Developer", "./docs.html"],
+      ["Updates", "./updates.html"],
+      ["AI + MCP", "./ai.html"],
+      ["Support", "./support.html"],
+      ["Source", "./source.html"],
+      ["Legal + privacy", "./legal.html"],
+      ["Repository ↗", "https://github.com/voided-network/voided"],
+    ].forEach(([label, href]) => {
+      const link = document.createElement("a");
+      link.textContent = label;
+      link.href = href;
+      footerNavigation.append(link);
+    });
   });
 }
 
@@ -406,6 +540,9 @@ const searchIndex = [
   { title: "AI full reference", summary: "Standalone plain-text Voided context for agents without MCP.", url: "./llms-full.txt" },
   { title: "Machine reference JSON", summary: "Structured Voided facts, invariants, release state, and endpoints.", url: "./ai.json" },
   { title: "Voided MCP", summary: "Read-only local source knowledge, code search, symbols, modules, and file excerpts.", url: "./mcp.html" },
+  { title: "Source", summary: "Repository, packages, release integrity, licenses, agent resources, and project routes.", url: "./source.html" },
+  { title: "Voided agent skill", summary: "Reusable SKILL.md for API selection, safety boundaries, and reference routing.", url: "./downloads/voided-skill.md" },
+  { title: "Voided AGENTS.md instruction", summary: "Compact persistent repository guidance for coding agents.", url: "./downloads/voided-agents.md" },
   { title: "Browser SDK", summary: "Stateful client, IndexedDB keys, WASM behavior, compression, and browser support.", url: "./docs.html?guide=browser" },
   { title: "Node.js SDK", summary: "Native Rust package, Buffer APIs, runtime verification, CJS, and ESM.", url: "./docs.html?guide=node" },
   { title: "Rust crate", summary: "voided-core source-of-truth APIs, feature flags, and native integration.", url: "./docs.html?guide=rust" },
@@ -571,41 +708,75 @@ function setupDocs() {
   const panels = [...document.querySelectorAll("[data-guide-panel]")];
   const buttons = [...document.querySelectorAll("[data-guide]")];
   const toc = document.querySelector("[data-doc-toc]");
+  const main = document.querySelector(".docs-main");
   if (panels.length === 0) return;
 
-  function showGuide(name, updateHistory = true) {
-    const selected = panels.find((panel) => panel.dataset.guidePanel === name) ?? panels[0];
+  function rebuildToc(selected) {
+    if (!toc) return;
+    toc.replaceChildren();
+    selected.querySelectorAll("[data-doc-heading]").forEach((section) => {
+      const link = document.createElement("a");
+      link.href = `#${section.id}`;
+      link.textContent = section.dataset.docHeading;
+      link.addEventListener("click", (event) => {
+        event.preventDefault();
+        const destination = document.getElementById(section.id);
+        if (!destination) return;
+        const url = new URL(location.href);
+        url.hash = section.id;
+        history.replaceState(history.state, "", url);
+        remoldRegion(destination, () => {}, { quick: true }).then(() => {
+          destination.scrollIntoView({ block: "start", behavior: "auto" });
+        });
+      });
+      toc.append(link);
+    });
+  }
+
+  function commitGuide(selected, updateHistory) {
     const selectedButton = buttons.find((button) => button.dataset.guide === selected.dataset.guidePanel);
     panels.forEach((panel) => { panel.hidden = panel !== selected; });
     buttons.forEach((button) => {
       if (button.dataset.guide === selected.dataset.guidePanel) button.setAttribute("aria-current", "page");
       else button.removeAttribute("aria-current");
     });
-    if (toc) {
-      toc.replaceChildren();
-      selected.querySelectorAll("[data-doc-heading]").forEach((section) => {
-        const link = document.createElement("a");
-        link.href = `#${section.id}`;
-        link.textContent = section.dataset.docHeading;
-        toc.append(link);
-      });
-    }
+    rebuildToc(selected);
     if (updateHistory) {
       const url = new URL(location.href);
       url.searchParams.set("guide", selected.dataset.guidePanel);
+      url.hash = "";
       history.pushState({ guide: selected.dataset.guidePanel }, "", url);
     }
     document.title = `${selected.querySelector("h1").textContent} — Voided Developer`;
+    document.dispatchEvent(new CustomEvent("voided:guide-change", { detail: { guide: selected.dataset.guidePanel } }));
     if (selectedButton && window.matchMedia("(max-width: 780px)").matches) {
       const sidebar = selectedButton.closest(".docs-sidebar");
       sidebar.scrollLeft = Math.max(0, selectedButton.offsetLeft - ((sidebar.clientWidth - selectedButton.offsetWidth) / 2));
     }
-    window.scrollTo({ top: 0, behavior: "auto" });
+  }
+
+  function showGuide(name, updateHistory = true, animate = true) {
+    if (animate && main?.dataset.regionRemolding === "true") return Promise.resolve();
+    const selected = panels.find((panel) => panel.dataset.guidePanel === name) ?? panels[0];
+    const current = panels.find((panel) => !panel.hidden);
+    if (current === selected) {
+      if (!animate) commitGuide(selected, false);
+      else rebuildToc(selected);
+      return Promise.resolve();
+    }
+    const swap = () => commitGuide(selected, updateHistory);
+    const transition = animate ? remoldRegion(main, swap) : (swap(), Promise.resolve());
+    return transition.then(() => {
+      if (updateHistory) main.scrollIntoView({ block: "start", behavior: "auto" });
+    });
   }
 
   buttons.forEach((button) => button.addEventListener("click", () => showGuide(button.dataset.guide)));
   const initial = new URL(location.href).searchParams.get("guide") ?? "start";
-  showGuide(initial, false);
+  showGuide(initial, false, false).then(() => {
+    const hashTarget = location.hash ? document.querySelector(location.hash) : null;
+    if (hashTarget) hashTarget.scrollIntoView({ block: "start", behavior: "auto" });
+  });
   window.addEventListener("popstate", () => showGuide(new URL(location.href).searchParams.get("guide") ?? "start", false));
 }
 
@@ -712,35 +883,113 @@ function setupDiagnosticBuilder() {
   if (!form) return;
   const runtime = form.elements.runtime;
   const symptom = form.elements.symptom;
-  const context = form.elements.context;
   const output = form.querySelector("[data-diagnostic-output]");
   const runtimeLabels = { browser: "Browser / WASM", node: "Node.js native package", rust: "Rust crate" };
   function render() {
     const symptomLabel = symptom.options[symptom.selectedIndex].text;
-    const safeContext = context.value.trim() || "[Add OS/runtime version and exact public error message]";
-    output.textContent = `Runtime: ${runtimeLabels[runtime.value]}\nSymptom: ${symptomLabel}\n\nRun:\n${diagnosticCommands[runtime.value][symptom.value].join("\n")}\n\nSafe context:\n${safeContext}\n\nInclude:\n- Package or crate version\n- OS and architecture\n- Exact public error message\n- Whether the failure is deterministic\n\nNever include keys, deck order, plaintext, environment secrets, or protected customer data.`;
+    output.textContent = `# ${runtimeLabels[runtime.value]}\n# ${symptomLabel}\n\n${diagnosticCommands[runtime.value][symptom.value].join("\n")}`;
   }
   form.addEventListener("input", render);
   render();
 }
 
+const developerModeBriefs = {
+  start: {
+    guided: ["Start with the highest safe surface.", "Pick the runtime where readable data already exists, then use protect/open unless you deliberately own the outer format."],
+    expert: ["Entry contract", "Browser: stateful client · Node: native Buffer API · Rust: voided-core. Current writer: VOF3. Default AEAD: XChaCha20-Poly1305."],
+  },
+  lab: {
+    guided: ["Make the ownership decision visible.", "Use the controls to see which layer owns bytes, policy, artifacts, and recovery state."],
+    expert: ["Workbench contract", "Resolve runtime + inner-byte ownership + required output. Inspect VOF3 stages, preset overhead, and wrapper-only recovery rotation."],
+  },
+  library: {
+    guided: ["Move down only when you need control.", "Every lower layer removes automation and hands more lifecycle responsibility to your application."],
+    expert: ["Surface contract", "High-level → shell → primitive → recovery → utility. Package versions and wire-format versions are independent."],
+  },
+  browser: {
+    guided: ["Keep browser plaintext in the browser.", "Use the stateful client for normal app data and let it own verified WASM, artifact flow, and key lifecycle."],
+    expert: ["Browser contract", "Verified Rust/WASM is mandatory for Fuse and Recovery Deck. IndexedDB is a local key method, not an E2EE trust proof. Compression defaults off."],
+  },
+  node: {
+    guided: ["Use Node only when the server is allowed to read.", "The native package is for trusted server processes; client-side E2EE should protect data before it reaches Node."],
+    expert: ["Node contract", "Node 18+ · native Rust Buffer APIs · CJS + ESM · explicit zeroization. Never call this an E2EE server boundary if plaintext enters the process."],
+  },
+  rust: {
+    guided: ["Use the source-of-truth implementation directly.", "Rust is the right surface when your native system needs explicit feature, allocation, and byte ownership."],
+    expert: ["Rust contract", "voided-core owns authenticated open, bounded work, canonical parsing, recovery derivation, and VOF3 writers. Feature selection is target-specific."],
+  },
+  fuse: {
+    guided: ["One artifact, one authenticated story.", "Fuse shapes already-prepared bytes; protect/open owns the complete normal application path."],
+    expert: ["Artifact contract", "VOF3 plan + payload are authenticated together. Keyless inspection is untrusted. compact/balanced/concealed alter shape and overhead, not the AEAD primitive."],
+  },
+  recovery: {
+    guided: ["Recover a stable root, not every file.", "A new random deck replaces only the recovery wrapper while application and data keys remain stable."],
+    expert: ["Recovery contract", "52! permutations → canonical 29-byte rank → domain-separated 32-byte key → 80-byte opaque wrapper. Deck and derived key never persist."],
+  },
+  security: {
+    guided: ["Cryptography is one boundary in a system.", "Keep keys and plaintext out of logs, authenticate before trust, and decide where readable data is allowed to exist."],
+    expert: ["Failure contract", "Reject malformed, oversized, non-canonical, wrong-key, and tampered inputs before plaintext release. Structural inspection cannot authorize."],
+  },
+  operations: {
+    guided: ["Share the smallest reproducible failure.", "Run the focused checks, include public runtime facts, and remove all secret or customer material."],
+    expert: ["Evidence contract", "Report platform, version, exact public error, deterministic reproduction, and command output. Secrets, plaintext, decks, roots, and crash memory stay out."],
+  },
+};
+
 function setupDevMode() {
   const switcher = document.querySelector("[data-dev-mode-switch]");
   if (!switcher) return;
   const page = document.body;
+  const main = document.querySelector(".docs-main");
   const explanation = document.querySelector("[data-dev-mode-description]");
   const descriptions = {
     guided: "Plain-language reasoning, recommended defaults, and visible security boundaries.",
     expert: "Contracts, byte ownership, protocol facts, and API surface without the introductory layer.",
   };
-  function setMode(mode) {
+  document.querySelectorAll("[data-guide-panel]").forEach((panel) => {
+    const header = panel.querySelector(".docs-guide__header");
+    if (!header || header.querySelector("[data-dev-mode-brief]")) return;
+    const brief = document.createElement("div");
+    brief.className = "dev-mode-brief";
+    brief.dataset.devModeBrief = "";
+    const label = document.createElement("span");
+    const title = document.createElement("strong");
+    const copy = document.createElement("p");
+    label.dataset.devModeLabel = "";
+    title.dataset.devModeTitle = "";
+    copy.dataset.devModeCopy = "";
+    brief.append(label, title, copy);
+    header.append(brief);
+  });
+
+  function renderBriefs(mode) {
+    document.querySelectorAll("[data-guide-panel]").forEach((panel) => {
+      const facts = developerModeBriefs[panel.dataset.guidePanel]?.[mode];
+      const brief = panel.querySelector("[data-dev-mode-brief]");
+      if (!facts || !brief) return;
+      brief.querySelector("[data-dev-mode-label]").textContent = mode === "expert" ? "EXPERT CONTRACT" : "GUIDED PATH";
+      brief.querySelector("[data-dev-mode-title]").textContent = facts[0];
+      brief.querySelector("[data-dev-mode-copy]").textContent = facts[1];
+    });
+  }
+
+  function commitMode(mode) {
     page.dataset.devMode = mode;
     switcher.querySelectorAll("[data-dev-mode]").forEach((button) => button.setAttribute("aria-pressed", String(button.dataset.devMode === mode)));
     if (explanation) explanation.textContent = descriptions[mode];
+    renderBriefs(mode);
+  }
+
+  function setMode(mode, animate = true) {
+    if (page.dataset.devMode === mode && animate) return;
+    if (animate && main?.dataset.regionRemolding === "true") return;
+    const apply = () => commitMode(mode);
+    if (animate) remoldRegion(main, apply, { quick: true });
+    else apply();
     announce(`${mode === "expert" ? "Expert" : "Guided"} developer mode selected`);
   }
   switcher.querySelectorAll("[data-dev-mode]").forEach((button) => button.addEventListener("click", () => setMode(button.dataset.devMode)));
-  setMode("guided");
+  setMode("guided", false);
 }
 
 const artifactStages = {
@@ -789,6 +1038,7 @@ function setupRecoverySimulator() {
   });
 }
 
+setupSiteChrome();
 setupNavigation();
 setupCopyButtons();
 setupSearch();

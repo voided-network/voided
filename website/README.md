@@ -30,20 +30,23 @@ self-hosted.
 
 The human and machine reference surfaces are deliberately first-class:
 
-- `index.html`, `docs.html`, and `updates.html` are the three primary human pages.
+- The logo returns Home. Primary navigation exposes Learn, Developer, Source, and Updates; support and legal routes remain available everywhere in the consistent footer.
 - `docs.html` is the Guided/Expert Developer Lab, complete library map, runtime reference, and support workbench.
 - `learn.html` is the secondary, plain-language encryption fundamentals course. It teaches bytes, encoding, hashing, encryption, key models, E2EE, integrity, password derivation, recovery, and system limits with local experiments.
+- `source.html` maps the repository, packages, release integrity, licenses, agent resources, and contribution routes without conflating the page with the external repository.
 - `legal.html` and `support.html` remain contextual secondary routes.
 - `ai.html` is the semantic direct implementation reference.
 - `llms.txt` routes an agent to the smallest relevant source.
 - `llms-full.txt` is a standalone complete context file.
 - `ai.json` contains structured product and protocol facts.
 - `mcp.html` and `mcp.json` document the read-only source-aware MCP server.
+- `downloads/voided-agents.md` is a compact persistent repository instruction.
+- `downloads/voided-skill.md` is the reusable agent skill.
 - `downloads/voided-mcp.mjs` is the current single-file Node.js 18+ MCP artifact.
 
 When the MCP source changes, rebuild the artifact, update its SHA-256 in all
 descriptors, and run `npm run site:check`. The direct download is the current
-launch path; `@slipner/cli` is not yet public on the npm registry.
+launch path; a package-registry release is not yet available.
 
 The release status is deliberately labeled as a release candidate until the
 Windows native gate, tags, and package publication are complete.

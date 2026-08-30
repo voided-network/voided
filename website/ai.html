@@ -7,12 +7,12 @@
   <meta name="theme-color" content="#080a0b">
   <title>Voided for AI — Direct implementation reference</title>
   <link rel="icon" href="./assets/favicon.svg" type="image/svg+xml">
-  <script src="./assets/transition-boot.js?v=20260827.3"></script>
-  <link rel="stylesheet" href="./assets/styles.css?v=20260827.3">
+  <script src="./assets/transition-boot.js?v=20260829.1"></script>
+  <link rel="stylesheet" href="./assets/styles.css?v=20260829.1">
   <link rel="alternate" href="./llms.txt" type="text/plain" title="Voided AI index">
   <link rel="alternate" href="./llms-full.txt" type="text/plain" title="Voided full AI reference">
   <link rel="alternate" href="./ai.json" type="application/json" title="Voided machine reference">
-  <script src="./assets/site.js?v=20260827.3" defer></script>
+  <script src="./assets/site.js?v=20260829.1" defer></script>
 </head>
 <body data-page="ai">
   <a class="skip-link" href="#main">Skip to content</a>
@@ -27,20 +27,33 @@
   <main id="main">
     <section class="page-hero page-hero--utility">
       <div class="page-hero__inner">
-        <span class="eyebrow">Direct implementation reference</span>
-        <h1>Voided implementation reference.</h1>
-        <p>Runtime choices, default APIs, protocol boundaries, recovery rules, and release status in semantic HTML.</p>
-        <div class="hero__actions"><a class="button button--signal" href="./llms.txt">Open the compact index</a><a class="button" href="./llms-full.txt">Open the full text</a><a class="button" href="./ai.json">Open JSON</a></div>
+        <span class="eyebrow">Agent access to Voided</span>
+        <h1>Give an AI the right amount of Voided.</h1>
+        <p>Use one compact instruction, a reusable skill, machine-readable reference files, or the local read-only MCP. Each option below says what it is for.</p>
+        <div class="hero__actions"><a class="button button--signal" href="./mcp.html">Install the Voided MCP</a><a class="button" href="./downloads/voided-skill.md" download>Download the skill</a><a class="button" href="./llms.txt">Open the compact index</a></div>
       </div>
     </section>
 
     <section class="utility-layout" aria-label="Voided machine reference">
       <nav class="utility-index" aria-label="On this page">
         <span class="utility-index__label">ON THIS PAGE</span>
-        <a href="#core-rule">Core rule</a><a href="#decision-table">Decision table</a><a href="#runtime-facts">Runtimes</a><a href="#artifact-facts">Artifact</a><a href="#recovery-facts">Recovery</a><a href="#security-facts">Security</a><a href="#agent-prompt">Agent prompt</a><a href="#machine-endpoints">Endpoints</a>
+        <a href="#delivery">Choose a surface</a><a href="#core-rule">Core rule</a><a href="#decision-table">Decision table</a><a href="#runtime-facts">Runtimes</a><a href="#artifact-facts">Artifact</a><a href="#recovery-facts">Recovery</a><a href="#security-facts">Security</a><a href="#agent-prompt">Compact instruction</a><a href="#machine-endpoints">All endpoints</a>
       </nav>
 
       <article class="utility-content">
+        <section class="utility-section" id="delivery" data-search-title="Choose AI context for Voided" data-search-summary="Compare AGENTS instructions, a reusable skill, llms files, structured JSON, and the Voided MCP">
+          <span class="eyebrow">Choose by agent workflow</span>
+          <h2>One job per surface.</h2>
+          <div class="agent-resource-grid">
+            <a href="./downloads/voided-agents.md" download><span>ONE REPOSITORY</span><strong>AGENTS.md instruction</strong><p>A compact persistent rule block for an agent already working in a project.</p><code>~500 words</code></a>
+            <a href="./downloads/voided-skill.md" download><span>REUSABLE WORKFLOW</span><strong>Voided skill</strong><p>A portable SKILL.md that teaches API selection, safety boundaries, and reference routing.</p><code>guided + reusable</code></a>
+            <a href="./llms.txt"><span>DISCOVERY</span><strong>llms.txt</strong><p>A small routing index for a crawler or agent that needs to find the right source.</p><code>compact text</code></a>
+            <a href="./llms-full.txt"><span>NO MCP AVAILABLE</span><strong>Full text reference</strong><p>Standalone implementation facts for an agent that cannot inspect the local source tree.</p><code>complete text</code></a>
+            <a href="./mcp.html"><span>LOCAL SOURCE WORK</span><strong>Voided MCP</strong><p>Read-only repository context, symbol search, code search, and bounded file excerpts.</p><code>live local source</code></a>
+            <a href="./ai.json"><span>AUTOMATION</span><strong>Structured JSON</strong><p>Stable facts and endpoints for tools that prefer machine-readable data.</p><code>application/json</code></a>
+          </div>
+        </section>
+
         <section class="utility-section" id="core-rule" data-search-title="Voided core rule for AI" data-search-summary="Use protect/open for normal application data">
           <span class="eyebrow">Core rule</span>
           <h2>Use protect/open for normal application data.</h2>
@@ -109,8 +122,8 @@
         </section>
 
         <section class="utility-section" id="agent-prompt" data-search-title="Voided agent prompt" data-search-summary="Pasteable instructions for an AI coding agent">
-          <span class="eyebrow">Pasteable agent context</span>
-          <h2>Start an implementation with this.</h2>
+          <span class="eyebrow">Compact repository instruction</span>
+          <h2>Paste this into AGENTS.md.</h2>
           <div class="code-window"><div class="code-window__bar"><span>agent-prompt.txt</span><button class="copy-button" type="button" data-copy="#agent-prompt-code">Copy</button></div><pre><code id="agent-prompt-code">Use Voided to protect application data. Read https://voidednetwork.com/llms-full.txt before changing code. Default to protect/open in the runtime where plaintext already exists. Do not assemble primitives unless the application explicitly owns the outer format. Treat inspected metadata as untrusted until authenticated open. Never persist or log raw keys, Recovery Deck order, Recovery Key, stable root, or plaintext. Preserve the existing key hierarchy and application security boundary.</code></pre></div>
         </section>
 
@@ -121,6 +134,8 @@
             <a class="endpoint-row" href="./llms.txt"><span class="endpoint-row__kind">TEXT</span><strong>/llms.txt</strong><p>Routing index</p><span>→</span></a>
             <a class="endpoint-row" href="./llms-full.txt"><span class="endpoint-row__kind">TEXT</span><strong>/llms-full.txt</strong><p>Standalone full reference</p><span>→</span></a>
             <a class="endpoint-row" href="./ai.json"><span class="endpoint-row__kind">JSON</span><strong>/ai.json</strong><p>Structured implementation data</p><span>→</span></a>
+            <a class="endpoint-row" href="./downloads/voided-agents.md"><span class="endpoint-row__kind">RULES</span><strong>AGENTS.md block</strong><p>Compact persistent repository instruction</p><span>→</span></a>
+            <a class="endpoint-row" href="./downloads/voided-skill.md"><span class="endpoint-row__kind">SKILL</span><strong>Voided skill</strong><p>Reusable agent workflow and safety boundaries</p><span>→</span></a>
             <a class="endpoint-row" href="./mcp.json"><span class="endpoint-row__kind">JSON</span><strong>/mcp.json</strong><p>Project MCP descriptor</p><span>→</span></a>
             <a class="endpoint-row endpoint-row--signal" href="./mcp.html"><span class="endpoint-row__kind">MCP</span><strong>Voided MCP</strong><p>Local source-aware knowledge server</p><span>→</span></a>
           </div>

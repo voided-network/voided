@@ -77,7 +77,7 @@
     "minimum_runtime": "Node.js 18",
     "transport": "stdio JSON-RPC",
     "download": "https://voidednetwork.com/downloads/voided-mcp.mjs",
-    "sha256": "fd8ad4bdb0afde8d9d47d7a196dc88a473c3cc65a2494c4281cd4b5240f77354",
+    "sha256": "c149448fce0d18b277f6b2652547f1ab0ac882bab85f9b1a069afee3c420a088",
     "configuration_environment": "VOIDED_ROOT",
     "tools": ["voided_get_context", "voided_list_modules", "voided_search_knowledge", "voided_search_code", "voided_find_symbol", "voided_read_file"]
   },
@@ -88,10 +88,15 @@
     "json": "https://voidednetwork.com/ai.json",
     "mcp": "https://voidednetwork.com/mcp.html",
     "mcp_descriptor": "https://voidednetwork.com/mcp.json",
+    "agent_skill": "https://voidednetwork.com/downloads/voided-skill.md",
+    "agents_instruction": "https://voidednetwork.com/downloads/voided-agents.md",
     "docs": "https://voidednetwork.com/docs.html",
     "developer_lab": "https://voidednetwork.com/docs.html?guide=lab",
     "library_map": "https://voidednetwork.com/docs.html?guide=library",
     "learn": "https://voidednetwork.com/learn.html",
-    "updates": "https://voidednetwork.com/updates.html"
+    "updates": "https://voidednetwork.com/updates.html",
+    "source": "https://voidednetwork.com/source.html",
+    "support": "https://voidednetwork.com/support.html",
+    "legal": "https://voidednetwork.com/legal.html"
   }
 }
