@@ -1,6 +1,6 @@
 {
   "name": "@voideddev/monorepo",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "private": true,
   "workspaces": [
     "packages/*"
@@ -16,7 +16,8 @@
     "build:cross:linux": "node scripts/build-cross-platform.js --linux",
     "build:cross:mac": "node scripts/build-cross-platform.js --mac",
     "build:cross:windows": "node scripts/build-cross-platform.js --windows",
-    "test": "npm run test --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present && npm run test:mcp-boundary",
+    "test:mcp-boundary": "node scripts/test-mcp-boundary.js",
     "test:enc-server": "cd packages/enc-server && npm test",
     "test:e2ee-client": "cd packages/e2ee-client && npm test",
     "test:release-provenance-inputs": "node scripts/test-release-provenance-inputs.js",

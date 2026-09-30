@@ -1,6 +1,6 @@
 {
   "name": "@voideddev/e2ee-client",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Browser-based E2EE client library for keys, crypto, v3 monolith artifacts, compression, and local storage adapters.",
   "type": "module",
   "main": "dist/index.cjs",
@@ -73,7 +73,7 @@
     "@types/jest": "^29.5.14",
     "@types/node": "^20.19.10",
     "fast-check": "^3.13.1",
-    "fflate": "^0.8.2",
+    "fflate": "^0.8.3",
     "jest": "^29.0.0",
     "qrcode": "^1.5.3",
     "ts-jest": "^29.4.1",

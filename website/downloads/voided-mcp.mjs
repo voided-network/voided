@@ -2,11 +2,11 @@
 
 import readline from "node:readline";
 import path from "node:path";
-import { access, readdir, readFile } from "node:fs/promises";
+import { constants } from "node:fs";
+import { access, open, realpath, readdir } from "node:fs/promises";
 var SERVER_NAME = "voided-mcp";
 var SERVER_VERSION = "0.1.0";
 var SUPPORTED_PROTOCOL_VERSIONS = ["2025-11-25", "2025-06-18", "2025-03-26", "2024-11-05"];
-var DEFAULT_VOIDED_ROOT = "/Volumes/ORICO/odessa/voided";
 var DEFAULT_LIMIT = 8;
 var MAX_LIMIT = 25;
 var DEFAULT_READ_SPAN = 120;
@@ -16,7 +16,11 @@ var VoidedRuntime = class {
   root;
   fileCache = /* @__PURE__ */ new Map();
   constructor() {
-    this.root = path.resolve(normalizeString(process.env.VOIDED_ROOT) || DEFAULT_VOIDED_ROOT);
+    const configuredRoot = normalizeString(process.env.VOIDED_ROOT);
+    if (!configuredRoot || !path.isAbsolute(configuredRoot)) {
+      throw new Error("VOIDED_ROOT must be an absolute path to a local Voided checkout.");
+    }
+    this.root = path.resolve(configuredRoot);
   }
   async getContext() {
     const exists = await this.rootExists();
@@ -124,7 +128,31 @@ var VoidedRuntime = class {
     await this.ensureRootExists();
     const resolved = this.resolvePath(relativeOrAbsolutePath);
     const relativePath = toRepoRelative(this.root, resolved);
-    const content = await readFile(resolved, "utf8");
+    const [knowledgeFiles, codeFiles] = await Promise.all([
+      this.getFiles("knowledge:all"),
+      this.getFiles("code:all")
+    ]);
+    if (!knowledgeFiles.includes(relativePath) && !codeFiles.includes(relativePath)) {
+      throw new Error("Requested file is outside the Voided knowledge and source allowlist.");
+    }
+    const [realRoot, realFile] = await Promise.all([
+      realpath(this.root),
+      realpath(resolved)
+    ]);
+    if (!realFile.startsWith(`${realRoot}${path.sep}`)) {
+      throw new Error("Requested file is not a bounded regular Voided source file.");
+    }
+    const handle = await open(resolved, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0));
+    let content;
+    try {
+      const fileInfo = await handle.stat();
+      if (!fileInfo.isFile() || fileInfo.size > 2 * 1024 * 1024) {
+        throw new Error("Requested file is not a bounded regular Voided source file.");
+      }
+      content = await handle.readFile("utf8");
+    } finally {
+      await handle.close();
+    }
     const lines = content.split("\n");
     const start = clamp(startLine ?? 1, 1, lines.length || 1);
     const requestedEnd = endLine ?? start + DEFAULT_READ_SPAN - 1;
@@ -630,7 +658,7 @@ async function walkDirectory(root, onFile) {
   async function walk(currentDir) {
     const entries = await safeReaddir(currentDir);
     for (const entry of entries) {
-      if (IGNORED_NAMES.has(entry.name)) {
+      if (IGNORED_NAMES.has(entry.name) || entry.isSymbolicLink()) {
         continue;
       }
       const absolutePath = path.join(currentDir, entry.name);
@@ -653,7 +681,16 @@ async function safeReaddir(target) {
 }
 async function readTextFile(filePath) {
   try {
-    return await readFile(filePath, "utf8");
+    const handle = await open(filePath, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0));
+    try {
+      const fileInfo = await handle.stat();
+      if (!fileInfo.isFile() || fileInfo.size > 2 * 1024 * 1024) {
+        return null;
+      }
+      return await handle.readFile("utf8");
+    } finally {
+      await handle.close();
+    }
   } catch {
     return null;
   }

@@ -1,380 +1,105 @@
 import {
-    compress,
-    decompress,
-    analyzeCompression,
-    uint8ArrayToString
+  analyzeCompression,
+  compress,
+  decompress,
+  stringToUint8Array,
+  uint8ArrayToString,
 } from '../compression';
 
-// Fuzz test utilities
-function generateFuzzData(size: number, fuzzType: 'random' | 'malformed' | 'edge' | 'corrupted'): string | Uint8Array {
-    switch (fuzzType) {
-        case 'random':
-            return Array.from({ length: size }, () => String.fromCharCode(Math.floor(Math.random() * 65536))).join('');
-
-        case 'malformed':
-            // Mix of valid and potentially problematic characters
-            const chars = [
-                ...Array.from({ length: 32 }, (_, i) => String.fromCharCode(i)), // Control characters
-                ...Array.from({ length: 95 }, (_, i) => String.fromCharCode(i + 32)), // Printable ASCII
-                ...Array.from({ length: 100 }, () => String.fromCharCode(0x80 + Math.floor(Math.random() * 0x7F80))), // Extended Unicode
-                ...Array.from({ length: 50 }, () => '\u0000'), // Null bytes
-                ...Array.from({ length: 50 }, () => '\uFFFD'), // Replacement character
-            ];
-            return Array.from({ length: size }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
-
-        case 'edge':
-            // Edge case patterns
-            const patterns = [
-                'a'.repeat(size), // Single character repeated
-                'ab'.repeat(Math.ceil(size / 2)).substring(0, size), // Alternating characters
-                Array.from({ length: size }, (_, i) => String.fromCharCode(i % 256)).join(''), // Sequential bytes
-                Array.from({ length: size }, () => String.fromCharCode(0)).join(''), // All nulls
-                Array.from({ length: size }, () => String.fromCharCode(255)).join(''), // All 0xFF
-            ];
-            return patterns[Math.floor(Math.random() * patterns.length)];
-
-        case 'corrupted':
-            // Generate data that might cause issues
-            const base = 'normal data '.repeat(Math.ceil(size / 12));
-            const corrupted = base.split('').map((char, i) => {
-                if (i % 100 === 0) return String.fromCharCode(0); // Insert nulls
-                if (i % 200 === 0) return String.fromCharCode(0xFF); // Insert 0xFF
-                if (i % 300 === 0) return '\uFFFD'; // Insert replacement character
-                return char;
-            }).join('');
-            return corrupted.substring(0, size);
-
-        default:
-            return 'default fuzz data'.repeat(Math.ceil(size / 20)).substring(0, size);
-    }
+// Fixed seeds make failures reproducible while still exercising many byte and
+// Unicode combinations. This suite must fail when a valid round trip fails.
+function random(seed: number): () => number {
+  let state = seed >>> 0;
+  return () => {
+    state ^= state << 13;
+    state ^= state >>> 17;
+    state ^= state << 5;
+    return state >>> 0;
+  };
 }
 
-describe('Compression Fuzz Tests', () => {
-    describe('Random Data Fuzzing', () => {
-        test('should handle completely random string data', async () => {
-            const iterations = 50;
+function randomBytes(next: () => number, length: number): Uint8Array {
+  return Uint8Array.from({ length }, () => next() & 0xff);
+}
 
-            for (let i = 0; i < iterations; i++) {
-                const size = Math.floor(Math.random() * 1000) + 10;
-                const data = generateFuzzData(size, 'random');
+function randomText(next: () => number, length: number): string {
+  const scalars = ['\u0000', 'A', 'z', '\u00e9', '\u4e16', '\ufffd', '\ud83c\udf0d'];
+  return Array.from({ length }, () => scalars[next() % scalars.length]).join('');
+}
 
-                try {
-                    const result = await compress(data);
-                    const decompressed = await decompress(result.compressed, result.algorithm);
-
-                    const originalString = typeof data === 'string' ? data : uint8ArrayToString(data);
-                    const decompressedString = typeof decompressed === 'string' ? decompressed : uint8ArrayToString(decompressed);
-
-                    expect(decompressedString).toBe(originalString);
-                    expect(result.compressionRatio).toBeGreaterThan(0);
-                    expect(result.compressionRatio).toBeLessThan(2.0); // Shouldn't expand too much
-                } catch (error) {
-                    // Some random data might cause issues, but should be handled gracefully
-                    expect(error).toBeDefined();
-                }
-            }
+describe('compression randomized security properties', () => {
+  test.each(['none', 'gzip', 'auto'] as const)(
+    '%s preserves valid Unicode and exact UTF-8 byte length',
+    async algorithm => {
+      const next = random(0x61d0a17);
+      for (let trial = 0; trial < 80; trial++) {
+        const text = randomText(next, next() % 512);
+        const expected = new TextEncoder().encode(text);
+        const result = await compress(text, { algorithm });
+        const restored = await decompress(result.compressed, result.algorithm, {
+          expectedOutputBytes: expected.length,
         });
+        expect(restored).toEqual(expected);
+        expect(uint8ArrayToString(restored)).toBe(text);
+        expect(result.originalSize).toBe(expected.length);
+        expect(result.compressedSize).toBe(result.compressed.length);
+        expect(result.compressionRatio).toBeGreaterThanOrEqual(0);
+        expect(result.compressionRatio).toBeLessThanOrEqual(1);
+      }
+    },
+  );
 
-        test('should handle random Uint8Array data', async () => {
-            const iterations = 30;
-
-            for (let i = 0; i < iterations; i++) {
-                const size = Math.floor(Math.random() * 500) + 10;
-                const data = new Uint8Array(Array.from({ length: size }, () => Math.floor(Math.random() * 256)));
-
-                try {
-                    const result = await compress(data);
-                    const decompressed = await decompress(result.compressed, result.algorithm);
-
-                    expect(decompressed).toEqual(data);
-                    expect(result.compressionRatio).toBeGreaterThan(0);
-                    expect(result.compressionRatio).toBeLessThan(2.0);
-                } catch (error) {
-                    expect(error).toBeDefined();
-                }
-            }
+  test.each(['none', 'gzip', 'auto'] as const)(
+    '%s preserves arbitrary binary data',
+    async algorithm => {
+      const next = random(0x0ddba11);
+      for (let trial = 0; trial < 80; trial++) {
+        const input = randomBytes(next, next() % 1024);
+        const result = await compress(input, { algorithm });
+        const restored = await decompress(result.compressed, result.algorithm, {
+          expectedOutputBytes: input.length,
         });
+        expect(restored).toEqual(input);
+      }
+    },
+  );
+
+  test('rejects lone UTF-16 surrogates instead of silently replacing data', async () => {
+    for (const invalid of ['\ud800', 'a\ud800b', '\udc00', '\ud800\ud800']) {
+      await expect(compress(invalid)).rejects.toThrow('unpaired UTF-16 surrogate');
+      await expect(analyzeCompression(invalid)).rejects.toThrow('unpaired UTF-16 surrogate');
+      expect(() => stringToUint8Array(invalid)).toThrow('unpaired UTF-16 surrogate');
+    }
+    const validPair = '\ud83c\udf0d';
+    const compressed = await compress(validPair);
+    expect(uint8ArrayToString(await decompress(
+      compressed.compressed,
+      compressed.algorithm,
+    ))).toBe(validPair);
+  });
+
+  test('analysis reports byte sizes and a supported recommendation', async () => {
+    const next = random(0xa11ce12);
+    for (let trial = 0; trial < 40; trial++) {
+      const text = randomText(next, 1 + (next() % 512));
+      const analysis = await analyzeCompression(text);
+      expect(analysis.originalSize).toBe(new TextEncoder().encode(text).length);
+      expect(analysis.gzipSize).toBeGreaterThan(0);
+      expect(analysis.recommendation).toMatch(/^(gzip|none)$/);
+      expect(analysis.recommendation === 'gzip').toBe(analysis.gzipRatio < 0.9);
+    }
+  });
+
+  test('corrupt gzip and an unsupported decoder fail explicitly', async () => {
+    const result = await compress('recoverable material '.repeat(100), {
+      algorithm: 'gzip',
     });
-
-    describe('Malformed Data Fuzzing', () => {
-        test('should handle malformed string data', async () => {
-            const iterations = 40;
-
-            for (let i = 0; i < iterations; i++) {
-                const size = Math.floor(Math.random() * 500) + 10;
-                const data = generateFuzzData(size, 'malformed');
-
-                try {
-                    const result = await compress(data);
-                    const decompressed = await decompress(result.compressed, result.algorithm);
-
-                    const originalString = typeof data === 'string' ? data : uint8ArrayToString(data);
-                    const decompressedString = typeof decompressed === 'string' ? decompressed : uint8ArrayToString(decompressed);
-
-                    expect(decompressedString).toBe(originalString);
-                } catch (error) {
-                    // Malformed data might cause issues, but should be handled gracefully
-                    expect(error).toBeDefined();
-                }
-            }
-        });
-
-        test('should handle data with null bytes', async () => {
-            const testCases = [
-                'normal\u0000data',
-                '\u0000\u0000\u0000',
-                'start\u0000middle\u0000end',
-                '\u0000'.repeat(100)
-            ];
-
-            for (const data of testCases) {
-                try {
-                    const result = await compress(data);
-                    const decompressed = await decompress(result.compressed, result.algorithm);
-                    const decompressedString = typeof decompressed === 'string' ? decompressed : uint8ArrayToString(decompressed);
-
-                    expect(decompressedString).toBe(data);
-                } catch (error) {
-                    expect(error).toBeDefined();
-                }
-            }
-        });
-
-        test('should handle data with replacement characters', async () => {
-            const testCases = [
-                'normal\uFFFData',
-                '\uFFFD\uFFFD\uFFFD',
-                'start\uFFFDmiddle\uFFFDend',
-                '\uFFFD'.repeat(50)
-            ];
-
-            for (const data of testCases) {
-                try {
-                    const result = await compress(data);
-                    const decompressed = await decompress(result.compressed, result.algorithm);
-                    const decompressedString = typeof decompressed === 'string' ? decompressed : uint8ArrayToString(decompressed);
-
-                    expect(decompressedString).toBe(data);
-                } catch (error) {
-                    expect(error).toBeDefined();
-                }
-            }
-        });
-    });
-
-    describe('Edge Case Fuzzing', () => {
-        test('should handle edge case patterns', async () => {
-            const iterations = 30;
-
-            for (let i = 0; i < iterations; i++) {
-                const size = Math.floor(Math.random() * 300) + 10;
-                const data = generateFuzzData(size, 'edge');
-
-                try {
-                    const result = await compress(data);
-                    const decompressed = await decompress(result.compressed, result.algorithm);
-
-                    const originalString = typeof data === 'string' ? data : uint8ArrayToString(data);
-                    const decompressedString = typeof decompressed === 'string' ? decompressed : uint8ArrayToString(decompressed);
-
-                    expect(decompressedString).toBe(originalString);
-                } catch (error) {
-                    expect(error).toBeDefined();
-                }
-            }
-        });
-
-        test('should handle single character repeated data', async () => {
-            const testCases = [
-                'a'.repeat(100),
-                '0'.repeat(200),
-                ' '.repeat(150),
-                '\n'.repeat(80)
-            ];
-
-            for (const data of testCases) {
-                const result = await compress(data);
-                const decompressed = await decompress(result.compressed, result.algorithm);
-                const decompressedString = typeof decompressed === 'string' ? decompressed : uint8ArrayToString(decompressed);
-
-                expect(decompressedString).toBe(data);
-                // Allow for cases where compression might not be very effective for small data
-                expect(result.compressionRatio).toBeLessThan(1.1); // Shouldn't expand significantly
-            }
-        });
-
-        test('should handle alternating patterns', async () => {
-            const testCases = [
-                'ab'.repeat(100),
-                '01'.repeat(150),
-                '+-'.repeat(80),
-                'xy'.repeat(120)
-            ];
-
-            for (const data of testCases) {
-                const result = await compress(data);
-                const decompressed = await decompress(result.compressed, result.algorithm);
-                const decompressedString = typeof decompressed === 'string' ? decompressed : uint8ArrayToString(decompressed);
-
-                expect(decompressedString).toBe(data);
-                expect(result.compressionRatio).toBeLessThan(0.8); // Should compress reasonably well
-            }
-        });
-    });
-
-    describe('Corrupted Data Fuzzing', () => {
-        test('should handle data with embedded nulls and special characters', async () => {
-            const iterations = 25;
-
-            for (let i = 0; i < iterations; i++) {
-                const size = Math.floor(Math.random() * 400) + 20;
-                const data = generateFuzzData(size, 'corrupted');
-
-                try {
-                    const result = await compress(data);
-                    const decompressed = await decompress(result.compressed, result.algorithm);
-
-                    const originalString = typeof data === 'string' ? data : uint8ArrayToString(data);
-                    const decompressedString = typeof decompressed === 'string' ? decompressed : uint8ArrayToString(decompressed);
-
-                    expect(decompressedString).toBe(originalString);
-                } catch (error) {
-                    expect(error).toBeDefined();
-                }
-            }
-        });
-
-        test('should handle data with mixed encodings', async () => {
-            const testCases = [
-                'normal\u0000\uFFFDdata',
-                'start\u0000middle\uFFFDend',
-                '\u0000\uFFFD\u0000\uFFFD'.repeat(20),
-                'ascii\u0000unicode\uFFFDmixed'
-            ];
-
-            for (const data of testCases) {
-                try {
-                    const result = await compress(data);
-                    const decompressed = await decompress(result.compressed, result.algorithm);
-                    const decompressedString = typeof decompressed === 'string' ? decompressed : uint8ArrayToString(decompressed);
-
-                    expect(decompressedString).toBe(data);
-                } catch (error) {
-                    expect(error).toBeDefined();
-                }
-            }
-        });
-    });
-
-    describe('Algorithm Fuzzing', () => {
-        test('should handle fuzz data with different algorithms', async () => {
-            const algorithms: ('gzip' | 'brotli' | 'auto')[] = ['gzip', 'brotli', 'auto'];
-            const iterations = 20;
-
-            for (const algorithm of algorithms) {
-                for (let i = 0; i < iterations; i++) {
-                    const size = Math.floor(Math.random() * 200) + 10;
-                    const data = generateFuzzData(size, 'random');
-
-                    try {
-                        const result = await compress(data, { algorithm });
-                        const decompressed = await decompress(result.compressed, result.algorithm);
-
-                        const originalString = typeof data === 'string' ? data : uint8ArrayToString(data);
-                        const decompressedString = typeof decompressed === 'string' ? decompressed : uint8ArrayToString(decompressed);
-
-                        expect(decompressedString).toBe(originalString);
-                        expect(['gzip', 'none']).toContain(result.algorithm);
-                    } catch (error) {
-                        expect(error).toBeDefined();
-                    }
-                }
-            }
-        });
-
-        test('should handle fuzz data with different compression levels', async () => {
-            const levels = [1, 6, 9];
-            const iterations = 15;
-
-            for (const level of levels) {
-                for (let i = 0; i < iterations; i++) {
-                    const size = Math.floor(Math.random() * 150) + 10;
-                    const data = generateFuzzData(size, 'edge');
-
-                    try {
-                        const result = await compress(data, { compressionLevel: level });
-                        const decompressed = await decompress(result.compressed, result.algorithm);
-
-                        const originalString = typeof data === 'string' ? data : uint8ArrayToString(data);
-                        const decompressedString = typeof decompressed === 'string' ? decompressed : uint8ArrayToString(decompressed);
-
-                        expect(decompressedString).toBe(originalString);
-                    } catch (error) {
-                        expect(error).toBeDefined();
-                    }
-                }
-            }
-        });
-    });
-
-    describe('Analysis Fuzzing', () => {
-        test('should analyze fuzz data correctly', async () => {
-            const iterations = 30;
-
-            for (let i = 0; i < iterations; i++) {
-                const size = Math.floor(Math.random() * 300) + 10;
-                const data = generateFuzzData(size, 'random');
-
-                try {
-                    const analysis = await analyzeCompression(data);
-
-                    expect(analysis.originalSize).toBe(typeof data === 'string' ? data.length : data.length);
-                    expect(analysis.gzipSize).toBeGreaterThan(0);
-                    expect(analysis.brotliSize).toBeGreaterThan(0);
-                    expect(analysis.gzipRatio).toBeGreaterThan(0);
-                    expect(analysis.brotliRatio).toBeGreaterThan(0);
-                    expect(['gzip', 'none']).toContain(analysis.recommendation);
-                } catch (error) {
-                    expect(error).toBeDefined();
-                }
-            }
-        });
-    });
-
-    describe('Error Recovery Fuzzing', () => {
-        test('should handle decompression of corrupted compressed data', async () => {
-            const testData = 'normal test data';
-            const result = await compress(testData);
-
-            // Corrupt the compressed data
-            const corrupted = new Uint8Array(result.compressed);
-            corrupted[0] = corrupted[0] ^ 0xFF; // Flip bits
-
-            // Note: Some compression libraries are very resilient to corruption
-            // and might still decompress successfully. This test verifies the behavior
-            // but doesn't enforce that it must throw.
-            try {
-                await decompress(corrupted, result.algorithm);
-                // If it doesn't throw, that's also acceptable behavior
-            } catch (error) {
-                // If it throws, that's also acceptable behavior
-                expect(error).toBeDefined();
-            }
-        });
-
-        test('should handle wrong algorithm for decompression', async () => {
-            const testData = 'test data';
-            const result = await compress(testData, { algorithm: 'gzip' });
-
-            // Note: Some decompression libraries might be resilient to wrong algorithms
-            // and might still attempt decompression or handle gracefully
-            try {
-                await decompress(result.compressed, 'brotli');
-                // If it doesn't throw, that's also acceptable behavior
-            } catch (error) {
-                // If it throws, that's also acceptable behavior
-                expect(error).toBeDefined();
-            }
-        });
-    });
+    expect(result.algorithm).toBe('gzip');
+    const corrupt = new Uint8Array(result.compressed);
+    corrupt[0] ^= 0xff;
+    await expect(decompress(corrupt, 'gzip')).rejects.toThrow();
+    await expect(decompress(result.compressed, 'brotli')).rejects.toThrow(
+      'requires the Rust WASM backend',
+    );
+  });
 });

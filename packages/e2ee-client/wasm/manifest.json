@@ -1,12 +1,12 @@
 {
   "schemaVersion": 4,
   "package": "@voideddev/e2ee-client",
-  "packageVersion": "1.0.0",
+  "packageVersion": "1.0.1",
   "target": "wasm32-unknown-unknown",
   "coreVersion": "1.0.0",
   "bindingVersion": "1.0.0",
-  "sourceDigest": "sha256:86e22fc01604feaccf21f4e01e772d58c10c9bbb28aeb967112f5a68bd368c27",
-  "buildId": "sha256:20a92914784e67089017dff4c9bd12447f42a555926b170a8df61168f0c19ff7",
+  "sourceDigest": "sha256:ba5273def77062bd7d31e333459053ff26f3425e994c32276caa05e79bb99e7c",
+  "buildId": "sha256:cb587282e8fc1fc7701c994cb2016a9c1b4524859ca3675c2b713612fd952ab6",
   "tools": {
     "cargo": "cargo 1.93.0 (083ac5135 2025-12-15)",
     "cargoSha256": "sha256:46c9483604e913070b085dc5acf972bc560395c10dfec1cdb389c4b6bf17cf67",

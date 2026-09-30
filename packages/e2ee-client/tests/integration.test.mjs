@@ -10,6 +10,8 @@
 // Test tracking
 let passed = 0;
 let failed = 0;
+let skipped = 0;
+const SKIP = Symbol('skip');
 const errors = [];
 const startTime = Date.now();
 
@@ -30,8 +32,13 @@ function fail(name, error) {
 
 async function test(name, fn) {
   try {
-    await fn();
-    success(name);
+    const result = await fn();
+    if (result === SKIP) {
+      skipped++;
+      console.log(`↷ ${name} - skipped in Node; run tests/browser-release.html in a browser`);
+    } else {
+      success(name);
+    }
   } catch (e) {
     fail(name, e);
   }
@@ -347,11 +354,11 @@ await test('protect/open roundtrip with preset inspection', async () => {
     await initWasm();
   } catch (error) {
     log(`  Skipping WASM-only monolith roundtrip in Node integration harness: ${error.message || error}`);
-    return;
+    return SKIP;
   }
   if (!isWasmBackendReady()) {
     log('  Skipping WASM-only monolith roundtrip in Node integration harness');
-    return;
+    return SKIP;
   }
 
   const plaintext = 'browser monolith artifact '.repeat(4096);
@@ -372,11 +379,11 @@ await test('concealed preset handles larger payloads', async () => {
     await initWasm();
   } catch (error) {
     log(`  Skipping WASM-only large monolith artifact check: ${error.message || error}`);
-    return;
+    return SKIP;
   }
   if (!isWasmBackendReady()) {
     log('  Skipping WASM-only large monolith artifact check in Node integration harness');
-    return;
+    return SKIP;
   }
   const plaintext = 'concealed monolith payload '.repeat(12 * 1024);
   const protectedBlob = await protectArtifact(plaintext, { preset: 'concealed' });
@@ -499,7 +506,7 @@ function arraysEqual(a, b) {
 const totalTime = Date.now() - startTime;
 
 console.log('\n' + '='.repeat(60));
-console.log(`RESULTS: ${passed} passed, ${failed} failed (${totalTime}ms)`);
+console.log(`RESULTS: ${passed} passed, ${skipped} skipped, ${failed} failed (${totalTime}ms)`);
 console.log('='.repeat(60));
 
 if (failed > 0) {
@@ -509,6 +516,5 @@ if (failed > 0) {
   });
   process.exit(1);
 } else {
-  console.log('\n✓ All integration tests passed!\n');
+  console.log('\n✓ All executed integration tests passed.\n');
 }
-

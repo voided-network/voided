@@ -739,11 +739,14 @@ const persistedParameters =
   await client.getPasswordKeyDerivationRecord();
 ```
 
-Preserve the returned parameters with the same care as other recovery
-metadata. They are not secret, but losing them prevents deterministic
-re-derivation. The stored record is bound to the monotonic primary-key version;
-import, rotation, agreement, and deletion remove it, and a failed cleanup can
-never make an old record describe the newly active key.
+Preserve the returned parameters securely. Losing them prevents deterministic
+re-derivation. Version 2 records include a hash commitment to the exact derived
+key, which can also serve as an offline password verifier if the record leaks.
+Keep the record private and use a strong password. Import, rotation, agreement,
+and deletion invalidate the record. A version 1 record only checked the key
+version and cannot prove that it describes the active key. Reading one now
+fails closed unless you explicitly pass `{ allowUnverifiedLegacy: true }` to
+`getPasswordKeyDerivationRecord()` after independently checking recovery.
 
 ## Development
 

@@ -4200,9 +4200,6 @@ var CryptoService = class {
   constructor() {
     this.textEncoder = new TextEncoder();
   }
-  // ============================================================================
-  // METHODS THAT WORK WITH CryptoKey (for VoidedE2EEClient)
-  // ============================================================================
   /**
    * Generate a new AES-256-GCM encryption key (CryptoKey)
    */
@@ -4933,9 +4930,6 @@ var CryptoService = class {
     const bytes = data instanceof Uint8Array ? data : new Uint8Array(data);
     bytes.fill(0);
   }
-  // ============================================================================
-  // Helper methods
-  // ============================================================================
   arrayBufferToBase64(buffer) {
     const bytes = new Uint8Array(buffer);
     let binary = "";
@@ -5426,6 +5420,7 @@ var ec = [
   "stream finished",
   "no stream handler",
   ,
+  // determined by compression function
   "no callback",
   "invalid UTF-8 data",
   "extra field too long",
@@ -6018,12 +6013,14 @@ var Gunzip = /* @__PURE__ */ (function() {
       }
       this.p = p.subarray(s), this.v = 0;
     }
-    Inflate.prototype.c.call(this, final);
-    if (this.s.f && !this.s.l && !final) {
+    Inflate.prototype.c.call(this, 0);
+    if (this.s.f && !this.s.l) {
       this.v = shft(this.s.p) + 9;
       this.s = { i: 0 };
       this.o = new u8(0);
       this.push(new u8(0), final);
+    } else if (final) {
+      Inflate.prototype.c.call(this, final);
     }
   };
   return Gunzip2;
@@ -6039,6 +6036,19 @@ try {
 // src/compression.ts
 function hasGzipSupport() {
   return typeof gzipSync === "function" && typeof Gunzip === "function";
+}
+function assertWellFormedText(value) {
+  for (let index = 0; index < value.length; index++) {
+    const code = value.charCodeAt(index);
+    if (code >= 55296 && code <= 56319) {
+      const next = value.charCodeAt(++index);
+      if (!(next >= 56320 && next <= 57343)) {
+        throw new TypeError("Compression text contains an unpaired UTF-16 surrogate; supply bytes to preserve it");
+      }
+    } else if (code >= 56320 && code <= 57343) {
+      throw new TypeError("Compression text contains an unpaired UTF-16 surrogate; supply bytes to preserve it");
+    }
+  }
 }
 function normalizeRequestedAlgorithm(algorithm) {
   if (!["gzip", "brotli", "none", "auto"].includes(algorithm)) {
@@ -6090,6 +6100,7 @@ async function compress(data, options = {}) {
     compressionLevel: compressionLevel2 = 6
   } = options;
   const requestedAlgorithm = normalizeRequestedAlgorithm(algorithm);
+  if (typeof data === "string") assertWellFormedText(data);
   const input = typeof data === "string" ? new TextEncoder().encode(data) : data;
   assertWithinClientUploadLimit(input.length);
   assertWithinClientMemoryLimit(input.length, "Compression input");
@@ -7764,8 +7775,7 @@ var VoidedKeyExport = class {
       const keyId = await this.client.getCurrentKeyVersion();
       await this.createModal(key, keyId);
       this.showModal();
-    } catch (error) {
-      console.error("Failed to export key:", error);
+    } catch {
       alert("Failed to export key. Please try again.");
     }
   }
@@ -7948,8 +7958,7 @@ var VoidedKeyExport = class {
       } else {
         alert("\u{1F4CB} Key copied to clipboard!");
       }
-    } catch (error) {
-      console.error("Failed to copy key:", error);
+    } catch {
       alert("\u274C Failed to copy key to clipboard");
     }
   }
@@ -8001,8 +8010,7 @@ var VoidedKeyExport = class {
       } else {
         renderQrFallback(qrContainer, "QR Code Unavailable");
       }
-    } catch (error) {
-      console.warn("Failed to generate QR code:", error);
+    } catch {
       renderQrFallback(qrContainer, "QR Code Error");
     }
   }
@@ -8023,7 +8031,6 @@ var VoidedKeyExport = class {
         await this.copyKey(key);
       }
     } catch (error) {
-      console.error("Failed to share key:", error);
       if (error && typeof error === "object" && "name" in error && error.name === "AbortError") {
         alert("\u274C Sharing was cancelled");
       } else {
@@ -8217,7 +8224,6 @@ var VoidedKeyImport = class {
       }
       this.hide();
     } catch (error) {
-      console.error("Failed to import key:", error);
       const errorMessage = error instanceof Error ? error.message : "Failed to import key";
       if (this.options.onError) {
         this.options.onError(errorMessage);
@@ -9497,6 +9503,7 @@ var _VoidedE2EEClient = class _VoidedE2EEClient {
         salt,
         iterations
       );
+      const keyCommitment = await this.passwordKeyCommitment(derivedKey);
       let record;
       await this.keyManager.setKey(
         derivedKey,
@@ -9504,11 +9511,12 @@ var _VoidedE2EEClient = class _VoidedE2EEClient {
         {
           beforeCommit: async (keyVersion) => {
             record = {
-              version: 1,
+              version: 2,
               algorithm: "PBKDF2-SHA256",
               salt: base64Encode2(salt),
               iterations,
-              keyVersion
+              keyVersion,
+              keyCommitment
             };
             const storageKey = this.getInternalStorageKey("password-kdf");
             const serialized = JSON.stringify(record);
@@ -9527,7 +9535,7 @@ var _VoidedE2EEClient = class _VoidedE2EEClient {
       );
     }
   }
-  async getPasswordKeyDerivationRecord() {
+  async getPasswordKeyDerivationRecord(options = {}) {
     return this.keyManager.withKeyReadLease(async (lease) => {
       const stored = await this.storage.getKey(
         this.getInternalStorageKey("password-kdf")
@@ -9539,7 +9547,7 @@ var _VoidedE2EEClient = class _VoidedE2EEClient {
       } catch {
         throw new KeyError("Stored password derivation metadata is invalid");
       }
-      if (!record || typeof record !== "object" || record.version !== 1 || record.algorithm !== "PBKDF2-SHA256" || !Number.isSafeInteger(record.iterations) || record.iterations < _VoidedE2EEClient.PBKDF2_MIN_ITERATIONS || record.iterations > _VoidedE2EEClient.PBKDF2_MAX_ITERATIONS || !Number.isSafeInteger(record.keyVersion) || record.keyVersion < 1) {
+      if (!record || typeof record !== "object" || ![1, 2].includes(record.version) || record.algorithm !== "PBKDF2-SHA256" || !Number.isSafeInteger(record.iterations) || record.iterations < _VoidedE2EEClient.PBKDF2_MIN_ITERATIONS || record.iterations > _VoidedE2EEClient.PBKDF2_MAX_ITERATIONS || !Number.isSafeInteger(record.keyVersion) || record.keyVersion < 1) {
         throw new KeyError("Stored password derivation metadata is invalid");
       }
       const salt = base64Decode2(
@@ -9553,8 +9561,41 @@ var _VoidedE2EEClient = class _VoidedE2EEClient {
       if (activeVersion !== record.keyVersion) {
         return null;
       }
+      const typedRecord = record;
+      if (typedRecord.version === 1) {
+        if (options.allowUnverifiedLegacy === true) return typedRecord;
+        throw new KeyError(
+          "Legacy password derivation metadata is not bound to the active key; pass allowUnverifiedLegacy only after independent recovery verification"
+        );
+      }
+      const commitment = inspectCanonicalBase64(typedRecord.keyCommitment, 32);
+      if (!commitment.ok || commitment.decodedLength !== 32) {
+        throw new KeyError("Stored password derivation key commitment is invalid");
+      }
+      const currentKey = await lease.getCurrentKey();
+      if (typedRecord.keyCommitment !== await this.passwordKeyCommitment(currentKey)) {
+        return null;
+      }
       return record;
     });
+  }
+  async passwordKeyCommitment(key) {
+    const rawKey = await crypto.subtle.exportKey("raw", key);
+    const input = concatBytes(
+      this.textEncoder.encode("voided/password-kdf/key-commitment/v2\0"),
+      new Uint8Array(rawKey)
+    );
+    try {
+      const digest = await crypto.subtle.digest("SHA-256", input);
+      try {
+        return base64Encode2(new Uint8Array(digest));
+      } finally {
+        this.crypto.secureWipe(digest);
+      }
+    } finally {
+      this.crypto.secureWipe(rawKey);
+      this.crypto.secureWipe(input);
+    }
   }
   hasUnpairedSurrogates(input) {
     for (let i2 = 0; i2 < input.length; i2++) {
@@ -10547,8 +10588,8 @@ async function rotateKey() {
 async function deriveKeyFromPassword(options) {
   return getDefaultClient().deriveKeyFromPassword(options);
 }
-async function getPasswordKeyDerivationRecord() {
-  return getDefaultClient().getPasswordKeyDerivationRecord();
+async function getPasswordKeyDerivationRecord(options = {}) {
+  return getDefaultClient().getPasswordKeyDerivationRecord(options);
 }
 async function getKeyFingerprint() {
   return getDefaultClient().getKeyFingerprint();

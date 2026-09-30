@@ -10,7 +10,7 @@
   "protocol_versions": ["2025-11-25", "2025-06-18", "2025-03-26", "2024-11-05"],
   "download": {
     "url": "https://voidednetwork.com/downloads/voided-mcp.mjs",
-    "sha256": "c149448fce0d18b277f6b2652547f1ab0ac882bab85f9b1a069afee3c420a088",
+    "sha256": "9bd1896067921717ab5e4573f733677bdcaeb3f20dff42cc6db594341249e5b8",
     "registry_published": false
   },
   "configuration": {

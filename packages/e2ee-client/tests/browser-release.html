@@ -77,6 +77,38 @@
           protectedArtifact.artifact,
         );
 
+        class FailingStorage {
+          keys = new Map();
+          failPrimary = true;
+          async getKey(id) { return this.keys.get(id) ?? null; }
+          async setKey(id, value) {
+            if (id === 'audit-key' && this.failPrimary) throw new Error('primary write failed');
+            this.keys.set(id, value);
+          }
+          async removeKey(id) { this.keys.delete(id); }
+          async getMigrationState() { return null; }
+          async setMigrationState() {}
+          async removeMigrationState() {}
+          async getKeyPair() { return null; }
+          async setKeyPair() {}
+          async removeKeyPair() {}
+        }
+        const storage = new FailingStorage();
+        let primaryWriteRejected = false;
+        try {
+          await new module.VoidedE2EEClient({ storage, keyId: 'audit-key' })
+            .deriveKeyFromPassword({
+              password: 'browser-audit-password', iterations: 600_000,
+            });
+        } catch (error) {
+          primaryWriteRejected = String(error).includes('primary write failed');
+        }
+        storage.failPrimary = false;
+        const laterClient = new module.VoidedE2EEClient({ storage, keyId: 'audit-key' });
+        await laterClient.encrypt('unrelated new key');
+        const passwordMetadataBound = primaryWriteRejected &&
+          await laterClient.getPasswordKeyDerivationRecord() === null;
+
         const result = {
           backend: await module.getCurrentBackend(),
           wasmReady: module.isWasmReady(),
@@ -88,6 +120,7 @@
           artifactRoundtrip: equal(opened, plaintext),
           artifactVersion: inspected.version,
           artifactBytes: protectedArtifact.artifact.length,
+          passwordMetadataBound,
         };
         const passed =
           result.backend === 'wasm' &&
@@ -98,7 +131,8 @@
           result.boundedRoundtrip &&
           result.boundRejected &&
           result.artifactRoundtrip &&
-          result.artifactVersion === 3;
+          result.artifactVersion === 3 &&
+          result.passwordMetadataBound;
         if (!passed) throw new Error(`release assertions failed: ${JSON.stringify(result)}`);
 
         output.dataset.status = 'passed';

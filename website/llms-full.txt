@@ -1,8 +1,8 @@
 # Voided full reference
 
-Reference status: Voided 1.0 release candidate.
-Publication status: packages are not published yet.
-Final native gate: real Windows x64 MSVC execution remains pending. The Windows artifact has verified provenance and hashes.
+Reference status: Voided browser package 1.0.1, Node.js package 1.0.0, Rust core 1.0.0.
+Publication status: browser and Node.js packages are public on npm.
+Windows x64 MSVC: the native prebuild has verified provenance and hashes; independent runtime execution remains pending.
 
 ## Educational route
 
@@ -180,7 +180,7 @@ Recovery Deck is not identity, login authentication, an application encryption k
 The Voided MCP server is a developer-facing, read-only local source knowledge server. It is not part of runtime cryptography or authentication.
 
 Download: https://voidednetwork.com/downloads/voided-mcp.mjs
-SHA-256: c149448fce0d18b277f6b2652547f1ab0ac882bab85f9b1a069afee3c420a088
+SHA-256: 9bd1896067921717ab5e4573f733677bdcaeb3f20dff42cc6db594341249e5b8
 Runtime: Node.js 18 or newer
 Transport: stdio JSON-RPC
 Server name/version: voided-mcp 0.1.0

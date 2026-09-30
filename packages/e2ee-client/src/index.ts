@@ -289,14 +289,19 @@ export interface KeyDerivationOptions {
   iterations?: number; // Default/minimum: 600000
 }
 
-export interface PasswordKeyDerivationRecord {
-  version: 1;
+export type PasswordKeyDerivationRecord = {
   algorithm: "PBKDF2-SHA256";
   salt: string;
   iterations: number;
   /** Monotonic primary-key version this recovery record describes. */
   keyVersion: number;
-}
+} & (
+  { version: 1; keyCommitment?: never } | {
+    version: 2;
+    /** Binds the record to the exact derived key. */
+    keyCommitment: string;
+  }
+);
 
 export interface KeyVerificationResult {
   fingerprint: string;
@@ -667,6 +672,7 @@ export class VoidedE2EEClient {
         salt,
         iterations
       );
+      const keyCommitment = await this.passwordKeyCommitment(derivedKey);
       let record: PasswordKeyDerivationRecord | undefined;
       await this.keyManager.setKey(
         derivedKey,
@@ -674,11 +680,12 @@ export class VoidedE2EEClient {
         {
           beforeCommit: async keyVersion => {
             record = {
-              version: 1,
+              version: 2,
               algorithm: "PBKDF2-SHA256",
               salt: base64Encode(salt),
               iterations,
               keyVersion,
+              keyCommitment,
             };
             const storageKey = this.getInternalStorageKey("password-kdf");
             const serialized = JSON.stringify(record);
@@ -700,7 +707,9 @@ export class VoidedE2EEClient {
     }
   }
 
-  public async getPasswordKeyDerivationRecord(): Promise<PasswordKeyDerivationRecord | null> {
+  public async getPasswordKeyDerivationRecord(
+    options: { allowUnverifiedLegacy?: boolean } = {}
+  ): Promise<PasswordKeyDerivationRecord | null> {
     return this.keyManager.withKeyReadLease(async lease => {
       const stored = await this.storage.getKey(
         this.getInternalStorageKey("password-kdf")
@@ -715,7 +724,7 @@ export class VoidedE2EEClient {
       if (
         !record ||
         typeof record !== "object" ||
-        (record as PasswordKeyDerivationRecord).version !== 1 ||
+        ![1, 2].includes((record as PasswordKeyDerivationRecord).version) ||
         (record as PasswordKeyDerivationRecord).algorithm !== "PBKDF2-SHA256" ||
         !Number.isSafeInteger((record as PasswordKeyDerivationRecord).iterations) ||
         (record as PasswordKeyDerivationRecord).iterations <
@@ -738,8 +747,42 @@ export class VoidedE2EEClient {
       if (activeVersion !== (record as PasswordKeyDerivationRecord).keyVersion) {
         return null;
       }
+      const typedRecord = record as PasswordKeyDerivationRecord;
+      if (typedRecord.version === 1) {
+        if (options.allowUnverifiedLegacy === true) return typedRecord;
+        throw new KeyError(
+          "Legacy password derivation metadata is not bound to the active key; pass allowUnverifiedLegacy only after independent recovery verification"
+        );
+      }
+      const commitment = inspectCanonicalBase64(typedRecord.keyCommitment, 32);
+      if (!commitment.ok || commitment.decodedLength !== 32) {
+        throw new KeyError("Stored password derivation key commitment is invalid");
+      }
+      const currentKey = await lease.getCurrentKey();
+      if (typedRecord.keyCommitment !== await this.passwordKeyCommitment(currentKey)) {
+        return null;
+      }
       return record as PasswordKeyDerivationRecord;
     });
+  }
+
+  private async passwordKeyCommitment(key: CryptoKey): Promise<string> {
+    const rawKey = await crypto.subtle.exportKey("raw", key) as ArrayBuffer;
+    const input = concatBytes(
+      this.textEncoder.encode("voided/password-kdf/key-commitment/v2\0"),
+      new Uint8Array(rawKey)
+    );
+    try {
+      const digest = await crypto.subtle.digest("SHA-256", input);
+      try {
+        return base64Encode(new Uint8Array(digest));
+      } finally {
+        this.crypto.secureWipe(digest);
+      }
+    } finally {
+      this.crypto.secureWipe(rawKey);
+      this.crypto.secureWipe(input);
+    }
   }
 
   private hasUnpairedSurrogates(input: string): boolean {
@@ -1973,8 +2016,10 @@ export async function deriveKeyFromPassword(
   return getDefaultClient().deriveKeyFromPassword(options);
 }
 
-export async function getPasswordKeyDerivationRecord(): Promise<PasswordKeyDerivationRecord | null> {
-  return getDefaultClient().getPasswordKeyDerivationRecord();
+export async function getPasswordKeyDerivationRecord(
+  options: { allowUnverifiedLegacy?: boolean } = {}
+): Promise<PasswordKeyDerivationRecord | null> {
+  return getDefaultClient().getPasswordKeyDerivationRecord(options);
 }
 
 export async function getKeyFingerprint(): Promise<string> {

@@ -48,5 +48,5 @@ When the MCP source changes, rebuild the artifact, update its SHA-256 in all
 descriptors, and run `npm run site:check`. The direct download is the current
 launch path; a package-registry release is not yet available.
 
-The release status is deliberately labeled as a release candidate until the
-Windows native gate, tags, and package publication are complete.
+The browser package 1.0.1 and Node.js package 1.0.0 are public on npm. Keep
+release copy aligned with actual registry state and independent platform checks.

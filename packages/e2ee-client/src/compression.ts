@@ -27,6 +27,20 @@ function hasGzipSupport(): boolean {
     return typeof gzipSync === 'function' && typeof Gunzip === 'function';
 }
 
+function assertWellFormedText(value: string): void {
+    for (let index = 0; index < value.length; index++) {
+        const code = value.charCodeAt(index);
+        if (code >= 0xd800 && code <= 0xdbff) {
+            const next = value.charCodeAt(++index);
+            if (!(next >= 0xdc00 && next <= 0xdfff)) {
+                throw new TypeError('Compression text contains an unpaired UTF-16 surrogate; supply bytes to preserve it');
+            }
+        } else if (code >= 0xdc00 && code <= 0xdfff) {
+            throw new TypeError('Compression text contains an unpaired UTF-16 surrogate; supply bytes to preserve it');
+        }
+    }
+}
+
 /**
  * Normalize requested algorithms for the TypeScript fallback. Algorithm labels
  * are protocol inputs: an explicit Brotli request must never silently become
@@ -133,6 +147,7 @@ export async function compress(
     const requestedAlgorithm = normalizeRequestedAlgorithm(algorithm);
 
     // Use TextEncoder for consistent UTF-8 encoding so TextDecoder on decrypt is a true inverse
+    if (typeof data === 'string') assertWellFormedText(data);
     const input = typeof data === 'string' ? new TextEncoder().encode(data) : data;
     // Guard: enforce 32 GiB limit on any input processed
     assertWithinClientUploadLimit(input.length);
@@ -320,6 +335,7 @@ export async function decompress(
  * Convert string to Uint8Array (fflate utility)
  */
 export function stringToUint8Array(str: string): Uint8Array {
+    assertWellFormedText(str);
     return strToU8(str);
 }
 
@@ -341,6 +357,7 @@ export async function analyzeCompression(data: string | Uint8Array): Promise<{
     brotliRatio: number;
     recommendation: 'gzip' | 'brotli' | 'none';
 }> {
+    if (typeof data === 'string') assertWellFormedText(data);
     const input = typeof data === 'string' ? strToU8(data) : data;
     assertWithinClientUploadLimit(input.length);
     const originalSize = input.length;

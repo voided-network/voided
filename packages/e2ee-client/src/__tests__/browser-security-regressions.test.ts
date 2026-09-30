@@ -299,13 +299,15 @@ describe("browser security regressions", () => {
       salt,
       iterations: 600_000,
     });
-    expect(record).toEqual({
-      version: 1,
+    expect(record).toMatchObject({
+      version: 2,
       algorithm: "PBKDF2-SHA256",
       salt: "BwcHBwcHBwcHBwcHBwcHBw==",
       iterations: 600_000,
       keyVersion: 1,
     });
+    expect(record.keyCommitment).toMatch(/^[A-Za-z0-9+/]{43}=$/);
+    await expect(client.getPasswordKeyDerivationRecord()).resolves.toEqual(record);
   });
 
   test("reserved storage namespaces cannot collide", () => {

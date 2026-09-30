@@ -106,6 +106,49 @@ function activeMigrationState(
 }
 
 describe("key lifecycle regressions", () => {
+  test("a failed password-key write cannot attach its KDF record to a later unrelated key", async () => {
+    const storage = new ControllableStorage();
+    storage.failPrimaryWrites = true;
+    const firstClient = new VoidedE2EEClient({ storage });
+    await expect(firstClient.deriveKeyFromPassword({
+      password: "long-enough-password",
+      iterations: 600_000,
+    })).rejects.toThrow("primary write failure");
+    expect(storage.peek("default")).toBeNull();
+
+    storage.failPrimaryWrites = false;
+    const laterClient = new VoidedE2EEClient({ storage });
+    await laterClient.encrypt("a different generated key");
+    await expect(laterClient.getPasswordKeyDerivationRecord()).resolves.toBeNull();
+  });
+
+  test("password metadata checks the exact key and gates unbound legacy records", async () => {
+    const storage = new ControllableStorage();
+    const client = new VoidedE2EEClient({ storage });
+    const record = await client.deriveKeyFromPassword({
+      password: "long-enough-password",
+      iterations: 600_000,
+    });
+    const metadataKey = "default::voided:internal:password-kdf";
+    expect(record.version).toBe(2);
+
+    await storage.setKey(metadataKey, JSON.stringify({
+      ...record,
+      keyCommitment: Buffer.alloc(32).toString("base64"),
+    }));
+    await expect(client.getPasswordKeyDerivationRecord()).resolves.toBeNull();
+
+    const legacy = { ...record, version: 1 } as Record<string, unknown>;
+    delete legacy.keyCommitment;
+    await storage.setKey(metadataKey, JSON.stringify(legacy));
+    await expect(client.getPasswordKeyDerivationRecord()).rejects.toThrow(
+      "Legacy password derivation metadata is not bound"
+    );
+    await expect(client.getPasswordKeyDerivationRecord({
+      allowUnverifiedLegacy: true,
+    })).resolves.toEqual(legacy);
+  });
+
   test("a transient read error never becomes key absence or overwrites storage", async () => {
     const storage = new ControllableStorage();
     const firstClient = new VoidedE2EEClient({ storage });

@@ -8,9 +8,10 @@
     "source": "https://github.com/voided-network/voided"
   },
   "release": {
-    "version": "1.0.0",
-    "status": "release_candidate",
-    "published": false,
+    "version": "1.0.1",
+    "status": "released",
+    "published": true,
+    "published_npm_packages": ["@voideddev/e2ee-client@1.0.1", "@voideddev/enc-server@1.0.0"],
     "current_writer_format": "VOF3",
     "validated": ["macos-arm64", "linux-x64-gnu-glibc-2.34+", "browser-wasm", "commonjs", "esm"],
     "pending": ["windows-x64-msvc-real-execution"]
@@ -77,7 +78,7 @@
     "minimum_runtime": "Node.js 18",
     "transport": "stdio JSON-RPC",
     "download": "https://voidednetwork.com/downloads/voided-mcp.mjs",
-    "sha256": "c149448fce0d18b277f6b2652547f1ab0ac882bab85f9b1a069afee3c420a088",
+    "sha256": "9bd1896067921717ab5e4573f733677bdcaeb3f20dff42cc6db594341249e5b8",
     "configuration_environment": "VOIDED_ROOT",
     "tools": ["voided_get_context", "voided_list_modules", "voided_search_knowledge", "voided_search_code", "voided_find_symbol", "voided_read_file"]
   },

@@ -85,10 +85,22 @@ for (const jsonFile of ["ai.json", "mcp.json"]) {
   }
 }
 
+const release = JSON.parse(readFileSync(join(root, "ai.json"), "utf8")).release;
+if (release.version !== "1.0.1" || release.status !== "released" || release.published !== true ||
+    !release.published_npm_packages?.includes("@voideddev/e2ee-client@1.0.1") ||
+    !release.published_npm_packages?.includes("@voideddev/enc-server@1.0.0")) {
+  failures.push("ai.json: published package status is stale");
+}
+for (const page of ["updates.html", "ai.html", "llms.txt", "llms-full.txt"]) {
+  if (/packages (?:are )?not published|publication (?:is still gated|remains intentionally held)/i.test(readFileSync(join(root, page), "utf8"))) {
+    failures.push(`${page}: stale prerelease status`);
+  }
+}
+
 const mcpPath = join(root, "downloads", "voided-mcp.mjs");
 const mcpBytes = readFileSync(mcpPath);
 const actualMcpHash = createHash("sha256").update(mcpBytes).digest("hex");
-const expectedMcpHash = "c149448fce0d18b277f6b2652547f1ab0ac882bab85f9b1a069afee3c420a088";
+const expectedMcpHash = "9bd1896067921717ab5e4573f733677bdcaeb3f20dff42cc6db594341249e5b8";
 if (actualMcpHash !== expectedMcpHash) failures.push(`voided-mcp.mjs: SHA-256 ${actualMcpHash} does not match descriptor`);
 for (const descriptor of ["mcp.html", "mcp.json", "ai.json", "downloads/README.txt"]) {
   if (!readFileSync(join(root, descriptor), "utf8").includes(expectedMcpHash)) failures.push(`${descriptor}: missing MCP checksum`);

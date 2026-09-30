@@ -23,7 +23,7 @@
         <h1>Local source context for AI.</h1>
         <p>The read-only Voided MCP server exposes architecture, modules, symbols, code, and knowledge files from a local checkout. It does not require keys, deck order, plaintext, or a Voided backend.</p>
         <div class="hero__actions"><a class="button button--signal" href="./downloads/voided-mcp.mjs" download>Download voided-mcp.mjs</a><a class="button" href="./mcp.json">Open MCP descriptor</a></div>
-        <p class="status-line"><span class="signal-dot" aria-hidden="true"></span> Source-ready direct download · npm registry publication pending</p>
+        <p class="status-line"><span class="signal-dot" aria-hidden="true"></span> Direct download · local source reference</p>
       </div>
     </section>
 
@@ -32,11 +32,11 @@
         <section class="utility-section" id="install" data-search-title="Install Voided MCP" data-search-summary="Download, verify, and configure the read-only local MCP server">
           <span class="eyebrow">Install</span>
           <h2>Install the single-file server.</h2>
-          <p>The current launch path is this versioned direct Voided artifact. It is not published to a package registry yet, so use the verified download below.</p>
+          <p>Download this standalone server and point it at an absolute path to your Voided source checkout.</p>
           <div class="code-window"><div class="code-window__bar"><span>terminal</span><button class="copy-button" type="button" data-copy="#mcp-install-code">Copy</button></div><pre><code id="mcp-install-code">curl -fsSLo voided-mcp.mjs https://voidednetwork.com/downloads/voided-mcp.mjs
 shasum -a 256 voided-mcp.mjs
 VOIDED_ROOT=/absolute/path/to/voided node /absolute/path/to/voided-mcp.mjs</code></pre></div>
-          <dl class="fact-list fact-list--compact"><div><dt>SHA-256</dt><dd><code>c149448fce0d18b277f6b2652547f1ab0ac882bab85f9b1a069afee3c420a088</code></dd></div><div><dt>Transport</dt><dd>stdio JSON-RPC</dd></div><div><dt>Server</dt><dd><code>voided-mcp</code> version <code>0.1.0</code></dd></div><div><dt>License</dt><dd><a class="text-link" href="./downloads/LICENSE.txt">MIT</a></dd></div></dl>
+          <dl class="fact-list fact-list--compact"><div><dt>SHA-256</dt><dd><code>9bd1896067921717ab5e4573f733677bdcaeb3f20dff42cc6db594341249e5b8</code></dd></div><div><dt>Transport</dt><dd>stdio JSON-RPC</dd></div><div><dt>Server</dt><dd><code>voided-mcp</code> version <code>0.1.0</code></dd></div><div><dt>License</dt><dd><a class="text-link" href="./downloads/LICENSE.txt">MIT</a></dd></div></dl>
         </section>
 
         <section class="utility-section" id="configure" data-search-title="Configure Voided MCP" data-search-summary="Generic MCP client configuration with VOIDED_ROOT">

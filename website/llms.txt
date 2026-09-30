@@ -2,7 +2,7 @@
 
 > Voided protects application data as one authenticated artifact across Rust, Node.js, and browser WASM. The default API is protect/open.
 
-Voided is at 1.0 release-candidate state. Package publication has not happened. macOS arm64, Linux x64, browser WASM, CommonJS, and ESM release gates passed. Real Windows x64 execution remains pending.
+Voided browser package 1.0.1 and Node.js package 1.0.0 are public on npm. The downloadable MCP is a separate local-source tool. Windows x64 native prebuild hashes and provenance are verified; independent Windows runtime execution remains pending.
 
 ## Read first
 
