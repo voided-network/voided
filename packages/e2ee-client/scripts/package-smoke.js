@@ -31,6 +31,7 @@ try {
     'pack',
     '--json',
     '--ignore-scripts',
+    '--dry-run=false',
     '--pack-destination',
     scratch,
   ]);
