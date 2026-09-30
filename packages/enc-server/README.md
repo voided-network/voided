@@ -49,9 +49,10 @@ usage, use `@voideddev/e2ee-client`.
 npm install @voideddev/enc-server
 ```
 
-The package ships verified native prebuilds for macOS Apple Silicon,
-Linux x64 GNU, and Windows x64 MSVC. Installation fails closed on other
-platforms rather than compiling unreviewed source during `npm install`.
+The package ships native prebuilds for macOS Apple Silicon, Linux x64 GNU,
+and Windows x64 MSVC. The loader verifies each artifact's hash and provenance
+before use. Unsupported platforms cannot load the native runtime; installation
+never compiles source code.
 
 The Linux x64 prebuild requires glibc 2.34 or newer. Consumers on another
 architecture, C library, or older Linux distribution should build the binding
@@ -377,9 +378,8 @@ Important runtime facts:
 
 - the package requires the native Node binding
 - native loading happens at runtime when the package is first used
-- the package prefers prebuilt binaries
-- local development builds live under `native/`
-- release prebuilds live under `prebuilds/`
+- the loader accepts only provenance-verified artifacts under `prebuilds/`
+- cached binaries under `native/` are not a runtime fallback
 
 For local development:
 

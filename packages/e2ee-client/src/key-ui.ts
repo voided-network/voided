@@ -200,8 +200,7 @@ export class VoidedKeyExport {
 
       await this.createModal(key, keyId);
       this.showModal();
-    } catch (error) {
-      console.error("Failed to export key:", error);
+    } catch {
       alert("Failed to export key. Please try again.");
     }
   }
@@ -408,17 +407,14 @@ export class VoidedKeyExport {
 
   private async copyKey(key: string): Promise<void> {
     try {
-      // log removed
       await navigator.clipboard.writeText(key);
 
-      // log removed
       if (this.options.onCopy) {
         this.options.onCopy();
       } else {
         alert("📋 Key copied to clipboard!");
       }
-    } catch (error) {
-      console.error("Failed to copy key:", error);
+    } catch {
       alert("❌ Failed to copy key to clipboard");
     }
   }
@@ -479,8 +475,7 @@ export class VoidedKeyExport {
       } else {
         renderQrFallback(qrContainer, "QR Code Unavailable");
       }
-    } catch (error) {
-      console.warn("Failed to generate QR code:", error);
+    } catch {
       renderQrFallback(qrContainer, "QR Code Error");
     }
   }
@@ -488,26 +483,22 @@ export class VoidedKeyExport {
   private async shareKey(key: string, keyId: number): Promise<void> {
     try {
       if (navigator.share) {
-        // log removed
         await navigator.share({
           title: "voideddev Encryption Key",
           text: `My encryption key (ID: ${keyId}): ${key}`,
           url: `data:text/plain;base64,${btoa(key)}`,
         });
 
-        // log removed
         if (this.options.onShare) {
           this.options.onShare();
         } else {
           alert("✅ Key shared successfully!");
         }
       } else {
-        // log removed
         // Fallback: copy to clipboard
         await this.copyKey(key);
       }
     } catch (error) {
-      console.error("Failed to share key:", error);
       if (
         error &&
         typeof error === "object" &&
@@ -515,11 +506,9 @@ export class VoidedKeyExport {
         error.name === "AbortError"
       ) {
         // User cancelled the share
-        // log removed
         alert("❌ Sharing was cancelled");
       } else {
         // Other error, fallback to clipboard
-        // log removed
         await this.copyKey(key);
       }
     }
@@ -754,7 +743,6 @@ export class VoidedKeyImport {
 
       this.hide();
     } catch (error) {
-      console.error("Failed to import key:", error);
       const errorMessage =
         error instanceof Error ? error.message : "Failed to import key";
 

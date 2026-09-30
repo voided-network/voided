@@ -4,8 +4,7 @@
  * Uses WASM (Rust) bindings in browsers. Node uses the TypeScript Web Crypto
  * implementation; browser fallback requires an explicit caller opt-in.
  *
- * This ensures the package works even without WASM,
- * while providing potential performance benefits when available.
+ * Artifact and Recovery Deck operations require WASM and fail closed without it.
  */
 
 import {
@@ -212,9 +211,6 @@ async function keyToCryptoKey(key: Uint8Array): Promise<CryptoKey> {
   );
 }
 
-// ============================================================================
-// ENCRYPTION FUNCTIONS
-// ============================================================================
 
 export interface EncryptionResult {
   data: string;
@@ -642,9 +638,6 @@ export async function deriveKeyPbkdf2(
   return getTsCrypto().deriveKeyPbkdf2(password, salt, iterations);
 }
 
-// ============================================================================
-// RECOVERY DECK
-// ============================================================================
 
 function recoveryDeckWasm<K extends keyof WasmModule>(
   method: K,
@@ -728,9 +721,6 @@ export async function rotateRecoveryDeck(
   return recoveryDeckWasm('rotate_recovery_deck')(rootWrapper, oldDeck);
 }
 
-// ============================================================================
-// HASHING FUNCTIONS
-// ============================================================================
 
 /**
  * Hash data.
@@ -854,9 +844,6 @@ export async function generateSafetyNumbers(
   return getTsHash().safetyNumbers(data, checkedGroupSize);
 }
 
-// ============================================================================
-// COMPRESSION FUNCTIONS
-// ============================================================================
 
 /**
  * Compress data.
@@ -958,9 +945,6 @@ export async function decompressBounded(
   return output;
 }
 
-// ============================================================================
-// FUSED SHELL / FULL-FLOW
-// ============================================================================
 
 function fusedWasmOnlyError(): Error {
   return new Error(
@@ -1065,9 +1049,6 @@ export async function repackArtifact(
   throw fusedWasmOnlyError();
 }
 
-// ============================================================================
-// UTILITY FUNCTIONS
-// ============================================================================
 
 /**
  * Generate random bytes.

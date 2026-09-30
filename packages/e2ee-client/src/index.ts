@@ -64,7 +64,6 @@ import {
 } from "./limits";
 import { inspectCanonicalBase64 } from "./base64-validation";
 
-// --- SAFE BASE64 HELPERS ---
 function base64Encode(bytes: Uint8Array): string {
   // Prefer Node's Buffer when available (tests), otherwise fallback to browser btoa
   try {
@@ -177,7 +176,8 @@ export interface E2EEConfig {
 
 export interface RotationOptions {
   force?: boolean; // Force rotate: delete old key, leave old data encrypted (unrecoverable) - DEFAULT: true
-  migrate?: boolean; // Whether to attempt migration (default: false, requires enc-seq library for full migration)
+  /** Keep the previous key available while the application migrates its data. */
+  migrate?: boolean;
   cutoffTime?: Date; // Time-based cutoff for migration (default: now)
 }
 
@@ -197,7 +197,6 @@ export interface E2EEStorage {
   getMigrationState(keyId: string): Promise<MigrationState | null>;
   setMigrationState(keyId: string, state: MigrationState): Promise<void>;
   removeMigrationState(keyId: string): Promise<void>;
-  // Enhanced storage for advanced features
   getKeyPair(
     keyId: string,
     type: "signing" | "agreement"
@@ -230,7 +229,6 @@ export interface EncryptedBlob {
     originalSize: number;
     compressedSize: number;
   };
-  // Enhanced with signature support
   signature?: string; // Required when signature mode is enabled
   // Chunking support
   chunks?: EncryptedChunk[]; // Array of encrypted chunks (for large data)
@@ -308,7 +306,6 @@ export interface KeyVerificationResult {
 
 /**
  * IndexedDB storage adapter for browser environments
- * Enhanced with support for key pairs and advanced features
  */
 export class IndexedDBStorage implements E2EEStorage {
   private dbName = "voideddev-e2ee";
@@ -429,7 +426,6 @@ export class IndexedDBStorage implements E2EEStorage {
       const request = transaction.objectStore(this.keysStoreName).put({ id: keyId, key });
       return this.awaitTransactionResult(transaction, request, () => undefined);
     } catch (error) {
-      //if (process.env.NODE_ENV !== 'test') console.warn('IndexedDB access failed');
       throw new Error("Failed to store key: IndexedDB not available");
     }
   }
@@ -441,7 +437,6 @@ export class IndexedDBStorage implements E2EEStorage {
       const request = transaction.objectStore(this.keysStoreName).delete(keyId);
       return this.awaitTransactionResult(transaction, request, () => undefined);
     } catch (error) {
-      //if (process.env.NODE_ENV !== 'test') console.warn('IndexedDB access failed');
       throw new Error("Failed to remove key: IndexedDB not available");
     }
   }
@@ -481,7 +476,6 @@ export class IndexedDBStorage implements E2EEStorage {
       const request = transaction.objectStore(this.migrationStoreName).put({ id: keyId, state });
       return this.awaitTransactionResult(transaction, request, () => undefined);
     } catch (error) {
-      //if (process.env.NODE_ENV !== 'test') console.warn('IndexedDB access failed');
       throw new Error(
         "Failed to store migration state: IndexedDB not available"
       );
@@ -498,7 +492,6 @@ export class IndexedDBStorage implements E2EEStorage {
       const request = transaction.objectStore(this.migrationStoreName).delete(keyId);
       return this.awaitTransactionResult(transaction, request, () => undefined);
     } catch (error) {
-      //if (process.env.NODE_ENV !== 'test') console.warn('IndexedDB access failed');
       throw new Error(
         "Failed to remove migration state: IndexedDB not available"
       );
@@ -542,7 +535,6 @@ export class IndexedDBStorage implements E2EEStorage {
       const request = transaction.objectStore(this.keyPairsStoreName).put({ id: `${keyId}_${type}`, keyPair });
       return this.awaitTransactionResult(transaction, request, () => undefined);
     } catch (error) {
-      //if (process.env.NODE_ENV !== 'test') console.warn('IndexedDB access failed');
       throw new Error("Failed to store key pair: IndexedDB not available");
     }
   }
@@ -560,7 +552,6 @@ export class IndexedDBStorage implements E2EEStorage {
       const request = transaction.objectStore(this.keyPairsStoreName).delete(`${keyId}_${type}`);
       return this.awaitTransactionResult(transaction, request, () => undefined);
     } catch (error) {
-      //console.warn('IndexedDB access failed');
       throw new Error("Failed to remove key pair: IndexedDB not available");
     }
   }
@@ -568,7 +559,6 @@ export class IndexedDBStorage implements E2EEStorage {
 
 /**
  * Main E2EE Client for browser-based end-to-end encryption
- * Enhanced with advanced cryptographic features
  */
 export class VoidedE2EEClient {
   private static readonly PBKDF2_MIN_ITERATIONS = 600_000;
@@ -1977,7 +1967,6 @@ export async function rotateKey(): Promise<string> {
   return getDefaultClient().rotateKey();
 }
 
-// Enhanced convenience functions for advanced features
 export async function deriveKeyFromPassword(
   options: KeyDerivationOptions
 ): Promise<PasswordKeyDerivationRecord> {

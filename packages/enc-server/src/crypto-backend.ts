@@ -30,9 +30,6 @@ function boundedInteger(name: string, value: number, minimum: number, maximum: n
   return value;
 }
 
-// ============================================================================
-// ENCRYPTION
-// ============================================================================
 
 export interface EncryptResult {
   encrypted: Buffer;
@@ -69,9 +66,6 @@ export function decrypt(encrypted: EncryptResult, key: Buffer): Buffer {
   return native().decrypt(input, key);
 }
 
-// ============================================================================
-// KEY DERIVATION
-// ============================================================================
 
 export function deriveKeyHkdf(
   ikm: Buffer,
@@ -93,9 +87,6 @@ export function deriveKeyPbkdf2(
   return native().deriveKeyPbkdf2(password, salt, iterations);
 }
 
-// ============================================================================
-// RECOVERY DECK
-// ============================================================================
 
 /** Generate a fresh CSPRNG-shuffled standard 52-card recovery deck. */
 export function generateRecoveryDeck(): string[] {
@@ -146,9 +137,6 @@ export function rotateRecoveryDeck(
   return native().rotateRecoveryDeck(rootWrapper, oldDeck);
 }
 
-// ============================================================================
-// HASHING
-// ============================================================================
 
 export function hash(data: Buffer, algorithm: 'sha256' | 'sha512' = 'sha256'): string {
   return native().hash(data, algorithm);
@@ -218,9 +206,6 @@ export function safetyNumbers(data: Buffer, groupSize: number = 5): string {
   return native().generateSafetyNumbers(data, groupSize);
 }
 
-// ============================================================================
-// COMPRESSION
-// ============================================================================
 
 export interface CompressionResult {
   compressed: Buffer;
@@ -278,9 +263,6 @@ export function decompress(data: Buffer, algorithm: 'gzip' | 'brotli'): Buffer {
   return native().decompress(data, algorithm);
 }
 
-// ============================================================================
-// FUSED SHELL / FULL-FLOW
-// ============================================================================
 
 export function fuse(
   data: Buffer,
@@ -359,9 +341,6 @@ export function repackArtifact(
   );
 }
 
-// ============================================================================
-// UTILITY
-// ============================================================================
 
 export function randomBytes(length: number): Buffer {
   boundedInteger('length', length, 1, 16 * 1024 * 1024);

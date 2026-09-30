@@ -91,9 +91,6 @@ class X25519AgreementRejectedError extends CryptoError {
 export class CryptoService {
   private readonly textEncoder = new TextEncoder();
 
-  // ============================================================================
-  // METHODS THAT WORK WITH CryptoKey (for VoidedE2EEClient)
-  // ============================================================================
 
   /**
    * Generate a new AES-256-GCM encryption key (CryptoKey)
@@ -984,9 +981,6 @@ export class CryptoService {
     bytes.fill(0);
   }
 
-  // ============================================================================
-  // Helper methods
-  // ============================================================================
   
   private arrayBufferToBase64(buffer: ArrayBuffer): string {
     const bytes = new Uint8Array(buffer);

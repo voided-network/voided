@@ -354,7 +354,6 @@ export async function analyzeCompression(data: string | Uint8Array): Promise<{
             gzipSize = gzipResult.length;
             gzipRatio = gzipSize / originalSize;
         } catch (error) {
-            //if (process.env.NODE_ENV !== 'test') console.warn('Gzip analysis failed:', error);
         }
     }
 

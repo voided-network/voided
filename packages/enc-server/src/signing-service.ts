@@ -8,9 +8,9 @@ export interface GeneratedKeyPair {
 }
 
 export const RECOMMENDED_ALGORITHMS = {
-    modern: 'ed25519' as const, // Best performance + security
-    compatible: 'ecdsa-p256' as const, // Widest support
-    legacy: 'rsa-pss-2048' as const // Enterprise/compliance
+    modern: 'ed25519' as const,
+    compatible: 'ecdsa-p256' as const,
+    legacy: 'rsa-pss-2048' as const
 };
 
 function assertSigningAlgorithm(value: unknown): asserts value is SigningAlgorithm {

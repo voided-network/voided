@@ -2,12 +2,9 @@
  * @voideddev/enc-server
  * 
  * Server-side encryption library powered by Rust.
- * All cryptographic operations use the native Rust module.
+ * Data-protection primitives use the native Rust module; signing uses Node.js crypto.
  */
 
-// ============================================================================
-// CORE CRYPTO - All from Rust native module
-// ============================================================================
 
 export {
   // Encryption
@@ -74,14 +71,11 @@ export {
 // Also export as namespace for convenience
 export * as rust from "./crypto-backend.js";
 
-// ============================================================================
-// HIGHER-LEVEL FEATURES (TS orchestration using Rust primitives)
-// ============================================================================
 
 // Key management
 export { KeyManager, type StoredKey } from "./key-manager.js";
 
-// Signing (uses Node.js crypto - not yet migrated to Rust)
+// Signing uses Node.js crypto rather than the native binding.
 export { 
   SigningService, 
   signingService,

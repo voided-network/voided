@@ -9,9 +9,7 @@ export interface StoredKey {
 /**
  * Lightweight in-memory key manager.
  *
- * NOTE: In production you would back this by a database or KMS. The goal here
- * is to make key rotation workflows _easy to test_ while leaving persistence up
- * to the implementer.
+ * Keys remain in memory. Applications own durable custody and recovery.
  */
 export class KeyManager {
     private keys = new Map<string, StoredKey>();
@@ -80,4 +78,4 @@ export class KeyManager {
     private generateKeyId(): string {
         return hexEncode(randomBytes(8));
     }
-} 
+}

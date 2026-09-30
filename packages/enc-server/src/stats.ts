@@ -27,8 +27,8 @@ export interface Metric {
 
 /**
  * Simple singleton stats collector so library consumers (or tests) can push
- * metrics and later produce human-readable summaries. No external I/O unless
- * you explicitly call `dumpToJson()`.
+ * metrics and later produce human-readable summaries. Console and file output
+ * occur only through explicit `printSummary()` and `dumpToJson()` calls.
  */
 export class StatsTracker {
   private static _instance: StatsTracker | undefined;
@@ -102,12 +102,12 @@ export class StatsTracker {
       duration: m.durationMs + "ms",
     }));
 
-    // Suppress huge tables in CI by grouping if >50 rows
+    // Bound console table output to 50 records.
     if (rows.length <= 50) console.table(rows);
 
     const s = this.summary;
     console.log("\n─── Aggregated Stats ─────────────────────────");
-    console.log(` Test cases              : ${s.count}`);
+    console.log(` Records                 : ${s.count}`);
     console.log(
       ` Compression ratio (avg) : ${(s.avgCompressionRatio * 100).toFixed(
         2

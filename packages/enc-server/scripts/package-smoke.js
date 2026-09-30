@@ -73,6 +73,21 @@ try {
   const packedFiles = new Set(
     report[0].files.map((entry) => entry.path.replaceAll('\\', '/')),
   );
+  const allowedFiles = new Set([
+    'LICENSE',
+    'README.md',
+    'THIRD_PARTY_NOTICES',
+    'package.json',
+    'prebuilds/manifest.json',
+    'scripts/postinstall-verify.js',
+    ...targetsToSmoke.map((target) => `prebuilds/${target}/voided_node.node`),
+  ]);
+  const allowedDist = /^dist\/(?:index|native\/index)\.(?:js|cjs|d\.ts|d\.cts)$/;
+  for (const path of packedFiles) {
+    if (!allowedFiles.has(path) && !allowedDist.test(path)) {
+      throw new Error(`[package-smoke] unexpected published file: ${path}`);
+    }
+  }
   const packedRoot = join(scratch, 'package');
   for (const path of [
     'LICENSE',

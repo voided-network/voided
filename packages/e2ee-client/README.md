@@ -280,13 +280,13 @@ Omitted, duplicated, reordered, cross-message, or truncated chunks fail before
 plaintext is returned. The browser helper bounds aggregate decoding to 100 MiB,
 128 chunks, 8 MiB per chunk, and four concurrent cryptographic operations.
 
-### Prelaunch format break
+### Authenticated envelope compatibility
 
 Legacy `1.0` browser blobs are rejected. They did not authenticate the
 metadata and chunk framing above, so silently opening them would reintroduce
 reordering, truncation, and encoding-substitution attacks. This is an
-intentional prelaunch format break; migrate trusted data before updating rather
-than enabling a permissive compatibility fallback.
+intentional security boundary; migrate trusted data before updating rather than
+enabling a permissive compatibility fallback.
 
 ### Signatures
 
@@ -471,9 +471,7 @@ Practical meaning:
 - if your browser app depends on `fuse`, `protect`, `inspectArtifact`, or
   `repackArtifact`, treat WASM as required today
 
-If you are wondering whether this is a migration blocker, the practical answer
-is usually no: for the current browser fused path, WASM is the intended runtime
-rather than an optional acceleration layer.
+WASM is required for the browser artifact flow, not an optional acceleration layer.
 
 Useful exports:
 
@@ -623,8 +621,7 @@ That gives you:
 If you need custom storage behavior, provide your own `storage` implementation
 through the client config.
 
-For production custody, prefer Slipner Auth's OPRF-backed key path where it is
-available, or provide an external `E2EEStorage` implementation with the
+For production custody, provide an external `E2EEStorage` implementation with the
 durability and recovery guarantees your application requires. Keep an explicit
 export/import or recovery path as appropriate for the product. Browser storage
 can be cleared, isolated, or made unavailable by browser and origin policy.
@@ -671,8 +668,7 @@ encoding and derivation constants.
 The browser package also ships one framework-free deck component. It starts
 with a securely generated permutation, supports direct card movement, and can
 replace the entire order through a fresh CSPRNG shuffle. It does not persist
-decks, know about Slipner Auth, or choose where an opaque root wrapper is
-stored.
+decks or choose where an opaque root wrapper is stored.
 
 ```ts
 import {

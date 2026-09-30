@@ -56,6 +56,20 @@ try {
   const packedFiles = new Set(
     report[0].files.map((entry) => entry.path.replaceAll('\\', '/')),
   );
+  const allowedFiles = new Set([
+    ...expected,
+    'README.md',
+    'package.json',
+    'wasm/package.json',
+    'wasm/voided_wasm.d.ts',
+    'wasm/voided_wasm_bg.wasm.d.ts',
+  ]);
+  const allowedDist = /^dist\/(?:(?:index|transport-crypto|crypto-backend|wasm\/loader)\.(?:js|cjs|d\.ts|d\.cts)|crypto-backend-[A-Za-z0-9_-]+\.d\.(?:ts|cts))$/;
+  for (const path of packedFiles) {
+    if (!allowedFiles.has(path) && !allowedDist.test(path)) {
+      throw new Error(`[package-smoke] unexpected published file: ${path}`);
+    }
+  }
   for (const path of expected) {
     if (!packedFiles.has(path)) {
       throw new Error(`[package-smoke] packed tarball is missing ${path}`);
