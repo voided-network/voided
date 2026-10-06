@@ -6,7 +6,9 @@ mod aes_gcm;
 mod key;
 mod xchacha20;
 
-pub use aes_gcm::{decrypt_aes_gcm, encrypt_aes_gcm};
+pub use aes_gcm::{
+    decrypt_aes_gcm, decrypt_aes_gcm_sealed, encrypt_aes_gcm, encrypt_aes_gcm_with_nonce_aad,
+};
 pub use key::{
     derive_key_from_shared_secret, derive_key_hkdf, derive_key_hkdf_raw, derive_key_pbkdf2,
     generate_key, generate_x25519_key_pair, validate_pbkdf2_parameters, x25519_shared_secret, Key,
