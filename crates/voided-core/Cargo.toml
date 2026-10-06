@@ -76,6 +76,11 @@ wasm-bindgen = { version = "0.2", optional = true }
 # Error handling
 thiserror = "1.0"
 
+# RustCrypto checks CPU support at runtime and retains its software fallback.
+# Other targets (including WASM) retain their existing dependency features.
+[target.'cfg(target_arch = "aarch64")'.dependencies]
+sha2 = { version = "0.10", features = ["asm"] }
+
 [dev-dependencies]
 criterion = "0.5"
 proptest = "1.4"
