@@ -13,6 +13,7 @@ import { fileURLToPath } from 'node:url';
 
 const workspaceRoot = join(dirname(fileURLToPath(import.meta.url)), '..');
 const cratesRoot = join(workspaceRoot, 'crates');
+const coreOnly = process.argv.includes('--core-only');
 
 function run(command, args, options = {}) {
   const result = spawnSync(command, args, {
@@ -57,7 +58,7 @@ try {
     throw new Error('[licenses] generated Rust notices are incomplete');
   }
 
-  const npmPackages = [
+  const npmPackages = coreOnly ? [] : [
     { name: 'qrcode', licenseFile: 'license' },
     { name: 'fflate', licenseFile: 'LICENSE' },
   ];
@@ -95,19 +96,22 @@ try {
     `${header}BUNDLED JAVASCRIPT DEPENDENCIES\n\n${npmNotices}\n\n` +
     `RUST/WASM DEPENDENCIES\n\n${rustNotices}\n`;
 
-  writeFileSync(
-    join(workspaceRoot, 'packages', 'e2ee-client', 'THIRD_PARTY_NOTICES'),
-    browserDocument,
-  );
-  writeFileSync(
-    join(workspaceRoot, 'packages', 'enc-server', 'THIRD_PARTY_NOTICES'),
-    rustDocument,
-  );
+  if (!coreOnly) {
+    writeFileSync(
+      join(workspaceRoot, 'packages', 'e2ee-client', 'THIRD_PARTY_NOTICES'),
+      browserDocument,
+    );
+    writeFileSync(
+      join(workspaceRoot, 'packages', 'enc-server', 'THIRD_PARTY_NOTICES'),
+      rustDocument,
+    );
+  }
   writeFileSync(
     join(cratesRoot, 'voided-core', 'THIRD_PARTY_NOTICES'),
     rustDocument,
   );
-  console.log('[licenses] generated npm, native, WASM, and core notices');
+  console.log(coreOnly ? '[licenses] generated core notices only' :
+    '[licenses] generated npm, native, WASM, and core notices');
 } finally {
   rmSync(scratch, { recursive: true, force: true });
 }
