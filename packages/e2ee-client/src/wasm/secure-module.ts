@@ -202,6 +202,15 @@ export function secureWasmModule(raw: WasmModule): WasmModule {
     );
   };
 
+  const inspectRotationArtifact = (artifact: Uint8Array): ProtectedArtifactInfo => {
+    let inputLength = 0;
+    return callAfterPreflight(
+      () => { inputLength = assertBytes(artifact, 'rotation artifact input', WASM_ARTIFACT_MAX_BYTES); },
+      () => raw.inspectRotationArtifact(artifact),
+      (info) => validateArtifactInfo(info, inputLength),
+    );
+  };
+
   return {
     version: () =>
       callAfterPreflight(
@@ -865,6 +874,16 @@ export function secureWasmModule(raw: WasmModule): WasmModule {
           ),
       ),
     inspectArtifact,
+    inspectRotationArtifact,
+    openRotationArtifact: (artifact, key) => callAfterPreflight(
+      () => {
+        assertBytes(artifact, 'rotation artifact input', WASM_ARTIFACT_MAX_BYTES);
+        assertExactBytes(key, 'rotation artifact key', 32);
+        inspectRotationArtifact(artifact);
+      },
+      () => raw.openRotationArtifact(artifact, key),
+      (value) => validateBytesResult(value, 'opened rotation artifact plaintext', WASM_PLAINTEXT_MAX_BYTES),
+    ),
     repackArtifact: (
       artifact,
       key,

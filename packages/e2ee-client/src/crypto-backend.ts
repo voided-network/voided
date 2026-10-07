@@ -1015,6 +1015,17 @@ export async function open(artifact: Uint8Array, key: Uint8Array): Promise<Uint8
   throw fusedWasmOnlyError();
 }
 
+/** Explicit authenticated legacy reader; normal open() remains current-format only. */
+export async function openRotationArtifact(artifact: Uint8Array, key: Uint8Array): Promise<Uint8Array> {
+  if (await useWasmBackend()) return _wasm!.openRotationArtifact(artifact, key);
+  throw fusedWasmOnlyError();
+}
+
+export async function inspectRotationArtifact(artifact: Uint8Array): Promise<ProtectedArtifactInfo> {
+  if (await useWasmBackend()) return _wasm!.inspectRotationArtifact(artifact);
+  throw fusedWasmOnlyError();
+}
+
 export async function inspectArtifact(artifact: Uint8Array): Promise<ProtectedArtifactInfo> {
   if (await useWasmBackend()) {
     return _wasm!.inspectArtifact(artifact);

@@ -141,6 +141,9 @@ export interface WasmModule {
     shellChunkSize?: number,
   ): ProtectResult;
   open(artifact: Uint8Array, key: Uint8Array): Uint8Array;
+  /** Explicit authenticated reader for existing artifacts during format migration. */
+  openRotationArtifact(artifact: Uint8Array, key: Uint8Array): Uint8Array;
+  inspectRotationArtifact(artifact: Uint8Array): ProtectedArtifactInfo;
   inspectArtifact(artifact: Uint8Array): ProtectedArtifactInfo;
   repackArtifact(
     artifact: Uint8Array,
@@ -446,6 +449,8 @@ function normalizeWasmModule(mod: RawWasmModule): WasmModule {
     ) => any
   >(mod, ["protect"]);
   const openFn = getExportFn<(artifact: Uint8Array, key: Uint8Array) => Uint8Array>(mod, ["open"]);
+  const openRotationArtifactFn = getExportFn<(artifact: Uint8Array, key: Uint8Array) => Uint8Array>(mod, ["openRotationArtifact", "open_rotation_artifact"]);
+  const inspectRotationArtifactFn = getExportFn<(artifact: Uint8Array) => any>(mod, ["inspectRotationArtifact", "inspect_rotation_artifact"]);
   const inspectArtifactFn = getExportFn<(artifact: Uint8Array) => any>(mod, ["inspectArtifact", "inspect_artifact"]);
   const repackArtifactFn = getExportFn<
     (
@@ -574,6 +579,8 @@ function normalizeWasmModule(mod: RawWasmModule): WasmModule {
         ),
       ),
     open: (artifact, key) => openFn(artifact, key),
+    openRotationArtifact: (artifact, key) => openRotationArtifactFn(artifact, key),
+    inspectRotationArtifact: (artifact) => normalizeProtectedArtifactInfo(inspectRotationArtifactFn(artifact)),
     inspectArtifact: (artifact) => normalizeProtectedArtifactInfo(inspectArtifactFn(artifact)),
     repackArtifact: (
       artifact,
