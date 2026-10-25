@@ -11,11 +11,13 @@ import {
   isWasmReady,
   getWasm,
   initWasm,
-  type RecoveryDeckSetup,
+  type RecoveryDeckSetup as LoaderRecoveryDeckSetup,
+  type WasmLoaderOptions as LoaderWasmLoaderOptions,
   type WasmModule,
 } from './wasm/loader';
 export { configureWasmLoader } from './wasm/loader';
-export type { RecoveryDeckSetup, WasmLoaderOptions } from './wasm/loader';
+export type RecoveryDeckSetup = LoaderRecoveryDeckSetup;
+export type WasmLoaderOptions = LoaderWasmLoaderOptions;
 import { CryptoService, HashService } from './crypto-service';
 import * as tsCompression from './compression';
 import { inspectCanonicalBase64 } from './base64-validation';
