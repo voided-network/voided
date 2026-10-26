@@ -43,6 +43,28 @@ function boundedBytes(value: Uint8Array, label: string, minimum = 0): Uint8Array
   return value;
 }
 
+const BYTE_VIEW_PROTOTYPE = Object.getPrototypeOf(Uint8Array.prototype);
+const BYTE_VIEW_BUFFER = Object.getOwnPropertyDescriptor(BYTE_VIEW_PROTOTYPE, 'buffer')?.get;
+const BYTE_VIEW_OFFSET = Object.getOwnPropertyDescriptor(BYTE_VIEW_PROTOTYPE, 'byteOffset')?.get;
+const BYTE_VIEW_LENGTH = Object.getOwnPropertyDescriptor(BYTE_VIEW_PROTOTYPE, 'byteLength')?.get;
+const ARRAY_BUFFER_LENGTH = Object.getOwnPropertyDescriptor(ArrayBuffer.prototype, 'byteLength')?.get;
+
+// Preserve the exact validated view without copying caller-owned key material.
+function browserBytes(value: Uint8Array): Uint8Array<ArrayBuffer> {
+  try {
+    if (!BYTE_VIEW_BUFFER || !BYTE_VIEW_OFFSET || !BYTE_VIEW_LENGTH || !ARRAY_BUFFER_LENGTH) {
+      throw new Error('Byte-view intrinsics unavailable');
+    }
+    const buffer: ArrayBuffer = Reflect.apply(BYTE_VIEW_BUFFER, value, []);
+    const offset: number = Reflect.apply(BYTE_VIEW_OFFSET, value, []);
+    const length: number = Reflect.apply(BYTE_VIEW_LENGTH, value, []);
+    Reflect.apply(ARRAY_BUFFER_LENGTH, buffer, []);
+    return new Uint8Array(buffer, offset, length);
+  } catch {
+    throw new Error('Voided transport crypto requires non-shared ArrayBuffer-backed bytes');
+  }
+}
+
 function aesUsages(usages: readonly KeyUsage[]): KeyUsage[] {
   if (usages.length === 0 || usages.some((usage) => usage !== 'encrypt' && usage !== 'decrypt')) {
     throw new Error('Voided transport AES-GCM usages must contain encrypt and/or decrypt');
@@ -86,7 +108,7 @@ export async function deriveTransportX25519SharedSecret(
   peerPublicKey: Uint8Array,
 ): Promise<Uint8Array> {
   exactBytes(peerPublicKey, 'X25519 peer public key', X25519_KEY_BYTES);
-  const imported = await browserCrypto().subtle.importKey('raw', peerPublicKey, 'X25519', false, []);
+  const imported = await browserCrypto().subtle.importKey('raw', browserBytes(peerPublicKey), 'X25519', false, []);
   const secret = new Uint8Array(await browserCrypto().subtle.deriveBits(
     { name: 'X25519', public: imported },
     privateKey,
@@ -128,7 +150,7 @@ export async function generateTransportEd25519KeyPair(): Promise<VoidedTransport
 
 export async function signTransportEd25519(data: Uint8Array, privateKey: CryptoKey): Promise<Uint8Array> {
   boundedBytes(data, 'Ed25519 message');
-  const signature = new Uint8Array(await browserCrypto().subtle.sign('Ed25519', privateKey, data));
+  const signature = new Uint8Array(await browserCrypto().subtle.sign('Ed25519', privateKey, browserBytes(data)));
   return exactBytes(signature, 'Ed25519 signature', ED25519_SIGNATURE_BYTES);
 }
 
@@ -140,8 +162,8 @@ export async function verifyTransportEd25519(
   boundedBytes(data, 'Ed25519 message');
   exactBytes(signature, 'Ed25519 signature', ED25519_SIGNATURE_BYTES);
   exactBytes(publicKey, 'Ed25519 public key', ED25519_PUBLIC_KEY_BYTES);
-  const imported = await browserCrypto().subtle.importKey('raw', publicKey, 'Ed25519', false, ['verify']);
-  return browserCrypto().subtle.verify('Ed25519', imported, signature, data);
+  const imported = await browserCrypto().subtle.importKey('raw', browserBytes(publicKey), 'Ed25519', false, ['verify']);
+  return browserCrypto().subtle.verify('Ed25519', imported, browserBytes(signature), browserBytes(data));
 }
 
 export async function deriveTransportAesGcmKey(
@@ -160,7 +182,7 @@ export async function importTransportHkdfKey(
   usages: readonly KeyUsage[] = ['deriveBits', 'deriveKey'],
 ): Promise<CryptoKey> {
   boundedBytes(inputKeyMaterial, 'HKDF input key material', 1);
-  return browserCrypto().subtle.importKey('raw', inputKeyMaterial, 'HKDF', false, hkdfUsages(usages));
+  return browserCrypto().subtle.importKey('raw', browserBytes(inputKeyMaterial), 'HKDF', false, hkdfUsages(usages));
 }
 
 export async function deriveTransportAesGcmKeyFromHkdfKey(
@@ -173,7 +195,7 @@ export async function deriveTransportAesGcmKeyFromHkdfKey(
   boundedBytes(salt, 'HKDF salt');
   boundedBytes(info, 'HKDF info');
   return browserCrypto().subtle.deriveKey(
-    { name: 'HKDF', hash: 'SHA-256', salt, info },
+    { name: 'HKDF', hash: 'SHA-256', salt: browserBytes(salt), info: browserBytes(info) },
     inputKey,
     { name: 'AES-GCM', length: AES_GCM_KEY_BITS },
     extractable,
@@ -201,7 +223,7 @@ export async function deriveTransportHkdfBytesFromKey(
   boundedBytes(salt, 'HKDF salt');
   boundedBytes(info, 'HKDF info');
   return new Uint8Array(await browserCrypto().subtle.deriveBits(
-    { name: 'HKDF', hash: 'SHA-256', salt, info },
+    { name: 'HKDF', hash: 'SHA-256', salt: browserBytes(salt), info: browserBytes(info) },
     inputKey,
     checkedLength * 8,
   ));
@@ -209,7 +231,7 @@ export async function deriveTransportHkdfBytesFromKey(
 
 export async function hashTransportSha256(data: Uint8Array): Promise<Uint8Array> {
   boundedBytes(data, 'SHA-256 input');
-  return new Uint8Array(await browserCrypto().subtle.digest('SHA-256', data));
+  return new Uint8Array(await browserCrypto().subtle.digest('SHA-256', browserBytes(data)));
 }
 
 export async function generateTransportAesGcmKey(
@@ -231,7 +253,7 @@ export async function importTransportAesGcmKey(
   exactBytes(rawKey, 'AES-GCM key', AES_GCM_KEY_BITS / 8);
   return browserCrypto().subtle.importKey(
     'raw',
-    rawKey,
+    browserBytes(rawKey),
     { name: 'AES-GCM', length: AES_GCM_KEY_BITS },
     extractable,
     aesUsages(usages),
@@ -254,7 +276,7 @@ export async function createTransportP256EnvelopeKey(
   boundedBytes(info, 'P-256 envelope info');
   const peerPublicKey = await browserCrypto().subtle.importKey(
     'spki',
-    peerPublicKeySpki,
+    browserBytes(peerPublicKeySpki),
     { name: 'ECDH', namedCurve: 'P-256' },
     false,
     [],
@@ -291,9 +313,9 @@ export async function sealTransportAesGcm(
   boundedBytes(plaintext, 'AES-GCM plaintext');
   exactBytes(nonce, 'AES-GCM nonce', AES_GCM_NONCE_BYTES);
   if (aad) boundedBytes(aad, 'AES-GCM additional data');
-  const algorithm: AesGcmParams = { name: 'AES-GCM', iv: nonce };
-  if (aad) algorithm.additionalData = aad;
-  const ciphertext = new Uint8Array(await browserCrypto().subtle.encrypt(algorithm, key, plaintext));
+  const algorithm: AesGcmParams = { name: 'AES-GCM', iv: browserBytes(nonce) };
+  if (aad) algorithm.additionalData = browserBytes(aad);
+  const ciphertext = new Uint8Array(await browserCrypto().subtle.encrypt(algorithm, key, browserBytes(plaintext)));
   return { ciphertext, nonce: nonce.slice() };
 }
 
@@ -306,9 +328,9 @@ export async function openTransportAesGcm(
   boundedBytes(ciphertext, 'AES-GCM ciphertext', 16);
   exactBytes(nonce, 'AES-GCM nonce', AES_GCM_NONCE_BYTES);
   if (aad) boundedBytes(aad, 'AES-GCM additional data');
-  const algorithm: AesGcmParams = { name: 'AES-GCM', iv: nonce };
-  if (aad) algorithm.additionalData = aad;
-  return new Uint8Array(await browserCrypto().subtle.decrypt(algorithm, key, ciphertext));
+  const algorithm: AesGcmParams = { name: 'AES-GCM', iv: browserBytes(nonce) };
+  if (aad) algorithm.additionalData = browserBytes(aad);
+  return new Uint8Array(await browserCrypto().subtle.decrypt(algorithm, key, browserBytes(ciphertext)));
 }
 
 export async function exportTransportPrivateKeyPkcs8(privateKey: CryptoKey): Promise<Uint8Array> {
@@ -317,7 +339,7 @@ export async function exportTransportPrivateKeyPkcs8(privateKey: CryptoKey): Pro
 
 export async function importTransportEd25519PublicKey(publicKey: Uint8Array): Promise<CryptoKey> {
   exactBytes(publicKey, 'Ed25519 public key', ED25519_PUBLIC_KEY_BYTES);
-  return browserCrypto().subtle.importKey('raw', publicKey, 'Ed25519', true, ['verify']);
+  return browserCrypto().subtle.importKey('raw', browserBytes(publicKey), 'Ed25519', true, ['verify']);
 }
 
 export async function importTransportEd25519PrivateKey(
@@ -325,12 +347,12 @@ export async function importTransportEd25519PrivateKey(
   extractable: boolean,
 ): Promise<CryptoKey> {
   boundedBytes(privateKeyPkcs8, 'Ed25519 PKCS#8 private key', 1);
-  return browserCrypto().subtle.importKey('pkcs8', privateKeyPkcs8, 'Ed25519', extractable, ['sign']);
+  return browserCrypto().subtle.importKey('pkcs8', browserBytes(privateKeyPkcs8), 'Ed25519', extractable, ['sign']);
 }
 
 export async function importTransportX25519PublicKey(publicKey: Uint8Array): Promise<CryptoKey> {
   exactBytes(publicKey, 'X25519 public key', X25519_KEY_BYTES);
-  return browserCrypto().subtle.importKey('raw', publicKey, 'X25519', true, []);
+  return browserCrypto().subtle.importKey('raw', browserBytes(publicKey), 'X25519', true, []);
 }
 
 export async function importTransportX25519PrivateKey(
@@ -338,5 +360,5 @@ export async function importTransportX25519PrivateKey(
   extractable: boolean,
 ): Promise<CryptoKey> {
   boundedBytes(privateKeyPkcs8, 'X25519 PKCS#8 private key', 1);
-  return browserCrypto().subtle.importKey('pkcs8', privateKeyPkcs8, 'X25519', extractable, ['deriveBits']);
+  return browserCrypto().subtle.importKey('pkcs8', browserBytes(privateKeyPkcs8), 'X25519', extractable, ['deriveBits']);
 }

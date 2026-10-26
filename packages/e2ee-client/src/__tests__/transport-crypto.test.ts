@@ -161,6 +161,47 @@ describe('Voided transport crypto boundary', () => {
     }
   });
 
+  test('preserves sliced byte views without copying or invoking caller accessors', async () => {
+    const expected = Uint8Array.from({ length: 32 }, (_, index) => index + 1);
+    const backing = new Uint8Array(64).fill(0xee);
+    backing.set(expected, 16);
+    const view = backing.subarray(16, 48);
+    for (const name of ['buffer', 'byteOffset', 'byteLength']) {
+      Object.defineProperty(view, name, { get() { throw new Error('Caller accessor executed'); } });
+    }
+    const imported = jest.spyOn(crypto.subtle, 'importKey');
+    try {
+      const key = await importTransportAesGcmKey(view, true);
+      const argument = imported.mock.calls[0][1];
+      expect(argument).toBeInstanceOf(Uint8Array);
+      if (!(argument instanceof Uint8Array)) throw new Error('Expected a checked byte view');
+      expect(argument.buffer).toBe(backing.buffer);
+      expect(argument.byteOffset).toBe(16);
+      expect(argument.byteLength).toBe(32);
+      expect(await exportTransportAesGcmKey(key)).toEqual(expected);
+      expect(await hashTransportSha256(view)).toEqual(await hashTransportSha256(expected));
+      expect(backing.subarray(0, 16).every(byte => byte === 0xee)).toBe(true);
+      expect(backing.subarray(48).every(byte => byte === 0xee)).toBe(true);
+    } finally {
+      imported.mockRestore();
+    }
+  });
+
+  test('rejects shared byte storage before native key import or hashing', async () => {
+    const shared = new Uint8Array(new SharedArrayBuffer(32));
+    const imported = jest.spyOn(crypto.subtle, 'importKey');
+    const digest = jest.spyOn(crypto.subtle, 'digest');
+    try {
+      await expect(importTransportHkdfKey(shared)).rejects.toThrow('non-shared ArrayBuffer-backed bytes');
+      await expect(hashTransportSha256(shared)).rejects.toThrow('non-shared ArrayBuffer-backed bytes');
+      expect(imported).not.toHaveBeenCalled();
+      expect(digest).not.toHaveBeenCalled();
+    } finally {
+      imported.mockRestore();
+      digest.mockRestore();
+    }
+  });
+
   test('signs and verifies Ed25519 without exposing primitives to callers', async () => {
     const signer = await generateTransportEd25519KeyPair();
     const message = new TextEncoder().encode('tube handshake transcript');
