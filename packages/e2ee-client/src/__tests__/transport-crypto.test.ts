@@ -109,7 +109,7 @@ describe('Voided transport crypto boundary', () => {
     const envelope = await createTransportP256EnvelopeKey(receiverSpki, salt, info, ['encrypt']);
     const ephemeralPublic = await crypto.subtle.importKey(
       'spki',
-      envelope.ephemeralPublicKeySpki,
+      new Uint8Array(envelope.ephemeralPublicKeySpki).buffer,
       { name: 'ECDH', namedCurve: 'P-256' },
       false,
       [],
