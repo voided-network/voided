@@ -129,6 +129,38 @@ describe('Voided transport crypto boundary', () => {
     receiverSecret.fill(0);
   });
 
+  test('keeps P-256 envelope private and wrapping keys non-exportable', async () => {
+    const receiver = await crypto.subtle.generateKey(
+      { name: 'ECDH', namedCurve: 'P-256' },
+      false,
+      ['deriveBits'],
+    ) as CryptoKeyPair;
+    const receiverSpki = new Uint8Array(await crypto.subtle.exportKey('spki', receiver.publicKey));
+    const generated = jest.spyOn(crypto.subtle, 'generateKey');
+    try {
+      const envelope = await createTransportP256EnvelopeKey(
+        receiverSpki,
+        transportRandomBytes(32),
+        new TextEncoder().encode('slipner:mcp:crypto-grant:v1'),
+        ['encrypt'],
+      );
+      expect(generated).toHaveBeenCalledTimes(1);
+      expect(generated).toHaveBeenCalledWith({ name: 'ECDH', namedCurve: 'P-256' }, false, ['deriveBits']);
+      const ephemeral = await generated.mock.results[0].value as CryptoKeyPair;
+      expect(ephemeral.privateKey.extractable).toBe(false);
+      expect(ephemeral.publicKey.extractable).toBe(true);
+      expect(envelope.key.extractable).toBe(false);
+      expect(envelope.key.usages).toEqual(['encrypt']);
+      await expect(crypto.subtle.exportKey('pkcs8', ephemeral.privateKey)).rejects.toBeDefined();
+      await expect(crypto.subtle.exportKey('jwk', ephemeral.privateKey)).rejects.toBeDefined();
+      await expect(crypto.subtle.exportKey('raw', envelope.key)).rejects.toBeDefined();
+      const publicSpki = new Uint8Array(await crypto.subtle.exportKey('spki', ephemeral.publicKey));
+      expect(envelope.ephemeralPublicKeySpki).toEqual(publicSpki);
+    } finally {
+      generated.mockRestore();
+    }
+  });
+
   test('signs and verifies Ed25519 without exposing primitives to callers', async () => {
     const signer = await generateTransportEd25519KeyPair();
     const message = new TextEncoder().encode('tube handshake transcript');

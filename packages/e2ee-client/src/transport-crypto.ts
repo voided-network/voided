@@ -261,7 +261,7 @@ export async function createTransportP256EnvelopeKey(
   );
   const ephemeral = await browserCrypto().subtle.generateKey(
     { name: 'ECDH', namedCurve: 'P-256' },
-    true,
+    false,
     ['deriveBits'],
   ) as CryptoKeyPair;
   const sharedSecret = new Uint8Array(await browserCrypto().subtle.deriveBits(
