@@ -196,7 +196,7 @@ describe('WASM loader allocation boundary', () => {
   test('rejects hostile returned buffers and artifact metadata', () => {
     const rawExport = jest.fn(() => new Uint8Array(9));
     expect(() =>
-      callAfterPreflight(
+      callAfterPreflight<Uint8Array>(
         () => undefined,
         rawExport,
         (value) => validateBytesResult(value, 'raw output', 8),
