@@ -2,7 +2,7 @@
 
 use super::{Algorithm, EncryptionResult, Key};
 use crate::{Error, Result};
-use alloc::vec::Vec;
+use alloc::{format, string::ToString, vec::Vec};
 use chacha20poly1305::{
     aead::{Aead, KeyInit},
     XChaCha20Poly1305, XNonce,
@@ -29,7 +29,7 @@ pub const TAG_SIZE: usize = 16;
 pub fn encrypt_xchacha20(plaintext: &[u8], key: &Key, aad: &[u8]) -> Result<EncryptionResult> {
     // Generate random nonce (24 bytes for XChaCha20)
     let mut nonce_bytes = [0u8; NONCE_SIZE];
-    rand::thread_rng().fill_bytes(&mut nonce_bytes);
+    crate::util::entropy_rng().fill_bytes(&mut nonce_bytes);
     let nonce = XNonce::from_slice(&nonce_bytes);
 
     // Create cipher

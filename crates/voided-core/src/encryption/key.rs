@@ -1,7 +1,12 @@
 //! Key generation and derivation
 
 use crate::{Error, Result};
-use alloc::vec::Vec;
+use alloc::{
+    format,
+    string::{String, ToString},
+    vec,
+    vec::Vec,
+};
 use rand::RngCore;
 use x25519_dalek::{x25519, X25519_BASEPOINT_BYTES};
 use zeroize::{Zeroize, ZeroizeOnDrop};
@@ -109,7 +114,7 @@ pub struct X25519KeyPair {
 /// Generate a random 256-bit encryption key
 pub fn generate_key() -> Key {
     let mut key = [0u8; 32];
-    rand::thread_rng().fill_bytes(&mut key);
+    crate::util::entropy_rng().fill_bytes(&mut key);
     Key(key)
 }
 
@@ -221,7 +226,7 @@ pub fn generate_x25519_key_pair(seed: Option<&[u8]>) -> Result<X25519KeyPair> {
         }
         private_key.copy_from_slice(seed_bytes);
     } else {
-        rand::thread_rng().fill_bytes(&mut private_key);
+        crate::util::entropy_rng().fill_bytes(&mut private_key);
     }
 
     let public_key = x25519(private_key, X25519_BASEPOINT_BYTES);
@@ -290,7 +295,7 @@ pub fn derive_key_from_shared_secret(shared_secret: &[u8], salt: &str, info: &st
 #[allow(dead_code)]
 pub fn generate_salt(length: usize) -> Vec<u8> {
     let mut salt = vec![0u8; length];
-    rand::thread_rng().fill_bytes(&mut salt);
+    crate::util::entropy_rng().fill_bytes(&mut salt);
     salt
 }
 

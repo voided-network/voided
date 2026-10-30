@@ -1,21 +1,25 @@
 //! Fuse primitives and whole-monolith protect/open flows for Voided 1.0.
 
-use alloc::{format, string::String, vec, vec::Vec};
+use alloc::{
+    format,
+    string::{String, ToString},
+    vec,
+    vec::Vec,
+};
 
 use rand::RngCore;
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    encryption::{
-        derive_key_hkdf, derive_key_hkdf_raw, Algorithm as EncryptionAlgorithm, EncryptionResult,
-        Key,
-    },
+    encryption::{derive_key_hkdf, derive_key_hkdf_raw, Key},
     hash::{compare_hashes, generate_hmac_sha256, generate_hmac_sha256_parts},
     Error, Result,
 };
 
 #[cfg(feature = "compression")]
 use crate::compression::{self, CompressionAlgorithm, CompressionOptions};
+#[cfg(feature = "compression")]
+use crate::encryption::{Algorithm as EncryptionAlgorithm, EncryptionResult};
 
 /// Truncated outer shell tag size in bytes.
 pub const SHELL_TAG_SIZE: usize = 16;
@@ -2690,7 +2694,7 @@ fn segment_purpose(preset: FusedPreset, segment_index: usize) -> String {
 
 fn random_nonce() -> [u8; SHELL_NONCE_SIZE] {
     let mut nonce = [0u8; SHELL_NONCE_SIZE];
-    rand::thread_rng().fill_bytes(&mut nonce);
+    crate::util::entropy_rng().fill_bytes(&mut nonce);
     nonce
 }
 

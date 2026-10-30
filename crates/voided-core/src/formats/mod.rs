@@ -1,6 +1,9 @@
 //! Wire format utilities for serialization and deserialization.
 
-use alloc::{string::String, vec::Vec};
+use alloc::{
+    string::{String, ToString},
+    vec::Vec,
+};
 use base64::{engine::general_purpose::STANDARD, Engine};
 
 /// Encode bytes to Base64

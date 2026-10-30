@@ -18,7 +18,10 @@ pub use key::{
 pub use xchacha20::{decrypt_xchacha20, encrypt_xchacha20};
 
 use crate::{Error, Result, FORMAT_VERSION, MAGIC_ENCRYPTED};
-use alloc::vec::Vec;
+use alloc::{
+    string::{String, ToString},
+    vec::Vec,
+};
 use serde::{Deserialize, Serialize};
 use zeroize::Zeroize;
 

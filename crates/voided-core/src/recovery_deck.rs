@@ -6,6 +6,7 @@
 
 use crate::encryption::{self, Algorithm, EncryptOptions, EncryptionResult, Key};
 use crate::{Error, Result};
+use alloc::format;
 use alloc::string::{String, ToString};
 use alloc::vec::Vec;
 use rand::seq::SliceRandom;

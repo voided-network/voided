@@ -429,11 +429,13 @@ If you do not have a strong reason otherwise, start with `balanced`.
 ### `compression`
 
 - enables Brotli and Gzip helpers
+- enables `std`, required by these in-memory I/O codecs
 - required for `shell::protect`, `shell::open`, and `shell::repack_artifact`
 
 ### `signing`
 
 - enables Ed25519 and P-256 helpers; RSA-PSS remains a reserved identifier only
+- enables `std` for the backend signing configuration
 
 ### `wasm`
 
@@ -442,6 +444,34 @@ If you do not have a strong reason otherwise, start with `balanced`.
 ### `std`
 
 - enables the standard library path used by the backend build
+- forwards standard-library features to dependencies instead of enabling them unconditionally
+
+### `custom-rng`
+
+- enables `getrandom`'s custom entropy hook on unsupported targets
+- requires the final application to register a hardware/platform cryptographic
+  entropy function with `getrandom` 0.2's `register_custom_getrandom!`
+- never installs a deterministic or insecure entropy fallback
+
+### `no_std` With Allocation
+
+Disable default features for the primitive, encoding, recovery and fused-shell
+APIs without `std`. An allocator is still required by `Vec` and `String`.
+Compression and backend signing explicitly enable `std`; they are not part of
+this configuration. On targets supported by `getrandom`, entropy comes from
+the platform. Unsupported bare-metal targets also need `custom-rng` and a
+registered cryptographic entropy provider in the final application. Missing
+entropy must fail; it must not be replaced with a seeded test generator.
+
+```toml
+voided-core = { version = "1.0.0", default-features = false, features = ["custom-rng"] }
+getrandom = { version = "0.2", features = ["custom"] }
+```
+
+The feature enables the hook, not a board driver. A cross-target `cargo check`
+proves compilation only, not the final firmware's allocator, linking or entropy
+quality. Existing infallible random-generation APIs panic if platform entropy
+fails, as with the standard-library RNG path.
 
 ## Build Targets
 
@@ -469,6 +499,20 @@ From the workspace Rust root:
 ```bash
 cargo test -p voided-core
 ```
+
+The no-standard-library feature boundary has separate checks. Install the
+`thumbv7em-none-eabi` target for the pinned workspace toolchain first, then run:
+
+```bash
+cargo check -p voided-core --no-default-features --target thumbv7em-none-eabi --features custom-rng --locked
+cargo test -p voided-core --no-default-features --test no_std --locked
+```
+
+The first command checks a target without `std`; the second runs primitive,
+serialization, core-error and fused-shell checks against the no-std library on
+the host's real entropy provider. Neither test proves embedded firmware linking
+or a board's entropy implementation. `voided-core` builds an `rlib`; dynamic
+library outputs belong to the separate Node and WASM binding crates.
 
 ## License
 

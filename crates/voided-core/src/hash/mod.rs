@@ -1,7 +1,12 @@
 //! Hashing module providing SHA-256, SHA-512, HMAC, and PBKDF2.
 
 use crate::{Error, Result};
-use alloc::{format, string::String, vec, vec::Vec};
+use alloc::{
+    format,
+    string::{String, ToString},
+    vec,
+    vec::Vec,
+};
 use hmac::{Hmac, Mac};
 use sha2::{Digest, Sha256, Sha512};
 
@@ -265,7 +270,7 @@ fn format_safety_numbers(hash_bytes: &[u8], group_size: usize) -> String {
 pub fn generate_random_bytes(length: usize) -> Vec<u8> {
     use rand::RngCore;
     let mut bytes = vec![0u8; length];
-    rand::thread_rng().fill_bytes(&mut bytes);
+    crate::util::entropy_rng().fill_bytes(&mut bytes);
     bytes
 }
 

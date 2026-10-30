@@ -6,7 +6,7 @@ use aes_gcm::{
     aead::{Aead, KeyInit},
     Aes256Gcm, Nonce,
 };
-use alloc::vec::Vec;
+use alloc::{format, string::ToString, vec::Vec};
 use rand::RngCore;
 
 /// Nonce size for AES-256-GCM (96 bits)
@@ -54,7 +54,7 @@ pub fn encrypt_aes_gcm_with_nonce_aad(
 
 fn generate_nonce() -> [u8; NONCE_SIZE] {
     let mut nonce_bytes = [0u8; NONCE_SIZE];
-    rand::thread_rng().fill_bytes(&mut nonce_bytes);
+    crate::util::entropy_rng().fill_bytes(&mut nonce_bytes);
     nonce_bytes
 }
 

@@ -1,13 +1,23 @@
 //! Utility functions and helpers.
 
-use alloc::vec::Vec;
+use alloc::{vec, vec::Vec};
 use rand::RngCore;
 use zeroize::Zeroize;
+
+#[cfg(feature = "std")]
+pub(crate) fn entropy_rng() -> impl RngCore + rand::CryptoRng {
+    rand::thread_rng()
+}
+
+#[cfg(not(feature = "std"))]
+pub(crate) fn entropy_rng() -> impl RngCore + rand::CryptoRng {
+    rand::rngs::OsRng
+}
 
 /// Generate random bytes
 pub fn random_bytes(length: usize) -> Vec<u8> {
     let mut bytes = vec![0u8; length];
-    rand::thread_rng().fill_bytes(&mut bytes);
+    entropy_rng().fill_bytes(&mut bytes);
     bytes
 }
 

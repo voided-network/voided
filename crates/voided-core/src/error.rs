@@ -1,5 +1,6 @@
 //! Error types for voided-core
 
+use alloc::string::{String, ToString};
 use thiserror::Error;
 
 /// Result type alias for voided-core operations
