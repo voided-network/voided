@@ -1,12 +1,12 @@
 {
   "schemaVersion": 4,
   "package": "@voideddev/e2ee-client",
-  "packageVersion": "1.0.0",
+  "packageVersion": "1.0.2",
   "target": "wasm32-unknown-unknown",
-  "coreVersion": "1.0.0",
+  "coreVersion": "1.0.1",
   "bindingVersion": "1.0.0",
-  "sourceDigest": "sha256:86e22fc01604feaccf21f4e01e772d58c10c9bbb28aeb967112f5a68bd368c27",
-  "buildId": "sha256:20a92914784e67089017dff4c9bd12447f42a555926b170a8df61168f0c19ff7",
+  "sourceDigest": "sha256:3dd71bded3a630e12f37d8d103ecd120f6fdec0592b5b3f6f25e5eecababf68e",
+  "buildId": "sha256:2d43f7cb2fe3abfbbda8d35f7adffd0fc43188694367189edc9f6072788ce3c3",
   "tools": {
     "cargo": "cargo 1.93.0 (083ac5135 2025-12-15)",
     "cargoSha256": "sha256:46c9483604e913070b085dc5acf972bc560395c10dfec1cdb389c4b6bf17cf67",
@@ -36,8 +36,8 @@
     },
     {
       "file": "voided_wasm_bg.wasm",
-      "sha256": "sha256:0341e69d9bbb9bd990bc7ce6a1c54836096f9e3e974e8be84300b1fd9a1141bf",
-      "size": 1933249
+      "sha256": "sha256:c59a297d674c582ba8392f303785e21679a0598591b4a0f965a70d2de445a233",
+      "size": 1933573
     },
     {
       "file": "voided_wasm.d.ts",

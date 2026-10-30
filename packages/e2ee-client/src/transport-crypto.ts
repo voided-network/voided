@@ -265,6 +265,24 @@ export async function exportTransportAesGcmKey(key: CryptoKey): Promise<Uint8Arr
   return exactBytes(rawKey, 'AES-GCM key', AES_GCM_KEY_BITS / 8);
 }
 
+/** Imports an uncompressed P-256 SPKI without creating or exporting any key. */
+export async function importTransportP256PublicKey(
+  publicKeySpki: Uint8Array,
+  purpose: 'verify' | 'agreement',
+): Promise<CryptoKey> {
+  if (purpose !== 'verify' && purpose !== 'agreement') {
+    throw new Error('Voided transport P-256 public key requires verify or agreement purpose');
+  }
+  exactBytes(publicKeySpki, 'P-256 public SPKI', 91);
+  return browserCrypto().subtle.importKey(
+    'spki',
+    browserBytes(publicKeySpki),
+    { name: purpose === 'verify' ? 'ECDSA' : 'ECDH', namedCurve: 'P-256' },
+    false,
+    purpose === 'verify' ? ['verify'] : [],
+  );
+}
+
 export async function createTransportP256EnvelopeKey(
   peerPublicKeySpki: Uint8Array,
   salt: Uint8Array,

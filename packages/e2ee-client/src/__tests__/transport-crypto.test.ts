@@ -12,6 +12,7 @@ import {
   hashTransportSha256,
   importTransportAesGcmKey,
   importTransportHkdfKey,
+  importTransportP256PublicKey,
   importTransportX25519PrivateKey,
   openTransportAesGcm,
   sealTransportAesGcm,
@@ -210,6 +211,38 @@ describe('Voided transport crypto boundary', () => {
     const changed = message.slice();
     changed[0] ^= 1;
     await expect(verifyTransportEd25519(changed, signature, signer.publicKey)).resolves.toBe(false);
+  });
+
+  test.each(['verify', 'agreement'] as const)('imports a P-256 public key for %s without creating private keys', async purpose => {
+    const spki = Uint8Array.from(('3059301306072a8648ce3d020106082a8648ce3d03010703420004'
+      + '6b17d1f2e12c4247f8bce6e563a440f277037d812deb33a0f4a13945d898c296'
+      + '4fe342e2fe1a7f9b8ee7eb4a7c0f9e162bce33576b315ececbb6406837bf51f5').match(/../g)!, byte => parseInt(byte, 16));
+    const generated = jest.spyOn(crypto.subtle, 'generateKey');
+    const exported = jest.spyOn(crypto.subtle, 'exportKey');
+    try {
+      const key = await importTransportP256PublicKey(spki, purpose);
+      expect(key.type).toBe('public'); expect(key.extractable).toBe(false);
+      expect(key.algorithm).toEqual({ name: purpose === 'verify' ? 'ECDSA' : 'ECDH', namedCurve: 'P-256' });
+      expect(key.usages).toEqual(purpose === 'verify' ? ['verify'] : []);
+      expect(generated).not.toHaveBeenCalled(); expect(exported).not.toHaveBeenCalled();
+    } finally { generated.mockRestore(); exported.mockRestore(); }
+  });
+
+  test('rejects invalid P-256 import purpose and byte ownership before native import', async () => {
+    const imported = jest.spyOn(crypto.subtle, 'importKey');
+    try {
+      await expect(importTransportP256PublicKey(new Uint8Array(91), 'sign' as 'verify')).rejects.toThrow(/purpose/);
+      await expect(importTransportP256PublicKey(new Uint8Array(90), 'verify')).rejects.toThrow(/91/);
+      await expect(importTransportP256PublicKey(new Uint8Array(new SharedArrayBuffer(91)), 'verify')).rejects.toThrow(/non-shared/);
+      expect(imported).not.toHaveBeenCalled();
+    } finally { imported.mockRestore(); }
+  });
+
+  test('rejects a malformed P-256 public point rather than accepting its 91-byte shape', async () => {
+    const spki = Uint8Array.from(('3059301306072a8648ce3d020106082a8648ce3d03010703420004'
+      + '00'.repeat(64)).match(/../g)!, byte => parseInt(byte, 16));
+    await expect(importTransportP256PublicKey(spki, 'verify')).rejects.toBeDefined();
+    await expect(importTransportP256PublicKey(spki, 'agreement')).rejects.toBeDefined();
   });
 
   test('returns canonical SHA-256 bytes and rejects malformed inputs', async () => {
